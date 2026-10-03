@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_FLOWS } from "../mock/flows";
 import { MOCK_FAILING_QUERY } from "../mock/search";
 import { MOCK_TOKENS } from "../mock/tokens";
-import { listInvestigationHistory, searchInvestigations, searchPath, suggestSearch } from "./search";
+import { listInvestigationHistory, MOCK_FAILING_NOTE, saveInvestigationNote, searchInvestigations, searchPath, suggestSearch } from "./search";
 
 async function settle<T>(promise: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(5_000);
@@ -86,6 +86,21 @@ describe("API pencarian (mock)", () => {
     const transfer = MOCK_FLOWS[0].transfers[0];
     const tx = (await settle(searchInvestigations(transfer.txHash))).results[0];
     expect(tx.meta).toMatchObject({ kind: "transaction", direction: transfer.direction, amount: transfer.amount });
+  });
+
+  it("menyimpan, menghapus, dan menolak catatan", async () => {
+    expect(await settle(saveInvestigationNote("hist-2", "  pantau lagi  "))).toMatchObject({ id: "hist-2", note: "pantau lagi" });
+    expect((await settle(saveInvestigationNote("hist-1", ""))).note).toBeUndefined();
+    for (const [id, note, error] of [
+      ["hist-1", "x".repeat(281), /maksimal 280/],
+      ["hist-1", `coba ${MOCK_FAILING_NOTE}`, /gagal disimpan/],
+      ["tidak-ada", "halo", /tidak ada lagi/],
+    ] as const) {
+      const pending = saveInvestigationNote(id, note);
+      const assertion = expect(pending).rejects.toThrow(error);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await assertion;
+    }
   });
 
   it("riwayat terbaru dulu dan semua tautannya menuju halaman yang ada", async () => {

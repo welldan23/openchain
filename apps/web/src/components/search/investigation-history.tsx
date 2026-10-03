@@ -24,6 +24,16 @@ export function InvestigationHistory({
       description="Halaman yang terakhir kamu buka. Klik untuk melanjutkan."
       icon={History}
       className={className}
+      action={
+        entries.length > 0 ? (
+          <Link
+            href="/riwayat"
+            className="rounded text-xs text-muted underline-offset-2 transition hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            Semua riwayat
+          </Link>
+        ) : null
+      }
     >
       {entries.length === 0 ? (
         <EmptyState

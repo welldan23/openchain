@@ -55,6 +55,20 @@ const dateFormat = new Intl.DateTimeFormat(LOCALE, {
   year: "numeric",
 });
 
+const timeFormat = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const dayLongFormat = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: TIME_ZONE,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
 const relativeTimeFormat = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });
 
 function isValidNumber(value: number): boolean {
@@ -163,6 +177,20 @@ export function formatDateTime(iso: string): string {
   const date = parseDate(iso);
   if (!date) return EMPTY_VALUE;
   return `${dateTimeFormat.format(date)} ${TIME_ZONE_LABEL}`;
+}
+
+/** 11.30 WIB — jam saja, untuk daftar yang sudah dikelompokkan per hari. */
+export function formatTime(iso: string): string {
+  const date = parseDate(iso);
+  if (!date) return EMPTY_VALUE;
+  return `${timeFormat.format(date)} ${TIME_ZONE_LABEL}`;
+}
+
+/** Senin, 28 September 2026 — judul kelompok per hari. */
+export function formatDayLong(iso: string): string {
+  const date = parseDate(iso);
+  if (!date) return EMPTY_VALUE;
+  return dayLongFormat.format(date);
 }
 
 /** 03 Okt 2026 */

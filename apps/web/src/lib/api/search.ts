@@ -7,12 +7,14 @@
  * `InvestigationEntry[]`) tanpa mengubah komponen yang memakainya.
  */
 import { MOCK_FAILING_QUERY, MOCK_HISTORY, MOCK_SEARCH_EXAMPLES, MOCK_SEARCH_INDEX } from "../mock/search";
+import { validateNote } from "../history";
 import { classifyQuery, dedupeResults, normalizeText } from "../search";
 import { EMPTY_SEARCH_FILTERS, searchFilterHref } from "../search-filter";
 import type { InvestigationEntry, SearchQueryKind, SearchResult } from "../types";
 
 const MOCK_LATENCY_MS = 400;
 const SUGGEST_LATENCY_MS = 150;
+const SAVE_LATENCY_MS = 300;
 /** Teks lebih pendek dari ini terlalu umum untuk dicari sebagian. */
 export const MIN_TEXT_QUERY = 2;
 
@@ -84,6 +86,26 @@ export async function suggestSearch(rawQuery: string, limit = SUGGESTION_LIMIT):
 /** Investigasi yang pernah dibuka, terbaru dulu. */
 export async function listInvestigationHistory(): Promise<InvestigationEntry[]> {
   return [...MOCK_HISTORY].sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt));
+}
+
+/** Isi catatan yang sengaja membuat penyimpanan tiruan gagal, untuk mencoba tampilan error. */
+export const MOCK_FAILING_NOTE = "#gagal";
+
+/**
+ * Simpan atau hapus catatan satu investigasi (asumsi kontrak:
+ * `PATCH /investigations/:id` dengan body `{ note }` → `InvestigationEntry`;
+ * `note` kosong menghapus catatan). Versi tiruan tidak menyimpan permanen.
+ */
+export async function saveInvestigationNote(id: string, rawNote: string): Promise<InvestigationEntry> {
+  await delay(SAVE_LATENCY_MS);
+  const validation = validateNote(rawNote);
+  if (!validation.ok) throw new Error(validation.error);
+  if (validation.note?.includes(MOCK_FAILING_NOTE)) {
+    throw new Error("Simulasi: catatan gagal disimpan karena layanan tidak bisa dihubungi.");
+  }
+  const entry = MOCK_HISTORY.find((item) => item.id === id);
+  if (!entry) throw new Error("Investigasi ini tidak ada lagi di riwayat.");
+  return { ...entry, note: validation.note };
 }
 
 /** Contoh isian yang bisa dicoba saat kotak cari masih kosong. */

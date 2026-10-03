@@ -1,4 +1,4 @@
-import { Radar, Search } from "lucide-react";
+import { History, Radar, Search } from "lucide-react";
 import Link from "next/link";
 import { HeaderSearch } from "./search/header-search";
 
@@ -18,6 +18,14 @@ export function AppHeader() {
           <HeaderSearch />
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/riwayat"
+            aria-label="Riwayat investigasi"
+            title="Riwayat investigasi"
+            className="grid size-8 place-items-center rounded-lg text-muted ring-1 ring-line transition hover:text-accent hover:ring-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <History className="size-4" aria-hidden />
+          </Link>
           <Link
             href="/cari"
             aria-label="Cari"
