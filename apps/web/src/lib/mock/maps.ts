@@ -8,6 +8,8 @@
 import type {
   AddressFlow,
   CoordinationEvent,
+  CoordinationTx,
+  CoordinationTxAction,
   EntityLabel,
   MapCluster,
   MapEdge,
@@ -79,6 +81,41 @@ function edgesFromFlows(flows: AddressFlow[], nodes: MapNode[]): MapEdge[] {
 /** Hash transaksi garis dari `from` ke `to`; daftar kosong bila tidak ada garisnya. */
 function txBetween(edges: MapEdge[], pairs: Array<[string, string]>): string[] {
   return pairs.flatMap(([from, to]) => edges.filter((edge) => edge.from === from && edge.to === to).map((edge) => edge.txHash));
+}
+
+/** Blok/slot patokan dan lama per blok, untuk memperkirakan nomor blok transaksi tiruan. */
+const BLOCK_CLOCK = {
+  ethereum: { block: 23_271_904, at: Date.parse("2026-09-12T08:31:00.000Z"), seconds: 12 },
+  solana: { block: 371_002_118, at: Date.parse("2026-09-28T03:41:00.000Z"), seconds: 0.4 },
+} as const;
+
+function blockAt(chain: keyof typeof BLOCK_CLOCK, timestamp: string): number {
+  const clock = BLOCK_CLOCK[chain];
+  return clock.block + Math.round((Date.parse(timestamp) - clock.at) / 1000 / clock.seconds);
+}
+
+/** Transaksi pendukung dari garis peta antara pasangan wallet. */
+function txsFromEdges(
+  chain: keyof typeof BLOCK_CLOCK,
+  edges: MapEdge[],
+  pairs: Array<[string, string]>,
+  action: CoordinationTxAction,
+): CoordinationTx[] {
+  return pairs.flatMap(([from, to]) =>
+    edges
+      .filter((edge) => edge.from === from && edge.to === to)
+      .map((edge) => ({
+        txHash: edge.txHash,
+        timestamp: edge.timestamp,
+        blockNumber: blockAt(chain, edge.timestamp),
+        action,
+        from: edge.from,
+        to: edge.to,
+        asset: edge.asset,
+        amount: edge.amount,
+        amountUsd: edge.amountUsd,
+      })),
+  );
 }
 
 function withClusters(nodes: MapNode[], members: Record<string, string[]>): MapNode[] {
@@ -213,7 +250,27 @@ const nblaClusters: MapCluster[] = [
   },
 ];
 
-const nblaFundingTxs = txBetween(nblaEdges, nbla.bundlers.map((bundler): [string, string] => [nbla.funder, bundler]));
+const nblaFundingTxs = txsFromEdges(
+  "ethereum",
+  nblaEdges,
+  nbla.bundlers.map((bundler): [string, string] => [nbla.funder, bundler]),
+  "funding",
+);
+const NBLA_LAUNCH_PRICE = 0.0000306;
+const nblaLaunch = { timestamp: "2026-09-12T08:31:00.000Z", blockNumber: BLOCK_CLOCK.ethereum.block };
+const nblaPool = mockEvmAddress("nbla:univ2-pool");
+const nblaAsset = { symbol: "NBLA", address: nblaToken.token.address };
+/** Pembelian pertama tiap bundler di blok penambahan likuiditas (juta NBLA). */
+const nblaLaunchBuys: CoordinationTx[] = [51, 49, 18, 16, 15].map((millions, index) => ({
+  txHash: index === 0 ? mockEvmTxHash("nbla:bundler-buy") : mockEvmTxHash(`flow:nbla-bundler-buy-${index + 1}`),
+  ...nblaLaunch,
+  action: "buy",
+  from: nblaPool,
+  to: nbla.bundlers[index],
+  asset: nblaAsset,
+  amount: millions * 1_000_000,
+  amountUsd: millions * 1_000_000 * NBLA_LAUNCH_PRICE,
+}));
 
 const nblaCoordination: CoordinationEvent[] = [
   {
@@ -224,8 +281,11 @@ const nblaCoordination: CoordinationEvent[] = [
     confidence: "high",
     timestamp: "2026-09-12T08:31:00.000Z",
     windowSeconds: 0,
-    blockNumber: 23_271_904,
-    evidenceTxHashes: [mockEvmTxHash("nbla:add-liquidity"), mockEvmTxHash("nbla:bundler-buy")],
+    blockNumber: BLOCK_CLOCK.ethereum.block,
+    transactions: [
+      ...txsFromEdges("ethereum", nblaEdges, [[nbla.deployer, nblaPool]], "add_liquidity"),
+      ...nblaLaunchBuys,
+    ],
   },
   {
     id: "nbla-funding-burst",
@@ -235,7 +295,7 @@ const nblaCoordination: CoordinationEvent[] = [
     confidence: "medium",
     timestamp: "2026-09-12T07:58:00.000Z",
     windowSeconds: 9 * 60,
-    evidenceTxHashes: nblaFundingTxs,
+    transactions: nblaFundingTxs,
   },
   {
     id: "nbla-similar-amount",
@@ -245,7 +305,7 @@ const nblaCoordination: CoordinationEvent[] = [
     confidence: "low",
     timestamp: "2026-09-12T07:58:00.000Z",
     windowSeconds: 9 * 60,
-    evidenceTxHashes: nblaFundingTxs,
+    transactions: nblaFundingTxs,
   },
 ];
 
@@ -332,7 +392,12 @@ const kodoMap: WalletMap = {
       confidence: "high",
       timestamp: "2026-09-28T03:20:00.000Z",
       windowSeconds: 2 * 60,
-      evidenceTxHashes: txBetween(kodoEdges, kodo.bundlers.map((bundler): [string, string] => [kodo.creator, bundler])),
+      transactions: txsFromEdges(
+        "solana",
+        kodoEdges,
+        kodo.bundlers.map((bundler): [string, string] => [kodo.creator, bundler]),
+        "funding",
+      ),
     },
     {
       id: "kodo-same-slot-buy",
@@ -342,8 +407,19 @@ const kodoMap: WalletMap = {
       confidence: "medium",
       timestamp: "2026-09-28T03:41:00.000Z",
       windowSeconds: 0,
-      blockNumber: 371_002_118,
-      evidenceTxHashes: [1, 2, 3].map((n) => mockSolanaSignature(`kodo:bundle-buy-${n}`)),
+      blockNumber: BLOCK_CLOCK.solana.block,
+      // Porsi awal bundler (8,1%, 5,6%, 3,9% supply) dibeli di slot peluncuran.
+      transactions: [81, 56, 39].map((share, index) => ({
+        txHash: mockSolanaSignature(`kodo:bundle-buy-${index + 1}`),
+        timestamp: "2026-09-28T03:41:00.000Z",
+        blockNumber: BLOCK_CLOCK.solana.block,
+        action: "buy" as const,
+        from: mockSolanaAddress("kodo:raydium-pool"),
+        to: kodo.bundlers[index],
+        asset: { symbol: "KODO", address: kodoToken.token.address },
+        amount: Math.round((share / 1000) * kodoToken.token.totalSupply),
+        amountUsd: Math.round((share / 1000) * kodoToken.token.totalSupply) * 0.0000412,
+      })),
     },
   ],
   snapshot: kodoToken.snapshot,

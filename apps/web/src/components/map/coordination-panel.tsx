@@ -1,11 +1,10 @@
 "use client";
 
-import { Eye, EyeOff, Highlighter, Zap } from "lucide-react";
+import { Eye, EyeOff, Highlighter, ListOrdered, Zap } from "lucide-react";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { ConfidenceMeter } from "@/components/confidence-meter";
-import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
-import { explorerTxUrl, getChain } from "@/lib/chains";
+import { getChain } from "@/lib/chains";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { COORDINATION_KIND_META } from "@/lib/labels";
@@ -19,13 +18,23 @@ interface CoordinationPanelProps {
   onFocus: (id: string | null) => void;
   showMarkers: boolean;
   onToggleMarkers: () => void;
+  /** Tampilkan transaksi pendukung kejadian ini di panel transaksi. */
+  onShowTransactions: (id: string) => void;
 }
 
 /**
  * Daftar kejadian yang tampak terkoordinasi, terkuat dulu. Tiap kejadian bisa
  * disorot di peta; wallet yang terlibat ditandai ikon petir di gelembungnya.
  */
-export function CoordinationPanel({ chain, events, focusedId, onFocus, showMarkers, onToggleMarkers }: CoordinationPanelProps) {
+export function CoordinationPanel({
+  chain,
+  events,
+  focusedId,
+  onFocus,
+  showMarkers,
+  onToggleMarkers,
+  onShowTransactions,
+}: CoordinationPanelProps) {
   const position = getChain(chain).addressFormat === "solana" ? "slot" : "blok";
   return (
     <Panel
@@ -71,26 +80,25 @@ export function CoordinationPanel({ chain, events, focusedId, onFocus, showMarke
                     ·{" "}
                     <time dateTime={event.timestamp}>{formatDateTime(event.timestamp)}</time>
                   </p>
-                  {event.evidenceTxHashes.length > 0 ? (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="text-[11px] text-muted">Bukti:</span>
-                      {event.evidenceTxHashes.slice(0, 2).map((hash) => (
-                        <HashLink key={hash} value={hash} href={explorerTxUrl(chain, hash)} head={8} tail={4} copyLabel="Salin hash bukti" />
-                      ))}
-                      {event.evidenceTxHashes.length > 2 ? (
-                        <span className="text-[11px] text-muted">+{event.evidenceTxHashes.length - 2} lagi</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    aria-pressed={focused}
-                    onClick={() => onFocus(focused ? null : event.id)}
-                    className="mt-2 inline-flex items-center gap-1 rounded text-[11px] text-muted underline-offset-2 transition hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-                  >
-                    <Highlighter className="size-3" aria-hidden />
-                    {focused ? "Berhenti menyorot" : "Sorot di peta"}
-                  </button>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <button
+                      type="button"
+                      aria-pressed={focused}
+                      onClick={() => onFocus(focused ? null : event.id)}
+                      className="inline-flex items-center gap-1 rounded text-[11px] text-muted underline-offset-2 transition hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      <Highlighter className="size-3" aria-hidden />
+                      {focused ? "Berhenti menyorot" : "Sorot di peta"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onShowTransactions(event.id)}
+                      className="inline-flex items-center gap-1 rounded text-[11px] text-muted underline-offset-2 transition hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      <ListOrdered className="size-3" aria-hidden />
+                      Lihat {event.transactions.length} transaksi pendukung
+                    </button>
+                  </div>
                 </li>
               );
             })}

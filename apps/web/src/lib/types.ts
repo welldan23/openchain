@@ -399,7 +399,24 @@ export interface CoordinationEvent {
   /** Rentang waktu kejadian dalam detik; 0 bila di blok yang sama. */
   windowSeconds: number;
   blockNumber?: number;
-  evidenceTxHashes: string[];
+  /** Transaksi on-chain yang mendukung temuan ini. */
+  transactions: CoordinationTx[];
+}
+
+/** Aksi dalam transaksi pendukung temuan koordinasi. */
+export type CoordinationTxAction = "funding" | "buy" | "sell" | "add_liquidity" | "transfer";
+
+/** Satu transaksi pendukung temuan koordinasi; selalu fakta on-chain. */
+export interface CoordinationTx {
+  txHash: string;
+  timestamp: string;
+  blockNumber: number;
+  action: CoordinationTxAction;
+  from: string;
+  to: string;
+  asset: FlowAsset;
+  amount: number;
+  amountUsd?: number;
 }
 
 /**

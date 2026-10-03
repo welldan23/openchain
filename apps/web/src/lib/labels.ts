@@ -3,6 +3,7 @@ import type {
   ClusterConfidence,
   ClusterLabel,
   CoordinationKind,
+  CoordinationTxAction,
   ContractCheckStatus,
   EntityLabelType,
   FindingClassification,
@@ -230,4 +231,12 @@ export const COORDINATION_KIND_META: Record<CoordinationKind, { label: string; d
     label: "Jual bersamaan",
     description: "Beberapa wallet menjual dalam rentang waktu yang sangat berdekatan.",
   },
+};
+
+export const COORDINATION_TX_ACTION_META: Record<CoordinationTxAction, Meta> = {
+  funding: { label: "Pendanaan", className: "bg-sky-500/15 text-sky-300 ring-sky-400/30" },
+  buy: { label: "Beli", className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30" },
+  sell: { label: "Jual", className: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
+  add_liquidity: { label: "Tambah likuiditas", className: "bg-teal-500/15 text-teal-300 ring-teal-400/30" },
+  transfer: { label: "Transfer", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
 };

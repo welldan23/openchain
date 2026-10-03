@@ -461,3 +461,18 @@ export function sortCoordination<T extends { confidence: "low" | "medium" | "hig
   const rank = { high: 0, medium: 1, low: 2 } as const;
   return [...events].sort((a, b) => rank[a.confidence] - rank[b.confidence] || b.members.length - a.members.length);
 }
+
+/** Transaksi pendukung urut blok lalu waktu; urutan asli dipertahankan bila sama. */
+export function sortCoordinationTxs<T extends { blockNumber: number; timestamp: string }>(txs: T[]): T[] {
+  return txs
+    .map((tx, index) => ({ tx, index }))
+    .sort((a, b) => a.tx.blockNumber - b.tx.blockNumber || Date.parse(a.tx.timestamp) - Date.parse(b.tx.timestamp) || a.index - b.index)
+    .map(({ tx }) => tx);
+}
+
+/** Jumlah transaksi yang berbagi blok dengan transaksi lain di daftar yang sama. */
+export function sameBlockCount(txs: Array<{ blockNumber: number }>): number {
+  const counts = new Map<number, number>();
+  for (const tx of txs) counts.set(tx.blockNumber, (counts.get(tx.blockNumber) ?? 0) + 1);
+  return [...counts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
+}

@@ -2,7 +2,7 @@
  * Bukti transaksi untuk modal "Bukti hash": dikumpulkan per hash transaksi,
  * dan bisa dibuka langsung lewat tautan `#bukti-<hash>`.
  */
-import type { ChainId, EntityLabel, FlowTransfer, MapEdge, MapNode, TraceHop, TxEvidence } from "./types";
+import type { ChainId, CoordinationEvent, EntityLabel, FlowTransfer, MapEdge, MapNode, TraceHop, TxEvidence } from "./types";
 
 const ANCHOR_PREFIX = "bukti-";
 /** Hash EVM (0x + 64 hex) atau signature Solana (base58). */
@@ -85,5 +85,35 @@ export function evidenceFromEdges(chain: ChainId, edges: MapEdge[], nodes: MapNo
       amountUsd: edge.amountUsd,
     });
   }
+  return [...map.values()];
+}
+
+/** Bukti dari transaksi pendukung temuan koordinasi. */
+export function evidenceFromCoordination(chain: ChainId, events: CoordinationEvent[], nodes: MapNode[]): TxEvidence[] {
+  const labels = new Map(nodes.map((node) => [node.address, node.label]));
+  const map = new Map<string, TxEvidence>();
+  const seen = new Set<string>();
+  for (const tx of events.flatMap((event) => event.transactions)) {
+    // Transaksi yang sama bisa mendukung beberapa temuan; cukup satu kali.
+    const id = `${tx.txHash}:${tx.from}:${tx.to}:${tx.asset.symbol}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    addMovement(map, chain, tx.txHash, tx.timestamp, {
+      from: tx.from,
+      fromLabel: labels.get(tx.from),
+      to: tx.to,
+      toLabel: labels.get(tx.to),
+      asset: tx.asset,
+      amount: tx.amount,
+      amountUsd: tx.amountUsd,
+    });
+  }
+  return [...map.values()];
+}
+
+/** Gabungan beberapa daftar bukti; bukti pertama untuk tiap hash yang dipakai. */
+export function mergeEvidence(...lists: TxEvidence[][]): TxEvidence[] {
+  const map = new Map<string, TxEvidence>();
+  for (const item of lists.flat()) if (!map.has(item.txHash)) map.set(item.txHash, item);
   return [...map.values()];
 }

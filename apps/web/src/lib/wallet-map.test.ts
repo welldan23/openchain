@@ -7,7 +7,9 @@ import {
   clusterStyles,
   coordinationMembership,
   describeCoordinationWindow,
+  sameBlockCount,
   sortCoordination,
+  sortCoordinationTxs,
   edgesOf,
   EMPTY_LABEL_FILTER,
   isLabelFilterActive,
@@ -243,5 +245,42 @@ describe("deteksi koordinasi", () => {
       "nbla-funding-burst",
       "nbla-similar-amount",
     ]);
+  });
+});
+
+describe("transaksi pendukung koordinasi", () => {
+  const sameBlock = nbla.coordination.find((event) => event.kind === "same_block_buy")!;
+
+  it("semua transaksi beli di blok peluncuran, bersama penambahan likuiditas", () => {
+    // Tambah likuiditas memindahkan ETH dan NBLA dalam satu transaksi, jadi dua baris.
+    expect(sameBlock.transactions.map((tx) => tx.action)).toEqual([
+      "add_liquidity",
+      "add_liquidity",
+      "buy",
+      "buy",
+      "buy",
+      "buy",
+      "buy",
+    ]);
+    expect(new Set(sameBlock.transactions.map((tx) => tx.blockNumber)).size).toBe(1);
+    expect(sameBlockCount(sameBlock.transactions)).toBe(7);
+  });
+
+  it("pendanaan beruntun berurutan dalam 9 menit di blok berbeda", () => {
+    const burst = nbla.coordination.find((event) => event.kind === "funding_burst")!;
+    const sorted = sortCoordinationTxs(burst.transactions);
+    expect(sorted).toHaveLength(5);
+    expect(Date.parse(sorted[4].timestamp) - Date.parse(sorted[0].timestamp)).toBe(9 * 60 * 1000);
+    expect(sorted[4].blockNumber - sorted[0].blockNumber).toBe(45);
+    expect(sameBlockCount(sorted)).toBe(0);
+  });
+
+  it("mengurutkan menurut blok lalu waktu", () => {
+    const txs = [
+      { id: "b", blockNumber: 2, timestamp: "2026-01-01T00:00:00Z" },
+      { id: "a", blockNumber: 1, timestamp: "2026-01-01T00:05:00Z" },
+      { id: "c", blockNumber: 2, timestamp: "2026-01-01T00:00:00Z" },
+    ];
+    expect(sortCoordinationTxs(txs).map((tx) => tx.id)).toEqual(["a", "b", "c"]);
   });
 });

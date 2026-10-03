@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   evidenceAnchor,
+  evidenceFromCoordination,
   evidenceFromEdges,
   evidenceFromHops,
   evidenceFromTransfers,
   evidenceLink,
+  mergeEvidence,
   parseEvidenceAnchor,
 } from "./evidence";
 import { MOCK_MAPS } from "./mock/maps";
@@ -62,5 +64,24 @@ describe("bukti dari garis peta", () => {
     expect(evidence).toHaveLength(new Set(nbla.edges.map((edge) => edge.txHash)).size);
     const funding = evidence.find((item) => item.movements[0].fromLabel?.type === "exchange" && item.movements[0].amount === 12)!;
     expect(funding.movements[0].toLabel?.name).toBe("Pendana bersama 5 wallet");
+  });
+});
+
+describe("bukti dari transaksi koordinasi", () => {
+  it("tidak menggandakan transaksi yang mendukung beberapa temuan", () => {
+    const [nbla] = MOCK_MAPS;
+    const evidence = evidenceFromCoordination(nbla.chain, nbla.coordination, nbla.nodes);
+    const unique = new Set(nbla.coordination.flatMap((event) => event.transactions.map((tx) => tx.txHash)));
+    expect(evidence).toHaveLength(unique.size);
+    // Tambah likuiditas memindahkan ETH dan NBLA dalam satu transaksi: satu bukti, dua perpindahan.
+    expect(evidence.filter((item) => item.movements.length === 2)).toHaveLength(1);
+  });
+
+  it("menggabungkan daftar bukti tanpa menimpa yang pertama", () => {
+    const [nbla] = MOCK_MAPS;
+    const fromEdges = evidenceFromEdges(nbla.chain, nbla.edges, nbla.nodes);
+    const merged = mergeEvidence(fromEdges, evidenceFromCoordination(nbla.chain, nbla.coordination, nbla.nodes));
+    expect(merged.length).toBeGreaterThan(fromEdges.length);
+    expect(merged.slice(0, fromEdges.length)).toEqual(fromEdges);
   });
 });

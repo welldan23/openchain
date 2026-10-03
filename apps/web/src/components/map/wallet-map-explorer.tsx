@@ -28,7 +28,7 @@ import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/chains";
 import { cn } from "@/lib/cn";
-import { evidenceFromEdges } from "@/lib/evidence";
+import { evidenceFromCoordination, evidenceFromEdges, mergeEvidence } from "@/lib/evidence";
 import { COORDINATION_KIND_META } from "@/lib/labels";
 import { formatDateTime, formatPct, formatTokenAmount, formatUsdCompact, shortenHash } from "@/lib/format";
 import { addressKey, addressTitle } from "@/lib/fund-flow";
@@ -51,6 +51,7 @@ import {
   type LabelFilter,
 } from "@/lib/wallet-map";
 import { CoordinationPanel } from "./coordination-panel";
+import { CoordinationTxsPanel } from "./coordination-txs-panel";
 import { LabelFilterBar } from "./label-filter-bar";
 import { usePanZoom } from "./use-pan-zoom";
 
@@ -205,7 +206,14 @@ export function WalletMapExplorer({
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const byKey = useMemo(() => new Map(nodes.map((item) => [addressKey(chain, item.node.address), item])), [chain, nodes]);
-  const evidence = useMemo(() => evidenceFromEdges(chain, edges, nodes.map((item) => item.node)), [chain, edges, nodes]);
+  const evidence = useMemo(() => {
+    const mapNodes = nodes.map((item) => item.node);
+    return mergeEvidence(evidenceFromEdges(chain, edges, mapNodes), evidenceFromCoordination(chain, coordination, mapNodes));
+  }, [chain, edges, nodes, coordination]);
+  const labelsByKey = useMemo(
+    () => new Map(nodes.map((item) => [addressKey(chain, item.node.address), item.node.label])),
+    [chain, nodes],
+  );
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined;
 
   /**
@@ -217,6 +225,7 @@ export function WalletMapExplorer({
   const [focusCluster, setFocusCluster] = useState<string | null>(null);
   const [focusCoordination, setFocusCoordination] = useState<string | null>(null);
   const [showCoordination, setShowCoordination] = useState(true);
+  const [txEventId, setTxEventId] = useState<string | null>(null);
   const coordinationOf = useMemo(() => coordinationMembership(chain, { coordination }), [chain, coordination]);
 
   const highlight = useMemo(() => {
@@ -699,15 +708,33 @@ export function WalletMapExplorer({
             focusedId={focusCoordination}
             onFocus={(id) => {
               setFocusCoordination(id);
+              if (id) setTxEventId(id);
               setFocusCluster(null);
               setSelected(null);
               setSelectedEdgeId(null);
             }}
             showMarkers={showCoordination}
             onToggleMarkers={() => setShowCoordination((value) => !value)}
+            onShowTransactions={(id) => {
+              setTxEventId(id);
+              requestAnimationFrame(() =>
+                document.getElementById("transaksi-koordinasi")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+              );
+            }}
           />
         </div>
       </div>
+      {coordination.length > 0 ? (
+        <div className="mt-5">
+          <CoordinationTxsPanel
+            chain={chain}
+            events={coordination}
+            activeId={txEventId}
+            onSelect={setTxEventId}
+            labels={labelsByKey}
+          />
+        </div>
+      ) : null}
     </EvidenceProvider>
   );
 }
