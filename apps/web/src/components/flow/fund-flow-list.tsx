@@ -24,8 +24,8 @@ const TABS: Array<{ id: DirectionFilter; label: string; totalLabel: string }> = 
 
 const EMPTY_TEXT: Record<DirectionFilter, string> = {
   all: "Transfer masuk dan keluar akan muncul di sini setelah terindeks dari blockchain.",
-  in: "Address ini belum menerima dana pada periode yang dianalisis.",
-  out: "Address ini belum mengirim dana pada periode yang dianalisis.",
+  in: "Address ini belum menerima dana pada rentang waktu yang dipilih.",
+  out: "Address ini belum mengirim dana pada rentang waktu yang dipilih.",
 };
 
 function signedUsd(value: number): string {

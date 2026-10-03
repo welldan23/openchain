@@ -78,7 +78,7 @@ export function CounterpartiesPanel({ sources, destinations }: CounterpartiesPan
       {sources.length === 0 && destinations.length === 0 ? (
         <EmptyState
           title="Belum ada lawan transaksi"
-          description="Address ini belum mengirim atau menerima dana pada periode yang dianalisis."
+          description="Address ini belum mengirim atau menerima dana pada rentang waktu yang dipilih."
         />
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -87,14 +87,14 @@ export function CounterpartiesPanel({ sources, destinations }: CounterpartiesPan
             title="Sumber dana terbesar"
             icon={ArrowDownLeft}
             items={sources}
-            emptyText="Belum ada dana masuk pada periode ini."
+            emptyText="Belum ada dana masuk pada rentang ini."
           />
           <CounterpartySide
             id="tujuan-dana"
             title="Tujuan dana terbesar"
             icon={ArrowUpRight}
             items={destinations}
-            emptyText="Belum ada dana keluar pada periode ini."
+            emptyText="Belum ada dana keluar pada rentang ini."
           />
         </div>
       )}

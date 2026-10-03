@@ -339,11 +339,64 @@ const emptyWalletFlow: AddressFlow = {
   },
 };
 
+/* -------------------------------------------------------------------------- */
+/* Pendana bersama yang sama di Base, setelah dana di-bridge dari Ethereum      */
+/* -------------------------------------------------------------------------- */
+
+const commonFunderBaseFlow: AddressFlow = {
+  chain: "base",
+  address: nbla.funder,
+  label: commonFunderFlow.label,
+  window: { from: "2026-09-12T00:00:00.000Z", to: SNAPSHOT_AT },
+  transfers: withIds("funder-base", [
+    {
+      direction: "in",
+      counterparty: mockEvmAddress("flow:base-bridge"),
+      counterpartyLabel: {
+        type: "bridge",
+        name: "Bridge dari Ethereum",
+        source: "external",
+        sourceName: "Label publik explorer",
+      },
+      asset: ETH,
+      amount: 1.4985,
+      amountUsd: 1.4985 * 2_510,
+      txHash: mockEvmTxHash("flow:base-funder-from-bridge"),
+      timestamp: "2026-09-22T09:31:00.000Z",
+    },
+    {
+      direction: "out",
+      counterparty: mockEvmAddress("flow:base-dex-router"),
+      counterpartyLabel: { type: "router", name: "Router DEX", source: "external", sourceName: "DEX indexer" },
+      asset: ETH,
+      amount: 1.2,
+      amountUsd: 1.2 * 2_495,
+      txHash: mockEvmTxHash("flow:base-funder-to-router"),
+      timestamp: "2026-09-30T22:15:00.000Z",
+    },
+    {
+      direction: "out",
+      counterparty: mockEvmAddress("flow:base-fresh-wallet"),
+      asset: ETH,
+      amount: 0.25,
+      amountUsd: 0.25 * 2_450,
+      txHash: mockEvmTxHash("flow:base-funder-to-fresh-wallet"),
+      timestamp: "2026-10-02T23:40:00.000Z",
+    },
+  ]),
+  snapshot: {
+    fetchedAt: SNAPSHOT_AT,
+    blockNumber: 36_118_402,
+    sources: ["Node RPC (tiruan)", "DEX indexer (tiruan)", "Label publik explorer (tiruan)"],
+  },
+};
+
 export const MOCK_FLOWS: AddressFlow[] = [
   commonFunderFlow,
   deployerFlow,
   kodoCreatorFlow,
   emptyWalletFlow,
+  commonFunderBaseFlow,
 ];
 
 /**

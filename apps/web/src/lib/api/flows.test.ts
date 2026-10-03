@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_FAILING_FLOW, MOCK_FLOWS } from "../mock/flows";
-import { flowFailureDemoPath, flowPath, getAddressFlow, listSampleFlows } from "./flows";
+import { flowFailureDemoPath, flowPath, getAddressFlow, listFlowChains, listSampleFlows } from "./flows";
 
 /** Jalankan pemanggilan API tiruan tanpa menunggu latensi sungguhan. */
 async function settle<T>(promise: Promise<T>): Promise<T> {
@@ -44,6 +44,7 @@ describe("API aliran dana (mock)", () => {
       ["ethereum", 5],
       ["solana", 4],
       ["base", 0],
+      ["base", 3],
     ]);
     expect(flowFailureDemoPath()).toBe(flowPath("arbitrum", MOCK_FAILING_FLOW.address));
   });
@@ -60,5 +61,16 @@ describe("API aliran dana (mock)", () => {
         }
       }
     }
+  });
+
+  it("menyebut chain dengan format address yang sama dan tanda ada datanya", async () => {
+    const chains = await listFlowChains("ethereum", funder.address);
+    expect(chains).toEqual([
+      { chain: "ethereum", hasData: true },
+      { chain: "bsc", hasData: false },
+      { chain: "base", hasData: true },
+      { chain: "arbitrum", hasData: false },
+    ]);
+    expect(await listFlowChains("solana", kodoCreator.address)).toEqual([{ chain: "solana", hasData: true }]);
   });
 });

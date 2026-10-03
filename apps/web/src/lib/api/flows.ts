@@ -6,6 +6,7 @@
  * `GET /flows/:chain/:address` → `AddressFlow`) tanpa mengubah komponen yang
  * memakainya.
  */
+import { CHAINS } from "../chains";
 import { addressKey } from "../fund-flow";
 import { MOCK_FAILING_FLOW, MOCK_FLOWS } from "../mock/flows";
 import type { AddressFlow, AddressFlowSummary, ChainId } from "../types";
@@ -37,6 +38,24 @@ export async function getAddressFlow(chain: ChainId, address: string): Promise<A
     (flow) => flow.chain === chain && sameAddress(chain, flow.address, address),
   );
   return found ?? null;
+}
+
+/**
+ * Chain yang format address-nya sama dengan `chain`, beserta tanda apakah
+ * address ini punya data aliran dana di sana. Address EVM sama di semua chain
+ * EVM, jadi satu wallet bisa dilacak di beberapa chain.
+ */
+export async function listFlowChains(
+  chain: ChainId,
+  address: string,
+): Promise<Array<{ chain: ChainId; hasData: boolean }>> {
+  const format = CHAINS[chain].addressFormat;
+  return (Object.keys(CHAINS) as ChainId[])
+    .filter((id) => CHAINS[id].addressFormat === format)
+    .map((id) => ({
+      chain: id,
+      hasData: MOCK_FLOWS.some((flow) => flow.chain === id && sameAddress(id, flow.address, address)),
+    }));
 }
 
 /** Daftar address contoh untuk dibuka dari beranda. */
