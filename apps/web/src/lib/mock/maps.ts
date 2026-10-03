@@ -425,7 +425,24 @@ const kodoMap: WalletMap = {
   snapshot: kodoToken.snapshot,
 };
 
-export const MOCK_MAPS: WalletMap[] = [nblaMap, kodoMap];
+/* -------------------------------------------------------------------------- */
+/* Sunyi Protocol (SUNY) — Base, token baru tanpa data holder                  */
+/* -------------------------------------------------------------------------- */
+
+const sunyiToken = tokenBySymbol("SUNY");
+
+/** Contoh peta kosong: holder token belum terindeks. */
+const sunyiMap: WalletMap = {
+  chain: sunyiToken.token.chain,
+  token: { address: sunyiToken.token.address, name: sunyiToken.token.name, symbol: sunyiToken.token.symbol },
+  nodes: [],
+  edges: [],
+  clusters: [],
+  coordination: [],
+  snapshot: sunyiToken.snapshot,
+};
+
+export const MOCK_MAPS: WalletMap[] = [nblaMap, kodoMap, sunyiMap];
 
 /**
  * Token yang sengaja membuat API tiruan gagal, untuk mencoba tampilan status

@@ -1,5 +1,6 @@
 import { Table2 } from "lucide-react";
 import { EntityLabelBadge } from "@/components/badges";
+import { ClassificationBadge } from "@/components/classification-badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl } from "@/lib/chains";
@@ -17,7 +18,13 @@ export function MapTable({ chain, symbol, nodes, connections }: {
 }) {
   const rows = [...nodes].sort((a, b) => b.node.sharePct - a.node.sharePct);
   return (
-    <Panel id="tabel-peta" title="Wallet di peta" description="Isi peta yang sama dalam bentuk tabel." icon={Table2}>
+    <Panel
+      id="tabel-peta"
+      title="Wallet di peta"
+      description="Isi peta yang sama dalam bentuk tabel. Porsi supply dihitung dari saldo on-chain pada snapshot."
+      icon={Table2}
+      action={<ClassificationBadge classification="calculation" />}
+    >
       <div className="-mx-4 overflow-x-auto sm:-mx-5">
         <table className="w-full text-left text-xs">
           <caption className="sr-only">Daftar wallet di peta hubungan holder {symbol}</caption>

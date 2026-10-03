@@ -42,7 +42,7 @@ describe("ukuran gelembung", () => {
 
 describe("data peta tiruan", () => {
   it("garis hanya menghubungkan wallet yang ada di peta", () => {
-    for (const map of MOCK_MAPS) {
+    for (const map of MOCK_MAPS.filter((item) => item.nodes.length > 0)) {
       const onMap = new Set(map.nodes.map((node) => node.address));
       expect(map.edges.length).toBeGreaterThan(0);
       expect(map.edges.every((edge) => onMap.has(edge.from) && onMap.has(edge.to))).toBe(true);
@@ -282,5 +282,22 @@ describe("transaksi pendukung koordinasi", () => {
       { id: "c", blockNumber: 2, timestamp: "2026-01-01T00:00:00Z" },
     ];
     expect(sortCoordinationTxs(txs).map((tx) => tx.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("peta kosong", () => {
+  const empty = MOCK_MAPS.find((map) => map.nodes.length === 0)!;
+
+  it("tata letak dan ringkasan tetap aman tanpa wallet", () => {
+    expect(layoutWalletMap(empty)).toEqual([]);
+    expect(summarizeMap(empty)).toEqual({ walletCount: 0, holderCount: 0, clusterCount: 0, linkCount: 0, clusteredSharePct: 0 });
+    expect(clusterStyles(empty)).toEqual([]);
+    expect(labelTypeCounts(empty.nodes)).toEqual([]);
+  });
+
+  it("satu wallet saja tetap di tengah kanvas", () => {
+    const [single] = layoutWalletMap({ ...nbla, nodes: [nbla.nodes[0]], edges: [] });
+    expect(single.x).toBeCloseTo(MAP_WIDTH / 2, 0);
+    expect(single.y).toBeCloseTo(MAP_HEIGHT / 2, 0);
   });
 });

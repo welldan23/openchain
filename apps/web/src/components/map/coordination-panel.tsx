@@ -4,6 +4,7 @@ import { Eye, EyeOff, Highlighter, ListOrdered, Zap } from "lucide-react";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { ConfidenceMeter } from "@/components/confidence-meter";
 import { Panel } from "@/components/ui/panel";
+import { EmptyState } from "@/components/ui/states";
 import { getChain } from "@/lib/chains";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber } from "@/lib/format";
@@ -46,7 +47,11 @@ export function CoordinationPanel({
       action={<ClassificationBadge classification="heuristic" />}
     >
       {events.length === 0 ? (
-        <p className="text-xs text-muted">Belum terdeteksi pola gerak serempak di antara wallet peta ini.</p>
+        <EmptyState
+          icon={Zap}
+          title="Belum ada gerak serempak"
+          description="Belum terdeteksi wallet yang bergerak serempak di peta ini. Ini bukan jaminan aman; datanya bisa belum lengkap."
+        />
       ) : (
         <div className="space-y-3">
           <button

@@ -41,6 +41,7 @@ describe("API peta hubungan wallet (mock)", () => {
     expect(samples.map((item) => [item.symbol, item.walletCount, item.clusterCount])).toEqual([
       ["NBLA", 14, 2],
       ["KODO", 11, 1],
+      ["SUNY", 0, 0],
     ]);
     expect(mapFailureDemoPath()).toBe(mapPath("arbitrum", MOCK_FAILING_MAP.address));
   });

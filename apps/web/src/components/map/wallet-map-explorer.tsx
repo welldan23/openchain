@@ -463,6 +463,11 @@ export function WalletMapExplorer({
               if (onKeyDown(event)) setHovered(null);
             }}
           >
+            {edges.length === 0 ? (
+              <p className="mb-2 rounded-lg bg-surface-raised px-3 py-2 text-[11px] text-muted">
+                Belum ada transfer di antara wallet peta ini, jadi belum ada garis hubungan.
+              </p>
+            ) : null}
             <div className="relative overflow-hidden rounded-lg">
               <svg
                 ref={svgRef}
@@ -631,6 +636,24 @@ export function WalletMapExplorer({
                   );
                 })}
               </svg>
+
+              {visibleNodes.length === 0 ? (
+                <div className="absolute inset-0 grid place-items-center p-4">
+                  <div role="status" className="max-w-xs rounded-lg border border-line bg-surface-raised/95 px-4 py-3 text-center shadow-xl shadow-black/40">
+                    <p className="text-sm font-medium">Tidak ada wallet yang cocok</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted">
+                      Pilihan wallet pusat atau filter label menyembunyikan semua wallet di peta ini.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => applyView(null, depth, EMPTY_LABEL_FILTER, true)}
+                      className="mt-3 inline-flex items-center rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-background transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      Tampilkan semua wallet
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="absolute top-2 right-2 flex flex-col items-center gap-1 rounded-lg border border-line bg-surface-raised/90 p-1 backdrop-blur">
                 <MapControl label="Perbesar" onClick={zoomIn} disabled={viewport.scale >= MAX_SCALE} icon={ZoomIn} />
@@ -1011,9 +1034,10 @@ function WalletDetail({
         ) : null}
 
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Hubungan ({related.length})
-          </h3>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Hubungan ({related.length})</h3>
+            {related.length > 0 ? <ClassificationBadge classification="fact" /> : null}
+          </div>
           {related.length === 0 ? (
             <p className="text-xs text-muted">Belum ada transfer ke atau dari wallet lain di peta.</p>
           ) : (
