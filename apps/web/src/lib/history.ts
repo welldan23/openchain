@@ -8,6 +8,9 @@ import type { InvestigationEntry } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Id judul halaman riwayat; menerima fokus bila item terakhir dihapus. */
+export const HISTORY_HEADING_ID = "riwayat-judul";
+
 export interface HistoryDayGroup {
   /** Tanggal WIB, mis. "2026-10-03". */
   day: string;
@@ -50,4 +53,15 @@ export function validateNote(raw: string): NoteValidation {
     return { ok: false, error: `Catatan maksimal ${NOTE_MAX_LENGTH} karakter (sekarang ${note.length}).` };
   }
   return { ok: true, note: note === "" ? undefined : note };
+}
+
+/**
+ * Item yang menerima fokus setelah `removedId` dihapus: item sesudahnya di
+ * urutan tampil, atau sebelumnya bila yang dihapus item terakhir. `null`
+ * bila daftar jadi kosong.
+ */
+export function focusTargetAfterRemoval(orderedIds: string[], removedId: string): string | null {
+  const index = orderedIds.indexOf(removedId);
+  if (index < 0) return null;
+  return orderedIds[index + 1] ?? orderedIds[index - 1] ?? null;
 }

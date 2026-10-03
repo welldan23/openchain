@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupHistoryByDay, NOTE_MAX_LENGTH, validateNote } from "./history";
+import { focusTargetAfterRemoval, groupHistoryByDay, NOTE_MAX_LENGTH, validateNote } from "./history";
 import type { InvestigationEntry } from "./types";
 
 const entry = (id: string, openedAt: string): InvestigationEntry => ({ id, kind: "token", title: id, href: `/${id}`, openedAt });
@@ -38,5 +38,14 @@ describe("catatan investigasi", () => {
     expect(validateNote("a".repeat(NOTE_MAX_LENGTH))).toEqual({ ok: true, note: "a".repeat(NOTE_MAX_LENGTH) });
     const result = validateNote("a".repeat(NOTE_MAX_LENGTH + 5));
     expect(result).toEqual({ ok: false, error: `Catatan maksimal ${NOTE_MAX_LENGTH} karakter (sekarang ${NOTE_MAX_LENGTH + 5}).` });
+  });
+});
+
+describe("fokus setelah menghapus", () => {
+  it("pindah ke item berikutnya, atau sebelumnya bila yang dihapus item terakhir", () => {
+    expect(focusTargetAfterRemoval(["a", "b", "c"], "a")).toBe("b");
+    expect(focusTargetAfterRemoval(["a", "b", "c"], "c")).toBe("b");
+    expect(focusTargetAfterRemoval(["a"], "a")).toBeNull();
+    expect(focusTargetAfterRemoval(["a"], "x")).toBeNull();
   });
 });

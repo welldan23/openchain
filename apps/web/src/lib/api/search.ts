@@ -108,6 +108,22 @@ export async function saveInvestigationNote(id: string, rawNote: string): Promis
   return { ...entry, note: validation.note };
 }
 
+/** Item riwayat tiruan yang sengaja gagal dihapus, untuk mencoba tampilan error. */
+export const MOCK_UNDELETABLE_HISTORY_ID = "hist-5";
+
+/**
+ * Hapus satu investigasi dari riwayat beserta catatannya (asumsi kontrak:
+ * `DELETE /investigations/:id` → 204). Hanya riwayatnya yang hilang; data
+ * on-chain dan halaman investigasinya tetap bisa dibuka lagi.
+ */
+export async function deleteInvestigation(id: string): Promise<void> {
+  await delay(SAVE_LATENCY_MS);
+  if (id === MOCK_UNDELETABLE_HISTORY_ID) {
+    throw new Error("Simulasi: item ini gagal dihapus karena layanan tidak bisa dihubungi.");
+  }
+  if (!MOCK_HISTORY.some((item) => item.id === id)) throw new Error("Investigasi ini sudah tidak ada di riwayat.");
+}
+
 /** Contoh isian yang bisa dicoba saat kotak cari masih kosong. */
 export function listSearchExamples(): Array<{ label: string; query: string }> {
   return MOCK_SEARCH_EXAMPLES;

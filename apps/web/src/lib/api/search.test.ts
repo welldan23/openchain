@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_FLOWS } from "../mock/flows";
 import { MOCK_FAILING_QUERY } from "../mock/search";
 import { MOCK_TOKENS } from "../mock/tokens";
-import { listInvestigationHistory, MOCK_FAILING_NOTE, saveInvestigationNote, searchInvestigations, searchPath, suggestSearch } from "./search";
+import {
+  deleteInvestigation,
+  listInvestigationHistory,
+  MOCK_FAILING_NOTE,
+  MOCK_UNDELETABLE_HISTORY_ID,
+  saveInvestigationNote,
+  searchInvestigations,
+  searchPath,
+  suggestSearch,
+} from "./search";
 
 async function settle<T>(promise: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(5_000);
@@ -97,6 +106,19 @@ describe("API pencarian (mock)", () => {
       ["tidak-ada", "halo", /tidak ada lagi/],
     ] as const) {
       const pending = saveInvestigationNote(id, note);
+      const assertion = expect(pending).rejects.toThrow(error);
+      await vi.advanceTimersByTimeAsync(5_000);
+      await assertion;
+    }
+  });
+
+  it("menghapus item riwayat; item simulasi dan item tak dikenal ditolak", async () => {
+    await expect(settle(deleteInvestigation("hist-1"))).resolves.toBeUndefined();
+    for (const [id, error] of [
+      [MOCK_UNDELETABLE_HISTORY_ID, /gagal dihapus/],
+      ["tidak-ada", /sudah tidak ada/],
+    ] as const) {
+      const pending = deleteInvestigation(id);
       const assertion = expect(pending).rejects.toThrow(error);
       await vi.advanceTimersByTimeAsync(5_000);
       await assertion;
