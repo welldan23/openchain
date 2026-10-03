@@ -1,14 +1,28 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, Maximize2, MousePointerClick, Network, X, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowRight,
+  ArrowUpRight,
+  FileSearch,
+  Highlighter,
+  Maximize2,
+  MousePointerClick,
+  Network,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { EntityLabelBadge } from "@/components/badges";
 import { ClassificationBadge } from "@/components/classification-badge";
+import { EvidenceProvider, EvidenceTrigger } from "@/components/evidence/evidence-dialog";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/chains";
 import { cn } from "@/lib/cn";
+import { evidenceFromEdges } from "@/lib/evidence";
 import { formatDateTime, formatPct, formatTokenAmount, formatUsdCompact, shortenHash } from "@/lib/format";
 import { addressKey, addressTitle } from "@/lib/fund-flow";
 import type { ChainId, MapEdge, MapNode } from "@/lib/types";
@@ -34,6 +48,10 @@ interface WalletMapExplorerProps {
 
 const EDGE_COLOR = "#3a4a63";
 const EDGE_ACTIVE_COLOR = "#8b9bb2";
+/** Garis yang dipilih memakai warna teks, bukan warna klaster, supaya tidak tertukar. */
+const EDGE_SELECTED_COLOR = "#e6edf6";
+/** Lebar area klik garis (px layar), jauh lebih lebar dari garisnya. */
+const EDGE_HIT_WIDTH = 14;
 /** Gelembung sebesar ini atau lebih diberi label langsung di dalamnya. */
 const LABEL_MIN_RADIUS = 22;
 
@@ -62,43 +80,74 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
   const { svgRef, viewport, dragging, zoomIn, zoomOut, reset, isDragClick, svgProps, onKeyDown } = usePanZoom();
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const byKey = useMemo(() => new Map(nodes.map((item) => [addressKey(chain, item.node.address), item])), [chain, nodes]);
-  const focusKey = hovered ?? selected;
+  const evidence = useMemo(() => evidenceFromEdges(chain, edges, nodes.map((item) => item.node)), [chain, edges, nodes]);
+  const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : undefined;
 
-  const neighbors = useMemo(() => {
-    if (!focusKey) return null;
-    const result = new Set([focusKey]);
-    for (const edge of edges) {
-      const from = addressKey(chain, edge.from);
-      const to = addressKey(chain, edge.to);
-      if (from === focusKey) result.add(to);
-      if (to === focusKey) result.add(from);
+  /**
+   * Yang sedang disorot: gelembung yang di-hover, lalu garis yang dipilih,
+   * lalu gelembung yang dipilih. Garis aktif dan gelembung di ujungnya terang,
+   * sisanya diredupkan.
+   */
+  const highlight = useMemo(() => {
+    const nodeKey = hovered ?? (selectedEdge ? null : selected);
+    if (nodeKey) {
+      const active = new Set<string>();
+      const keys = new Set([nodeKey]);
+      for (const edge of edges) {
+        const from = addressKey(chain, edge.from);
+        const to = addressKey(chain, edge.to);
+        if (from === nodeKey || to === nodeKey) {
+          active.add(edge.id);
+          keys.add(from);
+          keys.add(to);
+        }
+      }
+      return { edges: active, nodes: keys };
     }
-    return result;
-  }, [chain, edges, focusKey]);
+    if (selectedEdge) {
+      return {
+        edges: new Set([selectedEdge.id]),
+        nodes: new Set([addressKey(chain, selectedEdge.from), addressKey(chain, selectedEdge.to)]),
+      };
+    }
+    return null;
+  }, [chain, edges, hovered, selected, selectedEdge]);
 
   useEffect(() => {
-    if (!selected) return;
+    if (!selected && !selectedEdgeId) return;
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setSelected(null);
+      if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      setSelected(null);
+      setSelectedEdgeId(null);
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [selected]);
+  }, [selected, selectedEdgeId]);
 
   const hoveredItem = hovered ? byKey.get(hovered) : undefined;
   const selectedItem = selected ? byKey.get(selected) : undefined;
 
+  /** Di layar sempit panel samping ada di bawah peta; bawa ke sana supaya terlihat. */
+  function revealPanel(id: string) {
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   function select(key: string) {
     if (isDragClick()) return;
-    const next = selected === key ? null : key;
+    const next = selected === key && !selectedEdgeId ? null : key;
     setSelected(next);
-    // Di layar sempit panel detail ada di bawah peta; bawa ke sana supaya terlihat.
-    if (next && window.matchMedia("(max-width: 1023px)").matches) {
-      requestAnimationFrame(() =>
-        document.getElementById("detail-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
-    }
+    setSelectedEdgeId(null);
+    if (next) revealPanel("detail-wallet");
+  }
+
+  function selectEdge(id: string) {
+    if (isDragClick()) return;
+    const next = selectedEdgeId === id ? null : id;
+    setSelectedEdgeId(next);
+    if (next) revealPanel("bukti-garis");
   }
 
   function onNodeKey(event: KeyboardEvent<SVGGElement>, key: string) {
@@ -109,175 +158,295 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
   }
 
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-      <Panel
-        id="peta"
-        title="Peta hubungan"
-        description="Gelembung = wallet, besarnya sebanding porsi supply. Garis = transfer di antara wallet."
-        icon={Network}
-        className="min-w-0 lg:col-span-2"
-        action={<ClassificationBadge classification="heuristic" />}
-      >
-        <div
-          className="-mx-2 sm:mx-0"
-          onKeyDown={(event) => {
-            if (onKeyDown(event)) setHovered(null);
-          }}
+    <EvidenceProvider evidence={evidence}>
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+        <Panel
+          id="peta"
+          title="Peta hubungan"
+          description="Gelembung = wallet, besarnya sebanding porsi supply. Garis = transfer di antara wallet."
+          icon={Network}
+          className="min-w-0 lg:col-span-2"
+          action={<ClassificationBadge classification="heuristic" />}
         >
-          <div className="relative overflow-hidden rounded-lg">
-            <svg
-              ref={svgRef}
-              viewBox={viewBoxOf(viewport)}
-              className={cn(
-                "block h-auto w-full select-none",
-                viewport.scale > 1 ? (dragging ? "cursor-grabbing" : "cursor-grab") : undefined,
-              )}
-              // Saat diperbesar, sentuhan dipakai untuk menggeser peta; saat belum, untuk menggulir halaman.
-              style={{ touchAction: viewport.scale > 1 ? "none" : "pan-y" }}
-              role="group"
-              aria-label={`Peta hubungan ${nodes.length} wallet holder ${symbol}`}
-              aria-describedby={hintId}
-              onPointerLeave={() => setHovered(null)}
-              {...svgProps}
-            >
-              <defs>
-                <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                  <path d="M0 0 L10 5 L0 10 z" fill={EDGE_ACTIVE_COLOR} />
-                </marker>
-              </defs>
-              <g aria-hidden>
-                {edges.map((edge) => {
-                  const from = byKey.get(addressKey(chain, edge.from));
-                  const to = byKey.get(addressKey(chain, edge.to));
-                  if (!from || !to) return null;
-                  const touches =
-                    focusKey !== null &&
-                    (addressKey(chain, edge.from) === focusKey || addressKey(chain, edge.to) === focusKey);
+          <div
+            className="-mx-2 sm:mx-0"
+            onKeyDown={(event) => {
+              if (onKeyDown(event)) setHovered(null);
+            }}
+          >
+            <div className="relative overflow-hidden rounded-lg">
+              <svg
+                ref={svgRef}
+                viewBox={viewBoxOf(viewport)}
+                className={cn(
+                  "block h-auto w-full select-none",
+                  viewport.scale > 1 ? (dragging ? "cursor-grabbing" : "cursor-grab") : undefined,
+                )}
+                // Saat diperbesar, sentuhan dipakai untuk menggeser peta; saat belum, untuk menggulir halaman.
+                style={{ touchAction: viewport.scale > 1 ? "none" : "pan-y" }}
+                role="group"
+                aria-label={`Peta hubungan ${nodes.length} wallet holder ${symbol}`}
+                aria-describedby={hintId}
+                onPointerLeave={() => setHovered(null)}
+                {...svgProps}
+              >
+                <defs>
+                  <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M0 0 L10 5 L0 10 z" fill={EDGE_ACTIVE_COLOR} />
+                  </marker>
+                </defs>
+                <g aria-hidden>
+                  {edges.map((edge) => {
+                    const from = byKey.get(addressKey(chain, edge.from));
+                    const to = byKey.get(addressKey(chain, edge.to));
+                    if (!from || !to) return null;
+                    const ends = edgeEnds(from, to);
+                    const active = highlight?.edges.has(edge.id) ?? false;
+                    const isSelected = edge.id === selectedEdgeId;
+                    return (
+                      <g key={edge.id} opacity={highlight && !active ? 0.25 : 1}>
+                        <line
+                          {...ends}
+                          stroke={isSelected ? EDGE_SELECTED_COLOR : active ? EDGE_ACTIVE_COLOR : EDGE_COLOR}
+                          strokeWidth={isSelected ? 2.5 : active ? 2 : 1.5}
+                          strokeDasharray={edge.kind === "funding" ? "5 4" : undefined}
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
+                          markerEnd={active ? `url(#${markerId})` : undefined}
+                        />
+                        {/* Area klik transparan yang lebar; garisnya sendiri terlalu tipis untuk di-tap. */}
+                        <line
+                          {...ends}
+                          stroke="transparent"
+                          strokeWidth={EDGE_HIT_WIDTH}
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="stroke"
+                          className="cursor-pointer"
+                          onClick={() => selectEdge(edge.id)}
+                        />
+                      </g>
+                    );
+                  })}
+                </g>
+                {nodes.map((item) => {
+                  const key = addressKey(chain, item.node.address);
+                  const dimmed = highlight !== null && !highlight.nodes.has(key);
+                  const isSelected = selected === key;
+                  const holder = item.node.sharePct > 0;
+                  const showLabel = item.r >= LABEL_MIN_RADIUS;
                   return (
-                    <line
-                      key={edge.id}
-                      {...edgeEnds(from, to)}
-                      stroke={touches ? EDGE_ACTIVE_COLOR : EDGE_COLOR}
-                      strokeWidth={touches ? 2 : 1.5}
-                      strokeDasharray={edge.kind === "funding" ? "5 4" : undefined}
-                      strokeLinecap="round"
-                      vectorEffect="non-scaling-stroke"
-                      markerEnd={touches ? `url(#${markerId})` : undefined}
-                      opacity={focusKey && !touches ? 0.25 : 1}
-                    />
+                    <g
+                      key={key}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSelected}
+                      aria-label={`${nodeName(item.node)}, ${holder ? `${formatPct(item.node.sharePct)} supply` : "bukan holder"}${item.clusterName ? `, klaster ${item.clusterName}` : ""}`}
+                      className="cursor-pointer outline-none [&:focus-visible>circle:first-child]:stroke-accent"
+                      opacity={dimmed ? 0.3 : 1}
+                      onPointerEnter={(event) => {
+                        if (event.pointerType === "mouse" && !dragging) setHovered(key);
+                      }}
+                      onFocus={() => setHovered(key)}
+                      onBlur={() => setHovered(null)}
+                      onClick={() => select(key)}
+                      onKeyDown={(event) => onNodeKey(event, key)}
+                    >
+                      {/* Area sentuh minimal 12px supaya gelembung kecil mudah di-tap. */}
+                      <circle cx={item.x} cy={item.y} r={Math.max(item.r, 12)} fill="transparent" stroke="transparent" strokeWidth={3} />
+                      <circle
+                        cx={item.x}
+                        cy={item.y}
+                        r={item.r}
+                        fill={holder ? item.color : CHART_SURFACE}
+                        fillOpacity={holder ? 0.9 : 1}
+                        stroke={holder ? CHART_SURFACE : item.color}
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {isSelected ? (
+                        <circle cx={item.x} cy={item.y} r={item.r + 4} fill="none" stroke="var(--foreground)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+                      ) : null}
+                      {showLabel ? (
+                        <text
+                          x={item.x}
+                          y={item.y}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          stroke={CHART_SURFACE}
+                          strokeWidth={3}
+                          strokeOpacity={0.6}
+                          vectorEffect="non-scaling-stroke"
+                          style={{ paintOrder: "stroke" }}
+                          className="pointer-events-none fill-foreground text-[11px] font-medium"
+                        >
+                          {formatPct(item.node.sharePct, { maximumFractionDigits: 1 })}
+                        </text>
+                      ) : null}
+                    </g>
                   );
                 })}
-              </g>
-              {nodes.map((item) => {
-                const key = addressKey(chain, item.node.address);
-                const dimmed = neighbors !== null && !neighbors.has(key);
-                const isSelected = selected === key;
-                const holder = item.node.sharePct > 0;
-                const showLabel = item.r >= LABEL_MIN_RADIUS;
-                return (
-                  <g
-                    key={key}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isSelected}
-                    aria-label={`${nodeName(item.node)}, ${holder ? `${formatPct(item.node.sharePct)} supply` : "bukan holder"}${item.clusterName ? `, klaster ${item.clusterName}` : ""}`}
-                    className="cursor-pointer outline-none [&:focus-visible>circle:first-child]:stroke-accent"
-                    opacity={dimmed ? 0.3 : 1}
-                    onPointerEnter={(event) => {
-                      if (event.pointerType === "mouse" && !dragging) setHovered(key);
-                    }}
-                    onFocus={() => setHovered(key)}
-                    onBlur={() => setHovered(null)}
-                    onClick={() => select(key)}
-                    onKeyDown={(event) => onNodeKey(event, key)}
-                  >
-                    {/* Area sentuh minimal 12px supaya gelembung kecil mudah di-tap. */}
-                    <circle cx={item.x} cy={item.y} r={Math.max(item.r, 12)} fill="transparent" stroke="transparent" strokeWidth={3} />
-                    <circle
-                      cx={item.x}
-                      cy={item.y}
-                      r={item.r}
-                      fill={holder ? item.color : CHART_SURFACE}
-                      fillOpacity={holder ? 0.9 : 1}
-                      stroke={holder ? CHART_SURFACE : item.color}
-                      strokeWidth={2}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    {isSelected ? (
-                      <circle cx={item.x} cy={item.y} r={item.r + 4} fill="none" stroke="var(--foreground)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-                    ) : null}
-                    {showLabel ? (
-                      <text
-                        x={item.x}
-                        y={item.y}
-                        textAnchor="middle"
-                        dominantBaseline="central"
-                        stroke={CHART_SURFACE}
-                        strokeWidth={3}
-                        strokeOpacity={0.6}
-                        vectorEffect="non-scaling-stroke"
-                        style={{ paintOrder: "stroke" }}
-                        className="pointer-events-none fill-foreground text-[11px] font-medium"
-                      >
-                        {formatPct(item.node.sharePct, { maximumFractionDigits: 1 })}
-                      </text>
-                    ) : null}
-                  </g>
-                );
-              })}
-            </svg>
+              </svg>
   
-            <div className="absolute top-2 right-2 flex flex-col items-center gap-1 rounded-lg border border-line bg-surface-raised/90 p-1 backdrop-blur">
-              <MapControl label="Perbesar" onClick={zoomIn} disabled={viewport.scale >= MAX_SCALE} icon={ZoomIn} />
-              <MapControl label="Perkecil" onClick={zoomOut} disabled={viewport.scale <= MIN_SCALE} icon={ZoomOut} />
-              <MapControl label="Tampilkan seluruh peta" onClick={reset} disabled={viewport.scale <= MIN_SCALE} icon={Maximize2} />
-              <span className="px-0.5 pb-0.5 text-[10px] tabular-nums text-muted" aria-live="polite">
-                {Math.round(viewport.scale * 100)}%
-              </span>
-            </div>
-
-            {hoveredItem && !dragging ? (
-              <div
-                role="tooltip"
-                style={(() => {
-                  const position = toViewportPercent(viewport, hoveredItem.x, hoveredItem.y - hoveredItem.r);
-                  return { left: `${position.left}%`, top: `${position.top}%` };
-                })()}
-                className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-lg border border-line bg-surface-raised px-3 py-2 shadow-xl shadow-black/40"
-              >
-                <p className="text-sm font-semibold">
-                  {hoveredItem.node.sharePct > 0 ? formatPct(hoveredItem.node.sharePct) : "Bukan holder"}
-                </p>
-                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-foreground/80">
-                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: hoveredItem.color }} />
-                  <span className="truncate">{nodeName(hoveredItem.node)}</span>
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted">
-                  {shortenHash(hoveredItem.node.address)}
-                  {hoveredItem.clusterName ? ` · ${hoveredItem.clusterName}` : " · tanpa klaster"}
-                </p>
+              <div className="absolute top-2 right-2 flex flex-col items-center gap-1 rounded-lg border border-line bg-surface-raised/90 p-1 backdrop-blur">
+                <MapControl label="Perbesar" onClick={zoomIn} disabled={viewport.scale >= MAX_SCALE} icon={ZoomIn} />
+                <MapControl label="Perkecil" onClick={zoomOut} disabled={viewport.scale <= MIN_SCALE} icon={ZoomOut} />
+                <MapControl label="Tampilkan seluruh peta" onClick={reset} disabled={viewport.scale <= MIN_SCALE} icon={Maximize2} />
+                <span className="px-0.5 pb-0.5 text-[10px] tabular-nums text-muted" aria-live="polite">
+                  {Math.round(viewport.scale * 100)}%
+                </span>
               </div>
-            ) : null}
-          </div>
-        </div>
-        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted">
-          <MousePointerClick className="size-3.5" aria-hidden />
-          <span id={hintId}>
-            Tap atau klik gelembung untuk melihat detail. Perbesar dengan tombol +/−, Ctrl/⌘ + scroll, atau dua
-            jari, lalu seret untuk menggeser. Keyboard: + − 0 dan panah.
-          </span>
-        </p>
-      </Panel>
 
-      <WalletDetail
-        chain={chain}
-        symbol={symbol}
-        item={selectedItem}
-        edges={edges}
-        byKey={byKey}
-        onClose={() => setSelected(null)}
-      />
-    </div>
+              {hoveredItem && !dragging ? (
+                <div
+                  role="tooltip"
+                  style={(() => {
+                    const position = toViewportPercent(viewport, hoveredItem.x, hoveredItem.y - hoveredItem.r);
+                    return { left: `${position.left}%`, top: `${position.top}%` };
+                  })()}
+                  className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-lg border border-line bg-surface-raised px-3 py-2 shadow-xl shadow-black/40"
+                >
+                  <p className="text-sm font-semibold">
+                    {hoveredItem.node.sharePct > 0 ? formatPct(hoveredItem.node.sharePct) : "Bukan holder"}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-foreground/80">
+                    <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: hoveredItem.color }} />
+                    <span className="truncate">{nodeName(hoveredItem.node)}</span>
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    {shortenHash(hoveredItem.node.address)}
+                    {hoveredItem.clusterName ? ` · ${hoveredItem.clusterName}` : " · tanpa klaster"}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted">
+            <MousePointerClick className="size-3.5" aria-hidden />
+            <span id={hintId}>
+              Tap atau klik gelembung untuk melihat detail. Perbesar dengan tombol +/−, Ctrl/⌘ + scroll, atau dua
+              jari, lalu seret untuk menggeser. Keyboard: + − 0 dan panah.
+            </span>
+          </p>
+        </Panel>
+
+        {selectedEdge ? (
+          <EdgeEvidencePanel chain={chain} edge={selectedEdge} byKey={byKey} onClose={() => setSelectedEdgeId(null)} />
+        ) : (
+          <WalletDetail
+            chain={chain}
+            symbol={symbol}
+            item={selectedItem}
+            edges={edges}
+            byKey={byKey}
+            onClose={() => setSelected(null)}
+            onSelectEdge={(id) => {
+              setSelectedEdgeId(id);
+              revealPanel("bukti-garis");
+            }}
+          />
+        )}
+      </div>
+    </EvidenceProvider>
+  );
+}
+
+/** Bukti satu garis: transfer yang menghubungkan dua wallet di peta. */
+function EdgeEvidencePanel({
+  chain,
+  edge,
+  byKey,
+  onClose,
+}: {
+  chain: ChainId;
+  edge: MapEdge;
+  byKey: Map<string, ExplorerNode>;
+  onClose: () => void;
+}) {
+  const from = byKey.get(addressKey(chain, edge.from));
+  const to = byKey.get(addressKey(chain, edge.to));
+  return (
+    <Panel
+      id="bukti-garis"
+      title="Bukti transaksi"
+      description={edge.kind === "funding" ? "Pendanaan native coin di antara dua wallet." : "Transfer token di antara dua wallet."}
+      icon={FileSearch}
+      className="min-w-0"
+      action={
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Tutup bukti transaksi"
+          className="inline-grid size-7 place-items-center rounded-md text-muted transition hover:bg-surface-raised hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-lg font-semibold tabular-nums">
+            {formatTokenAmount(edge.amount, edge.asset.symbol)}
+            <span className="text-xs font-normal text-muted">
+              {" "}
+              · {edge.amountUsd !== undefined ? formatUsdCompact(edge.amountUsd) : "harga tidak diketahui"}
+            </span>
+          </p>
+          <ClassificationBadge classification="fact" />
+        </div>
+
+        <ol className="space-y-2">
+          {[
+            { role: "Pengirim", address: edge.from, item: from },
+            { role: "Penerima", address: edge.to, item: to },
+          ].map((party, index) => (
+            <li key={party.role} className="rounded-lg border border-line px-3 py-2.5">
+              <p className="flex items-center gap-1.5 text-[11px] text-muted">
+                {index === 1 ? <ArrowRight className="size-3" aria-hidden /> : null}
+                {party.role}
+              </p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium">
+                {party.item ? (
+                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: party.item.color }} />
+                ) : null}
+                <span className="truncate">{party.item ? nodeName(party.item.node) : shortenHash(party.address)}</span>
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <HashLink value={party.address} href={explorerAddressUrl(chain, party.address)} copyLabel={`Salin address ${party.role.toLowerCase()}`} />
+                {party.item?.node.label ? <EntityLabelBadge label={party.item.node.label} /> : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <dl className="space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-muted">Waktu</dt>
+            <dd>
+              <time dateTime={edge.timestamp}>{formatDateTime(edge.timestamp)}</time>
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-muted">Hash transaksi</dt>
+            <dd>
+              <EvidenceTrigger txHash={edge.txHash} />
+            </dd>
+          </div>
+        </dl>
+
+        <a
+          href={explorerTxUrl(chain, edge.txHash)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground/90 transition hover:border-accent/60 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          Buka transaksi di explorer
+        </a>
+        <p className="text-[11px] leading-relaxed text-muted">
+          Klik hash untuk bukti lengkap dan tautan yang bisa dibagikan. Garis menunjukkan transfer yang tercatat;
+          apakah kedua wallet dikendalikan pihak yang sama tetap dugaan.
+        </p>
+      </div>
+    </Panel>
   );
 }
 
@@ -313,6 +482,7 @@ function WalletDetail({
   edges,
   byKey,
   onClose,
+  onSelectEdge,
 }: {
   chain: ChainId;
   symbol: string;
@@ -320,6 +490,7 @@ function WalletDetail({
   edges: MapEdge[];
   byKey: Map<string, ExplorerNode>;
   onClose: () => void;
+  onSelectEdge: (id: string) => void;
 }) {
   if (!item) {
     return (
@@ -394,7 +565,15 @@ function WalletDetail({
                       <time dateTime={edge.timestamp} className="text-[11px] text-muted">
                         {formatDateTime(edge.timestamp)}
                       </time>
-                      <HashLink value={edge.txHash} href={explorerTxUrl(chain, edge.txHash)} head={8} tail={4} copyLabel="Salin hash transaksi" />
+                      <EvidenceTrigger txHash={edge.txHash} />
+                      <button
+                        type="button"
+                        onClick={() => onSelectEdge(edge.id)}
+                        className="inline-flex items-center gap-1 rounded text-[11px] text-muted underline-offset-2 transition hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                      >
+                        <Highlighter className="size-3" aria-hidden />
+                        Sorot garis
+                      </button>
                     </div>
                   </li>
                 );

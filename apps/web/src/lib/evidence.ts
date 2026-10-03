@@ -2,7 +2,7 @@
  * Bukti transaksi untuk modal "Bukti hash": dikumpulkan per hash transaksi,
  * dan bisa dibuka langsung lewat tautan `#bukti-<hash>`.
  */
-import type { ChainId, EntityLabel, FlowTransfer, TraceHop, TxEvidence } from "./types";
+import type { ChainId, EntityLabel, FlowTransfer, MapEdge, MapNode, TraceHop, TxEvidence } from "./types";
 
 const ANCHOR_PREFIX = "bukti-";
 /** Hash EVM (0x + 64 hex) atau signature Solana (base58). */
@@ -63,6 +63,27 @@ export function evidenceFromHops(chain: ChainId, hops: TraceHop[]): TxEvidence[]
   for (const hop of hops) {
     const { txHash, timestamp, ...movement } = hop;
     addMovement(map, chain, txHash, timestamp, movement);
+  }
+  return [...map.values()];
+}
+
+/**
+ * Bukti dari garis peta hubungan; label pengirim dan penerima diambil dari
+ * gelembung di peta.
+ */
+export function evidenceFromEdges(chain: ChainId, edges: MapEdge[], nodes: MapNode[]): TxEvidence[] {
+  const labels = new Map(nodes.map((node) => [node.address, node.label]));
+  const map = new Map<string, TxEvidence>();
+  for (const edge of edges) {
+    addMovement(map, chain, edge.txHash, edge.timestamp, {
+      from: edge.from,
+      fromLabel: labels.get(edge.from),
+      to: edge.to,
+      toLabel: labels.get(edge.to),
+      asset: edge.asset,
+      amount: edge.amount,
+      amountUsd: edge.amountUsd,
+    });
   }
   return [...map.values()];
 }

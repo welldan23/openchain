@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { evidenceAnchor, evidenceFromHops, evidenceFromTransfers, evidenceLink, parseEvidenceAnchor } from "./evidence";
+import {
+  evidenceAnchor,
+  evidenceFromEdges,
+  evidenceFromHops,
+  evidenceFromTransfers,
+  evidenceLink,
+  parseEvidenceAnchor,
+} from "./evidence";
+import { MOCK_MAPS } from "./mock/maps";
 import { MOCK_FLOWS } from "./mock/flows";
 import { MOCK_TRACES } from "./mock/traces";
 
@@ -44,5 +52,15 @@ describe("kumpulan bukti", () => {
     const evidence = evidenceFromHops(trace.chain, trace.hops);
     expect(evidence.map((item) => item.txHash)).toEqual(trace.hops.map((hop) => hop.txHash));
     expect(evidence[0].movements[0]).toMatchObject({ from: trace.from, amount: 12 });
+  });
+});
+
+describe("bukti dari garis peta", () => {
+  it("satu bukti per transaksi dengan label dari gelembung", () => {
+    const [nbla] = MOCK_MAPS;
+    const evidence = evidenceFromEdges(nbla.chain, nbla.edges, nbla.nodes);
+    expect(evidence).toHaveLength(new Set(nbla.edges.map((edge) => edge.txHash)).size);
+    const funding = evidence.find((item) => item.movements[0].fromLabel?.type === "exchange" && item.movements[0].amount === 12)!;
+    expect(funding.movements[0].toLabel?.name).toBe("Pendana bersama 5 wallet");
   });
 });
