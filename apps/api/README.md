@@ -30,7 +30,31 @@ environment variable dan tidak pernah dicetak ke log.
 | `npm run db:generate` | Membuat file migrasi baru dari perubahan skema |
 | `npm run db:migrate` | Menerapkan migrasi ke database di `DATABASE_URL` |
 | `npm test` | Tes unit, termasuk tes skema di PostgreSQL WebAssembly (PGlite) |
+| `npm run test:e2e` | Tes endpoint lewat HTTP dengan database PGlite |
 | `npm run typecheck` / `npm run lint` | Cek tipe dan lint |
+
+## Endpoint
+
+Semua endpoint memakai prefix `/api` dan bersifat read-only.
+
+### `GET /api/tokens/:chain/:address/summary`
+
+Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,
+konsentrasi holder, skor risiko, info chain, dan snapshot beserta status tiap
+provider.
+
+- `:chain` adalah id chain, mis. `robinhood` atau `ethereum`.
+- `:address` tidak peka huruf besar-kecil untuk EVM; identifier asli tetap
+  dikembalikan apa adanya.
+- `?block=` membuka snapshot pada blok tertentu supaya investigasi bisa
+  direproduksi. Tanpa parameter ini dipakai snapshot terbaru.
+- `dataStatus` bernilai `stale` bila snapshot lebih tua dari
+  `SNAPSHOT_STALE_AFTER_MINUTES` (default 60), dan `unavailable` bila token
+  belum punya snapshot. Data yang belum tersedia bernilai `null`, tidak ditebak.
+- Supply mentah dikirim sebagai string (`totalSupplyRaw`) supaya presisi uint256
+  terjaga, beserta versi desimalnya (`totalSupply`).
+- Respons error: `404` untuk chain, token, atau snapshot yang tidak ada, dan
+  `400` untuk format address atau nomor blok yang salah.
 
 ## Skema data token
 

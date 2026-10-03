@@ -5,11 +5,16 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { Pool } from 'pg';
 import * as schema from './schema/index.js';
 
-export type Database = NodePgDatabase<typeof schema>;
+/**
+ * Tipe database yang dipakai service. Sengaja memakai tipe dasar PgDatabase
+ * supaya tes bisa memakai PGlite tanpa server PostgreSQL.
+ */
+export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 /** Token injeksi untuk instance Drizzle. */
 export const DATABASE = Symbol('DATABASE');
