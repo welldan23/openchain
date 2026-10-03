@@ -67,6 +67,8 @@ export function TokenPageSkeleton() {
         ))}
       </div>
 
+      <PanelSkeleton rows={2} />
+
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <div className="min-w-0 space-y-5 lg:col-span-2">
           <PanelSkeleton rows={3} />

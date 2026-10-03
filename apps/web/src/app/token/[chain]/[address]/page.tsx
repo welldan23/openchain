@@ -6,9 +6,8 @@ import { ActivityPanel } from "@/components/token/activity-panel";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { EvidencePanel } from "@/components/token/evidence-panel";
 import { HoldersPanel } from "@/components/token/holders-panel";
-import { MarketStats } from "@/components/token/market-stats";
 import { RiskPanel } from "@/components/token/risk-panel";
-import { TokenHeader } from "@/components/token/token-header";
+import { TokenSummary } from "@/components/token/token-summary";
 import { getTokenInvestigation } from "@/lib/api/tokens";
 import { isChainId } from "@/lib/chains";
 
@@ -35,13 +34,12 @@ export default async function TokenPage({ params }: PageProps<"/token/[chain]/[a
   const data = await loadToken(chain, address);
   if (!data) notFound();
 
-  const { token, market, risk, holders, activity, evidence, snapshot } = data;
+  const { token, risk, holders, activity, evidence } = data;
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
-      <TokenHeader token={token} riskLevel={risk.level} snapshot={snapshot} />
-      <MarketStats market={market} />
+      <TokenSummary data={data} />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah tabel lebar mendorong kolom melebihi layar HP. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
