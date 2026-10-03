@@ -125,3 +125,10 @@ describe("hash", () => {
     expect(shortenHash("0xabc")).toBe("0xabc");
   });
 });
+
+describe("jumlah token dengan desimal pilihan", () => {
+  it("menampilkan selisih kecil bila diminta lebih banyak desimal", () => {
+    expect(formatTokenAmount(1.4985, "ETH", { compact: false })).toBe("1,5\u00a0ETH");
+    expect(formatTokenAmount(1.4985, "ETH", { compact: false, maximumFractionDigits: 6 })).toBe("1,4985\u00a0ETH");
+  });
+});

@@ -3,7 +3,7 @@
  * beberapa chain dan perpindahan dananya lewat bridge.
  */
 import { wibDateValue } from "./flow-filter";
-import type { ChainActivity, ChainId, CrossChainActivity, EntityLabel, MultichainProfile } from "./types";
+import type { BridgeMove, ChainActivity, ChainId, CrossChainActivity, EntityLabel, MultichainProfile } from "./types";
 
 export interface MultichainSummary {
   activeChains: ChainId[];
@@ -238,4 +238,86 @@ export function detectInfrastructure(activities: CrossChainActivity[]): Detected
     groups.set(key, group);
   }
   return [...groups.values()].sort((a, b) => b.totalUsd - a.totalUsd || a.key.localeCompare(b.key));
+}
+
+/** Satu alasan pencocokan kiriman dan penerimaan bridge. */
+export interface BridgeMatchCheck {
+  id: "asset" | "amount" | "timing";
+  label: string;
+  detail: string;
+  /** `null` bila belum bisa dicek, mis. penerimaan belum ditemukan. */
+  passed: boolean | null;
+}
+
+/** Selisih jumlah yang masih wajar sebagai biaya bridge. */
+const MAX_BRIDGE_FEE_PCT = 1;
+/** Jeda terlama yang masih wajar antara kiriman dan penerimaan. */
+const MAX_BRIDGE_DELAY_MS = 24 * 60 * 60 * 1000;
+
+function describeDelay(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes} menit`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} jam` : `${Math.round(hours / 24)} hari`;
+}
+
+/**
+ * Alasan kiriman di chain asal dianggap pasangan penerimaan di chain tujuan.
+ * Aset dan jumlah baru bisa dicek bila penerimaan sudah ditemukan; tanpa itu
+ * hanya lama menunggu yang bisa dinilai.
+ */
+export function bridgeMatchChecks(move: BridgeMove, now: string): BridgeMatchCheck[] {
+  if (move.amountReceived === undefined || !move.receivedAt) {
+    // Tanpa penerimaan, belum ada sisi kedua untuk dibandingkan.
+    const asset: BridgeMatchCheck = {
+      id: "asset",
+      label: "Aset sama",
+      detail: `Dikirim dalam ${move.asset.symbol}; sisi penerima belum ditemukan.`,
+      passed: null,
+    };
+    const waited = Date.parse(now) - Date.parse(move.sentAt);
+    const late = waited > MAX_BRIDGE_DELAY_MS;
+    return [
+      asset,
+      { id: "amount", label: "Jumlah cocok", detail: "Belum bisa dicek, penerimaan belum ditemukan.", passed: null },
+      {
+        id: "timing",
+        label: "Waktu wajar",
+        detail: late
+          ? `Sudah ${describeDelay(waited)} sejak dikirim tanpa penerimaan yang cocok; biasanya kurang dari 24 jam.`
+          : `Baru ${describeDelay(waited)} sejak dikirim; penerimaan bisa belum terjadi.`,
+        passed: late ? false : null,
+      },
+    ];
+  }
+  const asset: BridgeMatchCheck = {
+    id: "asset",
+    label: "Aset sama",
+    detail: `${move.asset.symbol} di kedua sisi.`,
+    passed: true,
+  };
+  const fee = bridgeFeePct(move.amountSent, move.amountReceived) ?? 0;
+  const delay = Date.parse(move.receivedAt) - Date.parse(move.sentAt);
+  return [
+    asset,
+    {
+      id: "amount",
+      label: "Jumlah cocok",
+      detail:
+        fee === 0
+          ? "Jumlah diterima sama persis dengan yang dikirim."
+          : `Selisih ${String(fee).replace(".", ",")}%, ${fee <= MAX_BRIDGE_FEE_PCT ? "wajar untuk biaya bridge" : "lebih besar dari biaya bridge yang biasa"}.`,
+      passed: fee >= 0 && fee <= MAX_BRIDGE_FEE_PCT,
+    },
+    {
+      id: "timing",
+      label: "Waktu wajar",
+      detail: `Diterima ${describeDelay(delay)} setelah dikirim.`,
+      passed: delay >= 0 && delay <= MAX_BRIDGE_DELAY_MS,
+    },
+  ];
+}
+
+export function bridgeEvidenceAnchor(id: string): string {
+  return `bukti-bridge-${id}`;
 }

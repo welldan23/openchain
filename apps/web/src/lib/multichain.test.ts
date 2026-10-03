@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { MOCK_FLOWS } from "./mock/flows";
 import { MOCK_MULTICHAIN } from "./mock/multichain";
 import {
+  bridgeEvidenceAnchor,
   bridgeFeePct,
+  bridgeMatchChecks,
   columnLeaders,
   comparisonRows,
   detectInfrastructure,
@@ -158,5 +160,31 @@ describe("jembatan dan router terdeteksi", () => {
       "Router DEX",
     ]);
     expect(detectInfrastructure([])).toEqual([]);
+  });
+});
+
+describe("alasan pencocokan bridge", () => {
+  const now = "2026-10-03T04:30:00.000Z";
+  const byId = (id: string) => busy.bridges.find((move) => move.id === id)!;
+
+  it("bridge yang cocok lolos semua cek", () => {
+    const checks = bridgeMatchChecks(funder.bridges[0], now);
+    expect(checks.map((check) => check.passed)).toEqual([true, true, true]);
+    expect(checks[1].detail).toMatch(/0,1%/);
+    expect(checks[2].detail).toBe("Diterima 11 menit setelah dikirim.");
+  });
+
+  it("kiriman baru masih menunggu, kiriman lama tanpa pasangan ditandai tidak wajar", () => {
+    expect(bridgeMatchChecks(byId("busy-base-eth"), now).map((check) => check.passed)).toEqual([null, null, null]);
+    const unmatched = bridgeMatchChecks(byId("busy-bsc-base"), now);
+    expect(unmatched.map((check) => check.passed)).toEqual([null, null, false]);
+    expect(unmatched[0].detail).toMatch(/sisi penerima belum ditemukan/);
+    expect(unmatched[2].detail).toMatch(/^Sudah 6 hari/);
+  });
+
+  it("selisih jumlah besar atau jeda terlalu lama tidak lolos", () => {
+    const move = { ...funder.bridges[0], amountReceived: 1.4, receivedAt: "2026-09-24T09:31:00.000Z" };
+    expect(bridgeMatchChecks(move, now).map((check) => check.passed)).toEqual([true, false, false]);
+    expect(bridgeEvidenceAnchor("x")).toBe("bukti-bridge-x");
   });
 });

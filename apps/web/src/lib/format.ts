@@ -81,14 +81,18 @@ export function formatNumberCompact(value: number): string {
   return compactFormat.format(value);
 }
 
-/** 1,25 jt NBLA — jumlah token beserta simbolnya. */
+/**
+ * 1,25 jt NBLA — jumlah token beserta simbolnya. `maximumFractionDigits`
+ * berlaku untuk angka penuh (`compact: false`), mis. 6 untuk jumlah bridge
+ * supaya selisih kecil tetap terlihat.
+ */
 export function formatTokenAmount(
   amount: number,
   symbol: string,
-  { compact = true }: { compact?: boolean } = {},
+  { compact = true, maximumFractionDigits = 2 }: { compact?: boolean; maximumFractionDigits?: number } = {},
 ): string {
   if (!isValidNumber(amount)) return EMPTY_VALUE;
-  const number = compact ? formatNumberCompact(amount) : formatNumber(amount, 2);
+  const number = compact ? formatNumberCompact(amount) : formatNumber(amount, maximumFractionDigits);
   return `${number}${NBSP}${symbol}`;
 }
 

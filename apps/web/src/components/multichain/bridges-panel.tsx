@@ -10,6 +10,7 @@ import { explorerTxUrl } from "@/lib/chains";
 import { formatAge, formatDateTime, formatPct, formatTokenAmount, formatUsdCompact } from "@/lib/format";
 import { BRIDGE_STATUS_META } from "@/lib/labels";
 import { bridgeFeePct } from "@/lib/multichain";
+import { BridgeEvidenceViewer } from "./bridge-evidence-viewer";
 import type { BridgeMatchStatus, BridgeMove } from "@/lib/types";
 
 const STATUS_ICONS: Record<BridgeMatchStatus, LucideIcon> = {
@@ -18,7 +19,7 @@ const STATUS_ICONS: Record<BridgeMatchStatus, LucideIcon> = {
   unmatched: CircleHelp,
 };
 
-function BridgeRow({ move }: { move: BridgeMove }) {
+function BridgeRow({ move, snapshotAt }: { move: BridgeMove; snapshotAt: string }) {
   const status = BRIDGE_STATUS_META[move.status];
   const StatusIcon = STATUS_ICONS[move.status];
   const fee = bridgeFeePct(move.amountSent, move.amountReceived);
@@ -38,11 +39,11 @@ function BridgeRow({ move }: { move: BridgeMove }) {
         </Badge>
       </div>
       <p className="text-sm font-medium tabular-nums">
-        {formatTokenAmount(move.amountSent, move.asset.symbol, { compact: false })}
+        {formatTokenAmount(move.amountSent, move.asset.symbol, { compact: false, maximumFractionDigits: 6 })}
         <span className="text-xs font-normal text-muted">
           {move.amountUsd !== undefined ? ` · ${formatUsdCompact(move.amountUsd)}` : ""}
           {move.amountReceived !== undefined
-            ? ` · diterima ${formatTokenAmount(move.amountReceived, move.asset.symbol, { compact: false })}${fee !== null && fee > 0 ? ` (selisih ${formatPct(fee)})` : ""}`
+            ? ` · diterima ${formatTokenAmount(move.amountReceived, move.asset.symbol, { compact: false, maximumFractionDigits: 6 })}${fee !== null && fee > 0 ? ` (selisih ${formatPct(fee)})` : ""}`
             : ""}
         </span>
       </p>
@@ -68,12 +69,13 @@ function BridgeRow({ move }: { move: BridgeMove }) {
           </dd>
         </div>
       </dl>
+      <BridgeEvidenceViewer move={move} snapshotAt={snapshotAt} />
     </li>
   );
 }
 
 /** Perpindahan dana antar chain lewat bridge, beserta hasil pencocokannya. */
-export function BridgesPanel({ bridges }: { bridges: BridgeMove[] }) {
+export function BridgesPanel({ bridges, snapshotAt }: { bridges: BridgeMove[]; snapshotAt: string }) {
   return (
     <Panel
       id="bridge"
@@ -94,7 +96,7 @@ export function BridgesPanel({ bridges }: { bridges: BridgeMove[] }) {
             {[...bridges]
               .sort((a, b) => Date.parse(b.sentAt) - Date.parse(a.sentAt))
               .map((move) => (
-                <BridgeRow key={move.id} move={move} />
+                <BridgeRow key={move.id} move={move} snapshotAt={snapshotAt} />
               ))}
           </ol>
           <p className="text-[11px] leading-relaxed text-muted">

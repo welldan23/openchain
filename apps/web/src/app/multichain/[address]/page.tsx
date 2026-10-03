@@ -77,7 +77,7 @@ export default async function MultichainPage({ params, searchParams }: PageProps
         <div className="min-w-0 space-y-5 lg:col-span-2">
           {profile.chains.length > 1 ? <ChainComparisonTable rows={comparisonRows(profile)} /> : null}
           <ChainActivityGrid address={profile.address} chains={profile.chains} flowChains={flowChains} />
-          <BridgesPanel bridges={profile.bridges} />
+          <BridgesPanel bridges={profile.bridges} snapshotAt={profile.fetchedAt} />
           <CrossChainActivityPanel owner={{ address: profile.address, label: profile.label }} activities={profile.activities} />
         </div>
         <aside className="min-w-0 space-y-5" aria-label="Infrastruktur dan keterangan">
