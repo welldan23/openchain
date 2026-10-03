@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DATABASE, type Database } from '../database/database.module.js';
 import {
@@ -18,6 +18,13 @@ import {
   tokenSnapshots,
 } from '../database/schema/index.js';
 import type { EvidenceRecord } from './evidence.view.js';
+
+/** Pilihan snapshot: per blok atau per waktu; keduanya tidak boleh diisi bersamaan. */
+export interface SnapshotSelector {
+  blockNumber?: number;
+  /** Ambil snapshot terakhir yang diambil sampai waktu ini. */
+  at?: Date;
+}
 
 /** Query baca untuk data token. Tidak ada operasi tulis di sini. */
 @Injectable()
@@ -42,18 +49,29 @@ export class TokensRepository {
     return row ?? null;
   }
 
-  /** Snapshot pada blok tertentu, atau yang terbaru bila blok tidak diminta. */
-  async findSnapshot(tokenId: number, blockNumber?: number) {
+  /**
+   * Snapshot sesuai pemilih: pada blok tertentu, yang terakhir diambil sampai
+   * waktu tertentu, atau yang terbaru bila tidak ada pemilih.
+   */
+  async findSnapshot(tokenId: number, selector: SnapshotSelector = {}) {
     const query = this.db.select().from(tokenSnapshots);
-    const [snapshot] =
-      blockNumber === undefined
-        ? await query
-            .where(eq(tokenSnapshots.tokenId, tokenId))
-            .orderBy(desc(tokenSnapshots.blockNumber))
-            .limit(1)
-        : await query
-            .where(and(eq(tokenSnapshots.tokenId, tokenId), eq(tokenSnapshots.blockNumber, blockNumber)))
-            .limit(1);
+    if (selector.blockNumber !== undefined) {
+      const [snapshot] = await query
+        .where(and(eq(tokenSnapshots.tokenId, tokenId), eq(tokenSnapshots.blockNumber, selector.blockNumber)))
+        .limit(1);
+      return snapshot ?? null;
+    }
+    if (selector.at !== undefined) {
+      const [snapshot] = await query
+        .where(and(eq(tokenSnapshots.tokenId, tokenId), lte(tokenSnapshots.fetchedAt, selector.at)))
+        .orderBy(desc(tokenSnapshots.fetchedAt), desc(tokenSnapshots.blockNumber))
+        .limit(1);
+      return snapshot ?? null;
+    }
+    const [snapshot] = await query
+      .where(eq(tokenSnapshots.tokenId, tokenId))
+      .orderBy(desc(tokenSnapshots.blockNumber))
+      .limit(1);
     return snapshot ?? null;
   }
 

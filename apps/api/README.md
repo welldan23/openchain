@@ -37,6 +37,18 @@ environment variable dan tidak pernah dicetak ke log.
 
 Semua endpoint memakai prefix `/api` dan bersifat read-only.
 
+Semua endpoint token memakai pemilih snapshot yang sama, supaya investigasi
+bisa dibuka ulang dengan hasil yang sama:
+
+| Parameter | Snapshot yang dipakai |
+| --- | --- |
+| tanpa parameter | snapshot terbaru |
+| `?block=<nomor>` | snapshot pada blok/slot tersebut |
+| `?at=<waktu ISO>` | snapshot terakhir yang diambil sampai waktu itu, mis. `2026-10-03T04:30:00Z` |
+
+`block` dan `at` tidak boleh dipakai bersamaan. Waktu wajib lengkap dengan zona
+waktu supaya tidak ambigu.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,
@@ -46,15 +58,13 @@ provider.
 - `:chain` adalah id chain, mis. `robinhood` atau `ethereum`.
 - `:address` tidak peka huruf besar-kecil untuk EVM; identifier asli tetap
   dikembalikan apa adanya.
-- `?block=` membuka snapshot pada blok tertentu supaya investigasi bisa
-  direproduksi. Tanpa parameter ini dipakai snapshot terbaru.
 - `dataStatus` bernilai `stale` bila snapshot lebih tua dari
   `SNAPSHOT_STALE_AFTER_MINUTES` (default 60), dan `unavailable` bila token
   belum punya snapshot. Data yang belum tersedia bernilai `null`, tidak ditebak.
 - Supply mentah dikirim sebagai string (`totalSupplyRaw`) supaya presisi uint256
   terjaga, beserta versi desimalnya (`totalSupply`).
 - Respons error: `404` untuk chain, token, atau snapshot yang tidak ada, dan
-  `400` untuk format address atau nomor blok yang salah.
+  `400` untuk format address, nomor blok, atau waktu yang salah.
 
 ### `GET /api/tokens/:chain/:address/contract-checks`
 
@@ -67,7 +77,7 @@ yang bisa diubah owner atau mint authority yang masih aktif.
   address terkait, method, penjelasan, dan `explorerUrl` bila chain punya
   explorer.
 - Pemeriksaan yang belum dijalankan berstatus `unknown` tanpa klasifikasi.
-- Parameter `?block=`, status data, dan respons error sama dengan endpoint
+- Pemilih snapshot, status data, dan respons error sama dengan endpoint
   ringkasan.
 
 ### `GET /api/tokens/:chain/:address/holders`
@@ -81,7 +91,7 @@ Sebaran pemegang: konsentrasi supply dan holder teratas pada snapshot.
   heuristic, lalu catatan user.
 - `?limit=` mengatur jumlah holder, 1 sampai 100, default 10.
 - Label mencerminkan pengetahuan terbaru, bukan kondisi saat snapshot diambil.
-- Parameter `?block=`, status data, dan respons error sama dengan endpoint
+- Pemilih snapshot, status data, dan respons error sama dengan endpoint
   ringkasan.
 
 ### `GET /api/tokens/:chain/:address/evidence`
@@ -99,7 +109,26 @@ Bukti transaksi yang mendukung temuan risiko dan cek kontrak pada snapshot.
 - `?classification=` menyaring menurut jenis informasi (`verified_fact`,
   `derived_metric`, `heuristic`, `external_label`, `assumption`,
   `unavailable`); nilai lain dijawab `400`. Kedua filter bisa digabung.
-- Parameter `?block=` dan status data sama dengan endpoint ringkasan.
+- Pemilih snapshot, status data, dan respons error sama dengan endpoint
+  ringkasan.
+
+## Merekam snapshot
+
+`SnapshotRecorder` (`src/snapshots`) adalah sisi tulis data. Service ini dipakai
+adapter dan job pengambilan data, dan sengaja tidak dibuka sebagai endpoint.
+
+- `recordEvidence` menyimpan bukti secara idempotent lewat `evidence_key`.
+- `recordSnapshot` menyimpan snapshot beserta sumber provider, holder, temuan,
+  dan cek kontrak dalam satu transaksi. Merekam ulang blok yang sama mengganti
+  isinya; input yang salah membatalkan seluruh perekaman.
+
+Aturan yang diterapkan saat merekam:
+
+| Hal | Aturan |
+| --- | --- |
+| Status data | Semua provider lengkap: `complete`. Ada yang sebagian atau gagal: `partial`. Ada yang memakai data lama: `stale`. Semua gagal atau tanpa provider: `unavailable`. |
+| Klasifikasi temuan | Mengikuti bukti terlemahnya. Urutan kekuatan: `verified_fact`, `derived_metric`, `external_label`, `heuristic`, `assumption`, `unavailable`. Temuan tanpa bukti menjadi `assumption`. |
+| Tingkat risiko | Dari skor: 0–24 rendah, 25–49 sedang, 50–74 tinggi, 75–100 kritis, tanpa skor `unknown`. |
 
 ## Skema data token
 

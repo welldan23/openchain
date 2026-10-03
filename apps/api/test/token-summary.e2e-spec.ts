@@ -137,6 +137,32 @@ describe('GET /api/tokens/:chain/:address/summary', () => {
     await request(app.getHttpServer()).get(`${summaryUrl('robinhood', TOKEN)}?block=abc`).expect(400);
   });
 
+  it('membuka snapshot terakhir sampai waktu tertentu lewat ?at=', async () => {
+    // Snapshot lama diambil 1 jam sebelum FETCHED_AT, snapshot terbaru tepat FETCHED_AT.
+    const between = await request(app.getHttpServer())
+      .get(`${summaryUrl('robinhood', TOKEN)}?at=2026-10-03T04:00:00Z`)
+      .expect(200);
+    expect(between.body.snapshot.blockNumber).toBe(23512000);
+    const exact = await request(app.getHttpServer())
+      .get(`${summaryUrl('robinhood', TOKEN)}?at=${FETCHED_AT.toISOString()}`)
+      .expect(200);
+    expect(exact.body.snapshot.blockNumber).toBe(23512880);
+    const before = await request(app.getHttpServer())
+      .get(`${summaryUrl('robinhood', TOKEN)}?at=2026-01-01T00:00:00Z`)
+      .expect(404);
+    expect(before.body.message).toBe('Belum ada snapshot token sampai 2026-01-01T00:00:00.000Z.');
+  });
+
+  it('400 untuk waktu yang salah format atau dipakai bersama block', async () => {
+    for (const at of ['kemarin', '2026-10-03', '2026-10-03T04:00:00']) {
+      await request(app.getHttpServer()).get(`${summaryUrl('robinhood', TOKEN)}?at=${at}`).expect(400);
+    }
+    const both = await request(app.getHttpServer())
+      .get(`${summaryUrl('robinhood', TOKEN)}?block=23512000&at=2026-10-03T04:00:00Z`)
+      .expect(400);
+    expect(both.body.message).toBe('Pakai salah satu: parameter block atau at, bukan keduanya.');
+  });
+
   it('token di chain lain tidak ikut terbaca', async () => {
     await request(app.getHttpServer()).get(summaryUrl('ethereum', TOKEN)).expect(404);
   });

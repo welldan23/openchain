@@ -3,7 +3,7 @@ import { SnapshotFreshness } from './snapshot-freshness.js';
 import { TokenLookupService } from './token-lookup.service.js';
 import { toTokenSummary } from './token-summary.mapper.js';
 import type { TokenSummaryResponse } from './token-summary.types.js';
-import { TokensRepository } from './tokens.repository.js';
+import { type SnapshotSelector, TokensRepository } from './tokens.repository.js';
 
 @Injectable()
 export class TokenSummaryService {
@@ -13,8 +13,12 @@ export class TokenSummaryService {
     private readonly freshness: SnapshotFreshness,
   ) {}
 
-  async getSummary(chainId: string, rawAddress: string, blockNumber?: number): Promise<TokenSummaryResponse> {
-    const resolved = await this.lookup.resolve(chainId, rawAddress, blockNumber);
+  async getSummary(
+    chainId: string,
+    rawAddress: string,
+    selector: SnapshotSelector = {},
+  ): Promise<TokenSummaryResponse> {
+    const resolved = await this.lookup.resolve(chainId, rawAddress, selector);
     const sources = resolved.snapshot
       ? await this.repository.findSnapshotSources(resolved.snapshot.id)
       : [];

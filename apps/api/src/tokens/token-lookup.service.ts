@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InvalidIdentifierError, normalizeAddress } from '../database/identifiers.js';
 import type { ChainRow, SnapshotRow, TokenRow } from './rows.js';
-import { TokensRepository } from './tokens.repository.js';
+import { type SnapshotSelector, TokensRepository } from './tokens.repository.js';
 
 export interface ResolvedToken {
   chain: ChainRow;
@@ -9,7 +9,7 @@ export interface ResolvedToken {
   /** Identifier asli address token. */
   address: string;
   deployer: string | null;
-  /** Snapshot pada blok yang diminta, atau yang terbaru; `null` bila belum ada. */
+  /** Snapshot sesuai pemilih, atau yang terbaru; `null` bila belum ada. */
   snapshot: SnapshotRow | null;
 }
 
@@ -21,7 +21,7 @@ export interface ResolvedToken {
 export class TokenLookupService {
   constructor(private readonly repository: TokensRepository) {}
 
-  async resolve(chainId: string, rawAddress: string, blockNumber?: number): Promise<ResolvedToken> {
+  async resolve(chainId: string, rawAddress: string, selector: SnapshotSelector = {}): Promise<ResolvedToken> {
     const chain = await this.repository.findChain(chainId);
     if (!chain) throw new NotFoundException(`Chain "${chainId}" tidak dikenal.`);
 
@@ -36,9 +36,12 @@ export class TokenLookupService {
     const found = await this.repository.findToken(chain.id, normalized);
     if (!found) throw new NotFoundException(`Token ${rawAddress} di ${chain.name} tidak ditemukan.`);
 
-    const snapshot = await this.repository.findSnapshot(found.token.id, blockNumber);
-    if (blockNumber !== undefined && !snapshot) {
-      throw new NotFoundException(`Snapshot token pada blok ${blockNumber} tidak ditemukan.`);
+    const snapshot = await this.repository.findSnapshot(found.token.id, selector);
+    if (selector.blockNumber !== undefined && !snapshot) {
+      throw new NotFoundException(`Snapshot token pada blok ${selector.blockNumber} tidak ditemukan.`);
+    }
+    if (selector.at !== undefined && !snapshot) {
+      throw new NotFoundException(`Belum ada snapshot token sampai ${selector.at.toISOString()}.`);
     }
 
     return { chain, token: found.token, address: found.address, deployer: found.deployer, snapshot };

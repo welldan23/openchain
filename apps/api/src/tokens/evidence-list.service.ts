@@ -3,7 +3,7 @@ import type { EvidenceFilter, EvidenceListResponse } from './evidence-list.types
 import { toEvidenceListResponse } from './evidence-list.mapper.js';
 import { SnapshotFreshness } from './snapshot-freshness.js';
 import { TokenLookupService } from './token-lookup.service.js';
-import { TokensRepository } from './tokens.repository.js';
+import { type SnapshotSelector, TokensRepository } from './tokens.repository.js';
 
 @Injectable()
 export class EvidenceListService {
@@ -17,9 +17,9 @@ export class EvidenceListService {
     chainId: string,
     rawAddress: string,
     filter: EvidenceFilter,
-    blockNumber?: number,
+    selector: SnapshotSelector = {},
   ): Promise<EvidenceListResponse> {
-    const resolved = await this.lookup.resolve(chainId, rawAddress, blockNumber);
+    const resolved = await this.lookup.resolve(chainId, rawAddress, selector);
     const snapshotId = resolved.snapshot?.id;
     const findings = snapshotId ? await this.repository.findRiskFindings(snapshotId) : [];
 
