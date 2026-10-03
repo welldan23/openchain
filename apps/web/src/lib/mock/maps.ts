@@ -5,9 +5,18 @@
  * `mock/flows.ts`, jadi peta, halaman token, dan aliran dana saling cocok.
  * Semua nilai FIKTIF.
  */
-import type { AddressFlow, EntityLabel, MapCluster, MapEdge, MapNode, TokenInvestigation, WalletMap } from "../types";
+import type {
+  AddressFlow,
+  CoordinationEvent,
+  EntityLabel,
+  MapCluster,
+  MapEdge,
+  MapNode,
+  TokenInvestigation,
+  WalletMap,
+} from "../types";
 import { MOCK_FLOWS } from "./flows";
-import { mockEvmAddress, mockEvmTxHash, mockSolanaAddress } from "./ids";
+import { mockEvmAddress, mockEvmTxHash, mockSolanaAddress, mockSolanaSignature } from "./ids";
 import { MOCK_TOKENS } from "./tokens";
 
 const BUNDLER_LABEL: EntityLabel = {
@@ -204,6 +213,42 @@ const nblaClusters: MapCluster[] = [
   },
 ];
 
+const nblaFundingTxs = txBetween(nblaEdges, nbla.bundlers.map((bundler): [string, string] => [nbla.funder, bundler]));
+
+const nblaCoordination: CoordinationEvent[] = [
+  {
+    id: "nbla-same-block-buy",
+    kind: "same_block_buy",
+    detail: "Kelima wallet membeli NBLA di blok yang sama dengan penambahan likuiditas.",
+    members: nbla.bundlers,
+    confidence: "high",
+    timestamp: "2026-09-12T08:31:00.000Z",
+    windowSeconds: 0,
+    blockNumber: 23_271_904,
+    evidenceTxHashes: [mockEvmTxHash("nbla:add-liquidity"), mockEvmTxHash("nbla:bundler-buy")],
+  },
+  {
+    id: "nbla-funding-burst",
+    kind: "funding_burst",
+    detail: "Pendana mengirim ETH ke lima wallet dalam 9 menit, tepat sebelum likuiditas ditambahkan.",
+    members: [nbla.funder, ...nbla.bundlers],
+    confidence: "medium",
+    timestamp: "2026-09-12T07:58:00.000Z",
+    windowSeconds: 9 * 60,
+    evidenceTxHashes: nblaFundingTxs,
+  },
+  {
+    id: "nbla-similar-amount",
+    kind: "similar_amount",
+    detail: "Kiriman ETH ke kelima wallet antara 1,95 dan 2,2 ETH (selisih kurang dari 13%).",
+    members: nbla.bundlers,
+    confidence: "low",
+    timestamp: "2026-09-12T07:58:00.000Z",
+    windowSeconds: 9 * 60,
+    evidenceTxHashes: nblaFundingTxs,
+  },
+];
+
 const nblaMap: WalletMap = {
   chain: "ethereum",
   token: { address: nblaToken.token.address, name: nblaToken.token.name, symbol: nblaToken.token.symbol },
@@ -213,6 +258,7 @@ const nblaMap: WalletMap = {
   }),
   edges: nblaEdges,
   clusters: nblaClusters,
+  coordination: nblaCoordination,
   snapshot: nblaToken.snapshot,
 };
 
@@ -275,6 +321,29 @@ const kodoMap: WalletMap = {
         },
       ],
       caveats: ["Pendanaan langsung dari pembuat adalah bukti kuat keterkaitan, tapi belum membuktikan niat menjual bersama."],
+    },
+  ],
+  coordination: [
+    {
+      id: "kodo-funding-burst",
+      kind: "funding_burst",
+      detail: "Pembuat token mengirim SOL ke tiga wallet dalam 2 menit, sebelum token diluncurkan.",
+      members: [kodo.creator, ...kodo.bundlers],
+      confidence: "high",
+      timestamp: "2026-09-28T03:20:00.000Z",
+      windowSeconds: 2 * 60,
+      evidenceTxHashes: txBetween(kodoEdges, kodo.bundlers.map((bundler): [string, string] => [kodo.creator, bundler])),
+    },
+    {
+      id: "kodo-same-slot-buy",
+      kind: "same_block_buy",
+      detail: "Ketiga wallet membeli KODO di slot peluncuran.",
+      members: kodo.bundlers,
+      confidence: "medium",
+      timestamp: "2026-09-28T03:41:00.000Z",
+      windowSeconds: 0,
+      blockNumber: 371_002_118,
+      evidenceTxHashes: [1, 2, 3].map((n) => mockSolanaSignature(`kodo:bundle-buy-${n}`)),
     },
   ],
   snapshot: kodoToken.snapshot,

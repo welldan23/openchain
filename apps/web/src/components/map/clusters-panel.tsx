@@ -1,5 +1,6 @@
-import { Boxes, CircleCheck, CircleMinus, Info, TriangleAlert } from "lucide-react";
+import { Boxes, CircleCheck, CircleMinus, Info, TriangleAlert, Zap } from "lucide-react";
 import { ClassificationBadge } from "@/components/classification-badge";
+import { ConfidenceMeter } from "@/components/confidence-meter";
 import { Badge } from "@/components/ui/badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
@@ -7,27 +8,9 @@ import { EmptyState } from "@/components/ui/states";
 import { explorerTxUrl } from "@/lib/chains";
 import { cn } from "@/lib/cn";
 import { formatPct, formatUsdCompact } from "@/lib/format";
-import { CLUSTER_CONFIDENCE_META, CLUSTER_LABEL_META } from "@/lib/labels";
-import type { ChainId, ClusterConfidence } from "@/lib/types";
+import { CLUSTER_LABEL_META } from "@/lib/labels";
+import type { ChainId } from "@/lib/types";
 import { NEUTRAL_NODE_COLOR, type ClusterStyle } from "@/lib/wallet-map";
-
-/** Tiga balok kecil; jumlah yang terisi menunjukkan tingkat keyakinan. */
-function ConfidenceMeter({ confidence }: { confidence: ClusterConfidence }) {
-  const meta = CLUSTER_CONFIDENCE_META[confidence];
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted">
-      <span aria-hidden className="inline-flex gap-0.5">
-        {[1, 2, 3].map((step) => (
-          <span
-            key={step}
-            className={cn("h-2.5 w-1.5 rounded-sm", step <= meta.level ? "bg-foreground/80" : "bg-surface-raised ring-1 ring-line")}
-          />
-        ))}
-      </span>
-      {meta.label}
-    </span>
-  );
-}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -202,6 +185,12 @@ export function MapLegendPanel() {
             <span aria-hidden className="size-3.5 rounded-full border border-dashed border-foreground/50" />
           </dt>
           <dd className="text-muted">Penanda jenis entitas: tepi utuh = label eksternal, putus-putus = dugaan OpenChain</dd>
+        </div>
+        <div className="flex items-center gap-2">
+          <dt className="flex w-10 shrink-0 justify-center">
+            <Zap className="size-3.5 text-foreground/80" aria-hidden />
+          </dt>
+          <dd className="text-muted">Terlibat gerak serempak (lihat panel deteksi koordinasi)</dd>
         </div>
       </dl>
     </Panel>

@@ -433,3 +433,31 @@ export function labelFilterParams(filter: LabelFilter): { sembunyikan?: string; 
     sumber: filter.source === "all" ? undefined : SOURCE_PARAM[filter.source],
   };
 }
+
+/* ------------------------------- Koordinasi ------------------------------- */
+
+/** Id kejadian koordinasi yang melibatkan tiap wallet (kunci address). */
+export function coordinationMembership(chain: ChainId, map: Pick<WalletMap, "coordination">): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  for (const event of map.coordination) {
+    for (const member of event.members) {
+      const key = addressKey(chain, member);
+      result.set(key, [...(result.get(key) ?? []), event.id]);
+    }
+  }
+  return result;
+}
+
+/** "di blok yang sama", "dalam 9 menit", atau "dalam 45 detik". */
+export function describeCoordinationWindow(windowSeconds: number, positionLabel: "blok" | "slot" = "blok"): string {
+  if (windowSeconds <= 0) return `di ${positionLabel} yang sama`;
+  if (windowSeconds < 60) return `dalam ${windowSeconds} detik`;
+  if (windowSeconds < 3600) return `dalam ${Math.round(windowSeconds / 60)} menit`;
+  return `dalam ${Math.round(windowSeconds / 3600)} jam`;
+}
+
+/** Kejadian koordinasi terkuat dulu, lalu yang melibatkan lebih banyak wallet. */
+export function sortCoordination<T extends { confidence: "low" | "medium" | "high"; members: string[] }>(events: T[]): T[] {
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  return [...events].sort((a, b) => rank[a.confidence] - rank[b.confidence] || b.members.length - a.members.length);
+}

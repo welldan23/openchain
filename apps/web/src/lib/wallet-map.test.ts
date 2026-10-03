@@ -5,6 +5,9 @@ import {
   clusterHull,
   CLUSTER_COLORS,
   clusterStyles,
+  coordinationMembership,
+  describeCoordinationWindow,
+  sortCoordination,
   edgesOf,
   EMPTY_LABEL_FILTER,
   isLabelFilterActive,
@@ -209,5 +212,36 @@ describe("filter label entitas", () => {
     expect(labelFilterParams(filter)).toEqual({ sembunyikan: "exchange,none", sumber: "dugaan" });
     expect(labelFilterParams(EMPTY_LABEL_FILTER)).toEqual({ sembunyikan: undefined, sumber: undefined });
     expect(parseLabelFilter(undefined, "aneh")).toEqual(EMPTY_LABEL_FILTER);
+  });
+});
+
+describe("deteksi koordinasi", () => {
+  it("mencatat kejadian koordinasi per wallet", () => {
+    const membership = coordinationMembership(nbla.chain, nbla);
+    const funder = nbla.nodes.find((node) => node.sharePct === 0)!;
+    const bundler = nbla.nodes.find((node) => node.label?.type === "bot")!;
+    expect(membership.get(funder.address.toLowerCase())).toEqual(["nbla-funding-burst"]);
+    expect(membership.get(bundler.address.toLowerCase())).toHaveLength(3);
+    expect(membership.has(nbla.nodes.find((node) => node.label?.type === "liquidity_pool")!.address.toLowerCase())).toBe(false);
+  });
+
+  it("anggota koordinasi semuanya ada di peta", () => {
+    for (const map of MOCK_MAPS) {
+      const onMap = new Set(map.nodes.map((node) => node.address));
+      for (const event of map.coordination) expect(event.members.every((member) => onMap.has(member))).toBe(true);
+    }
+  });
+
+  it("menjelaskan rentang waktu dan mengurutkan dari yang terkuat", () => {
+    expect(describeCoordinationWindow(0)).toBe("di blok yang sama");
+    expect(describeCoordinationWindow(0, "slot")).toBe("di slot yang sama");
+    expect(describeCoordinationWindow(45)).toBe("dalam 45 detik");
+    expect(describeCoordinationWindow(540)).toBe("dalam 9 menit");
+    expect(describeCoordinationWindow(7200)).toBe("dalam 2 jam");
+    expect(sortCoordination(nbla.coordination).map((event) => event.id)).toEqual([
+      "nbla-same-block-buy",
+      "nbla-funding-burst",
+      "nbla-similar-amount",
+    ]);
   });
 });

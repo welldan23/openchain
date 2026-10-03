@@ -59,6 +59,7 @@ export default async function MapPage({ params, searchParams }: PageProps<"/map/
         initialDepth={parseLayerParam(firstParam(query.lapis))}
         initialLabelFilter={{ sembunyikan: firstParam(query.sembunyikan), sumber: firstParam(query.sumber) }}
         clusters={styles.map((style) => ({ id: style.cluster.id, name: style.cluster.name, color: style.color }))}
+        coordination={map.coordination}
       />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah tabel lebar mendorong kolom melebihi layar HP. */}

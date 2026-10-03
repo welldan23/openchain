@@ -13,6 +13,7 @@ import {
   MousePointerClick,
   Network,
   X,
+  Zap,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -21,19 +22,22 @@ import type { KeyboardEvent } from "react";
 import { EntityLabelBadge } from "@/components/badges";
 import { ENTITY_ICONS } from "@/components/entity-label-badge";
 import { ClassificationBadge } from "@/components/classification-badge";
+import { ConfidenceMeter } from "@/components/confidence-meter";
 import { EvidenceProvider, EvidenceTrigger } from "@/components/evidence/evidence-dialog";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/chains";
 import { cn } from "@/lib/cn";
 import { evidenceFromEdges } from "@/lib/evidence";
+import { COORDINATION_KIND_META } from "@/lib/labels";
 import { formatDateTime, formatPct, formatTokenAmount, formatUsdCompact, shortenHash } from "@/lib/format";
 import { addressKey, addressTitle } from "@/lib/fund-flow";
-import type { ChainId, MapEdge, MapNode } from "@/lib/types";
+import type { ChainId, CoordinationEvent, MapEdge, MapNode } from "@/lib/types";
 import { CHART_SURFACE } from "@/lib/chart-colors";
 import { fitBounds, INITIAL_VIEWPORT, MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf, type Viewport } from "@/lib/map-viewport";
 import {
   clusterHull,
+  coordinationMembership,
   EMPTY_LABEL_FILTER,
   hullLabelPosition,
   hullPath,
@@ -46,6 +50,7 @@ import {
   parseLabelFilter,
   type LabelFilter,
 } from "@/lib/wallet-map";
+import { CoordinationPanel } from "./coordination-panel";
 import { LabelFilterBar } from "./label-filter-bar";
 import { usePanZoom } from "./use-pan-zoom";
 
@@ -71,6 +76,8 @@ interface WalletMapExplorerProps {
   initialLabelFilter?: { sembunyikan?: string; sumber?: string };
   /** Klaster sesuai urutan warna; `color` kosong untuk klaster yang digabung ke "lainnya". */
   clusters: Array<{ id: string; name: string; color: string | null }>;
+  /** Kejadian gerak serempak di antara wallet peta. */
+  coordination: CoordinationEvent[];
 }
 
 /** Perkiraan lebar satu huruf label 11px, untuk menaruh titik warna di depan label kelompok. */
@@ -151,6 +158,7 @@ export function WalletMapExplorer({
   initialDepth,
   initialLabelFilter,
   clusters,
+  coordination,
 }: WalletMapExplorerProps) {
   const markerId = useId().replace(/:/g, "");
   const hintId = useId();
@@ -207,6 +215,9 @@ export function WalletMapExplorer({
    */
   const [showGroups, setShowGroups] = useState(true);
   const [focusCluster, setFocusCluster] = useState<string | null>(null);
+  const [focusCoordination, setFocusCoordination] = useState<string | null>(null);
+  const [showCoordination, setShowCoordination] = useState(true);
+  const coordinationOf = useMemo(() => coordinationMembership(chain, { coordination }), [chain, coordination]);
 
   const highlight = useMemo(() => {
     const nodeKey = hovered ?? (selectedEdge ? null : selected);
@@ -241,8 +252,18 @@ export function WalletMapExplorer({
       );
       return { edges: active, nodes: members };
     }
+    const event = focusCoordination ? coordination.find((item) => item.id === focusCoordination) : undefined;
+    if (event) {
+      const members = new Set(event.members.map((member) => addressKey(chain, member)));
+      const active = new Set(
+        edges
+          .filter((edge) => members.has(addressKey(chain, edge.from)) && members.has(addressKey(chain, edge.to)))
+          .map((edge) => edge.id),
+      );
+      return { edges: active, nodes: members };
+    }
     return null;
-  }, [chain, edges, nodes, hovered, selected, selectedEdge, focusCluster]);
+  }, [chain, edges, nodes, hovered, selected, selectedEdge, focusCluster, focusCoordination, coordination]);
 
   /** Area dan label tiap kelompok, hanya dari anggota yang sedang tampil. */
   const groups = useMemo(
@@ -396,6 +417,7 @@ export function WalletMapExplorer({
                     title={active ? "Klik lagi untuk berhenti menyorot" : "Sorot anggota kelompok ini"}
                     onClick={() => {
                       setFocusCluster(active ? null : cluster.id);
+                      setFocusCoordination(null);
                       setSelected(null);
                       setSelectedEdgeId(null);
                     }}
@@ -536,7 +558,7 @@ export function WalletMapExplorer({
                       role="button"
                       tabIndex={0}
                       aria-pressed={isSelected}
-                      aria-label={`${nodeName(item.node)}, ${holder ? `${formatPct(item.node.sharePct)} supply` : "bukan holder"}${item.clusterName ? `, klaster ${item.clusterName}` : ""}${key === center ? ", wallet pusat" : layers ? `, lapis ${layers.get(key)}` : ""}`}
+                      aria-label={`${nodeName(item.node)}, ${holder ? `${formatPct(item.node.sharePct)} supply` : "bukan holder"}${item.clusterName ? `, klaster ${item.clusterName}` : ""}${key === center ? ", wallet pusat" : layers ? `, lapis ${layers.get(key)}` : ""}${coordinationOf.has(key) ? ", terlibat gerak serempak" : ""}`}
                       className="cursor-pointer outline-none [&:focus-visible>circle:first-child]:stroke-accent"
                       opacity={dimmed ? 0.3 : 1}
                       onPointerEnter={(event) => {
@@ -561,6 +583,9 @@ export function WalletMapExplorer({
                       />
                       {item.node.label && item.node.label.type !== "unknown" ? (
                         <EntityMarker x={item.x} y={item.y} r={item.r} type={item.node.label.type} heuristic={item.node.label.source === "heuristic"} />
+                      ) : null}
+                      {showCoordination && coordinationOf.has(key) ? (
+                        <CoordinationMarker x={item.x} y={item.y} r={item.r} />
                       ) : null}
                       {key === center ? (
                         <circle
@@ -647,25 +672,41 @@ export function WalletMapExplorer({
           </p>
         </Panel>
 
-        {selectedEdge ? (
-          <EdgeEvidencePanel chain={chain} edge={selectedEdge} byKey={byKey} onClose={() => setSelectedEdgeId(null)} />
-        ) : (
-          <WalletDetail
+        <div className="min-w-0 space-y-5">
+          {selectedEdge ? (
+            <EdgeEvidencePanel chain={chain} edge={selectedEdge} byKey={byKey} onClose={() => setSelectedEdgeId(null)} />
+          ) : (
+            <WalletDetail
+              chain={chain}
+              symbol={symbol}
+              item={selectedItem}
+              edges={edges}
+              byKey={byKey}
+              layer={selected && layers ? layers.get(selected) : undefined}
+              isCenter={selected !== null && selected === center}
+            coordination={selected ? coordination.filter((event) => coordinationOf.get(selected)?.includes(event.id)) : []}
+              onMakeCenter={(key) => applyFocus(key, depth ?? DEFAULT_DEPTH)}
+              onClose={() => setSelected(null)}
+              onSelectEdge={(id) => {
+                setSelectedEdgeId(id);
+                revealPanel("bukti-garis");
+              }}
+            />
+          )}
+          <CoordinationPanel
             chain={chain}
-            symbol={symbol}
-            item={selectedItem}
-            edges={edges}
-            byKey={byKey}
-            layer={selected && layers ? layers.get(selected) : undefined}
-            isCenter={selected !== null && selected === center}
-            onMakeCenter={(key) => applyFocus(key, depth ?? DEFAULT_DEPTH)}
-            onClose={() => setSelected(null)}
-            onSelectEdge={(id) => {
-              setSelectedEdgeId(id);
-              revealPanel("bukti-garis");
+            events={coordination}
+            focusedId={focusCoordination}
+            onFocus={(id) => {
+              setFocusCoordination(id);
+              setFocusCluster(null);
+              setSelected(null);
+              setSelectedEdgeId(null);
             }}
+            showMarkers={showCoordination}
+            onToggleMarkers={() => setShowCoordination((value) => !value)}
           />
-        )}
+        </div>
       </div>
     </EvidenceProvider>
   );
@@ -809,6 +850,18 @@ function EntityMarker({
   );
 }
 
+/** Penanda petir di kanan bawah gelembung yang terlibat gerak serempak. */
+function CoordinationMarker({ x, y, r }: { x: number; y: number; r: number }) {
+  const cx = x + r * Math.SQRT1_2;
+  const cy = y + r * Math.SQRT1_2;
+  return (
+    <g pointerEvents="none" aria-hidden>
+      <circle cx={cx} cy={cy} r={7.5} fill={CHART_SURFACE} stroke="var(--foreground)" strokeOpacity={0.55} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      <Zap x={cx - 4.5} y={cy - 4.5} width={9} height={9} strokeWidth={2.4} className="text-foreground/85" />
+    </g>
+  );
+}
+
 function MapControl({
   label,
   onClick,
@@ -842,6 +895,7 @@ function WalletDetail({
   byKey,
   layer,
   isCenter,
+  coordination,
   onMakeCenter,
   onClose,
   onSelectEdge,
@@ -854,6 +908,8 @@ function WalletDetail({
   /** Jarak lapis dari wallet pusat, bila sedang menelusuri. */
   layer?: number;
   isCenter: boolean;
+  /** Kejadian gerak serempak yang melibatkan wallet ini. */
+  coordination: CoordinationEvent[];
   onMakeCenter: (key: string) => void;
   onClose: () => void;
   onSelectEdge: (id: string) => void;
@@ -909,6 +965,23 @@ function WalletDetail({
             {isCenter ? "Pusat penelusuran" : "Jadikan pusat"}
           </button>
         </div>
+
+        {coordination.length > 0 ? (
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Gerak serempak</h3>
+            <ul className="space-y-1.5">
+              {coordination.map((event) => (
+                <li key={event.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Zap className="size-3.5 text-foreground/80" aria-hidden />
+                    {COORDINATION_KIND_META[event.kind].label}
+                  </span>
+                  <ConfidenceMeter confidence={event.confidence} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">

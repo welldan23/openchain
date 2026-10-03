@@ -380,6 +380,28 @@ export interface MapCluster {
   caveats: string[];
 }
 
+/** Jenis koordinasi yang dideteksi di antara wallet peta. */
+export type CoordinationKind = "funding_burst" | "same_block_buy" | "similar_amount" | "coordinated_sell";
+
+/**
+ * Satu kejadian yang tampak terkoordinasi: beberapa wallet melakukan hal
+ * serupa di waktu yang sangat berdekatan. Selalu heuristic.
+ */
+export interface CoordinationEvent {
+  id: string;
+  kind: CoordinationKind;
+  /** Penjelasan singkat, mis. "5 wallet didanai dalam 9 menit". */
+  detail: string;
+  members: string[];
+  confidence: ClusterConfidence;
+  /** Waktu kejadian pertama. */
+  timestamp: string;
+  /** Rentang waktu kejadian dalam detik; 0 bila di blok yang sama. */
+  windowSeconds: number;
+  blockNumber?: number;
+  evidenceTxHashes: string[];
+}
+
 /**
  * Peta hubungan holder satu token.
  * Asumsi kontrak API: `GET /maps/:chain/:token` → `WalletMap`.
@@ -390,6 +412,7 @@ export interface WalletMap {
   nodes: MapNode[];
   edges: MapEdge[];
   clusters: MapCluster[];
+  coordination: CoordinationEvent[];
   snapshot: DataSnapshot;
 }
 

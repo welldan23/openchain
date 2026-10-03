@@ -2,6 +2,7 @@ import type {
   ActivityType,
   ClusterConfidence,
   ClusterLabel,
+  CoordinationKind,
   ContractCheckStatus,
   EntityLabelType,
   FindingClassification,
@@ -210,4 +211,23 @@ export const CLUSTER_CONFIDENCE_META: Record<ClusterConfidence, { label: string;
   low: { label: "Keyakinan rendah", level: 1 },
   medium: { label: "Keyakinan sedang", level: 2 },
   high: { label: "Keyakinan tinggi", level: 3 },
+};
+
+export const COORDINATION_KIND_META: Record<CoordinationKind, { label: string; description: string }> = {
+  funding_burst: {
+    label: "Pendanaan beruntun",
+    description: "Beberapa wallet didanai dari sumber yang sama dalam waktu sangat singkat.",
+  },
+  same_block_buy: {
+    label: "Beli di blok yang sama",
+    description: "Beberapa wallet membeli di blok yang sama, sering bersamaan dengan penambahan likuiditas.",
+  },
+  similar_amount: {
+    label: "Nominal mirip",
+    description: "Jumlah yang dikirim atau dibeli hampir sama di antara wallet.",
+  },
+  coordinated_sell: {
+    label: "Jual bersamaan",
+    description: "Beberapa wallet menjual dalam rentang waktu yang sangat berdekatan.",
+  },
 };
