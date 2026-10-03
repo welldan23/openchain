@@ -7,7 +7,8 @@
  * dan bisa dibandingkan antar-snapshot.
  */
 import { addressKey } from "./fund-flow";
-import type { ChainId, MapCluster, MapEdge, MapNode, WalletMap } from "./types";
+import { ENTITY_LABEL_META } from "./labels";
+import type { ChainId, EntityLabelType, MapCluster, MapEdge, MapNode, WalletMap } from "./types";
 
 /** Warna klaster dari palet kategorikal (mode gelap), lolos cek semua pasangan. */
 export const CLUSTER_COLORS = ["#3987e5", "#d95926", "#199e70"] as const;
@@ -367,4 +368,68 @@ export function hullPath(points: Point[]): string {
 export function hullLabelPosition(points: Point[]): { x: number; y: number } {
   const top = points.reduce((best, point) => (point[1] < best[1] ? point : best), points[0]);
   return { x: Math.min(Math.max(top[0], 60), MAP_WIDTH - 60), y: Math.max(top[1] - 6, 12) };
+}
+
+/* ------------------------------ Filter label ------------------------------ */
+
+/** Jenis label untuk filter; `none` = wallet tanpa label. */
+export type LabelFilterKey = EntityLabelType | "none";
+export type LabelSourceFilter = "all" | "external" | "heuristic";
+
+export interface LabelFilter {
+  hiddenTypes: ReadonlySet<LabelFilterKey>;
+  source: LabelSourceFilter;
+}
+
+export const EMPTY_LABEL_FILTER: LabelFilter = { hiddenTypes: new Set(), source: "all" };
+
+/** Nilai `?sumber=` di URL untuk tiap pilihan sumber label. */
+const SOURCE_PARAM: Record<Exclude<LabelSourceFilter, "all">, string> = { external: "eksternal", heuristic: "dugaan" };
+
+export function labelFilterKey(node: MapNode): LabelFilterKey {
+  return node.label?.type ?? "none";
+}
+
+/**
+ * Lolos filter bila jenis labelnya tidak disembunyikan, dan (bila sumber
+ * dipilih) labelnya berasal dari sumber itu. Wallet tanpa label tidak punya
+ * sumber, jadi ikut tersembunyi saat sumber dipilih.
+ */
+export function matchesLabelFilter(node: MapNode, filter: LabelFilter): boolean {
+  if (filter.hiddenTypes.has(labelFilterKey(node))) return false;
+  return filter.source === "all" || node.label?.source === filter.source;
+}
+
+export function isLabelFilterActive(filter: LabelFilter): boolean {
+  return filter.hiddenTypes.size > 0 || filter.source !== "all";
+}
+
+/** Jenis label yang ada di peta beserta jumlahnya, terbanyak dulu; "tanpa label" paling akhir. */
+export function labelTypeCounts(nodes: MapNode[]): Array<{ key: LabelFilterKey; count: number }> {
+  const counts = new Map<LabelFilterKey, number>();
+  for (const node of nodes) counts.set(labelFilterKey(node), (counts.get(labelFilterKey(node)) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => Number(a.key === "none") - Number(b.key === "none") || b.count - a.count || a.key.localeCompare(b.key));
+}
+
+/** Baca filter dari URL: `?sembunyikan=exchange,none&sumber=eksternal`. Nilai asing diabaikan. */
+export function parseLabelFilter(hidden: string | undefined, source: string | undefined): LabelFilter {
+  const known = new Set<string>([...Object.keys(ENTITY_LABEL_META), "none"]);
+  const hiddenTypes = new Set(
+    (hidden ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item): item is LabelFilterKey => known.has(item)),
+  );
+  const sourceEntry = Object.entries(SOURCE_PARAM).find(([, value]) => value === source);
+  return { hiddenTypes, source: sourceEntry ? (sourceEntry[0] as LabelSourceFilter) : "all" };
+}
+
+/** Kebalikan `parseLabelFilter`; parameter kosong tidak ditulis. */
+export function labelFilterParams(filter: LabelFilter): { sembunyikan?: string; sumber?: string } {
+  return {
+    sembunyikan: filter.hiddenTypes.size > 0 ? [...filter.hiddenTypes].sort().join(",") : undefined,
+    sumber: filter.source === "all" ? undefined : SOURCE_PARAM[filter.source],
+  };
 }

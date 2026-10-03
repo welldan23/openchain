@@ -32,7 +32,21 @@ import { addressKey, addressTitle } from "@/lib/fund-flow";
 import type { ChainId, MapEdge, MapNode } from "@/lib/types";
 import { CHART_SURFACE } from "@/lib/chart-colors";
 import { fitBounds, INITIAL_VIEWPORT, MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf, type Viewport } from "@/lib/map-viewport";
-import { clusterHull, hullLabelPosition, hullPath, LAYER_OPTIONS, layersFrom, NEUTRAL_NODE_COLOR } from "@/lib/wallet-map";
+import {
+  clusterHull,
+  EMPTY_LABEL_FILTER,
+  hullLabelPosition,
+  hullPath,
+  isLabelFilterActive,
+  LAYER_OPTIONS,
+  labelFilterParams,
+  layersFrom,
+  matchesLabelFilter,
+  NEUTRAL_NODE_COLOR,
+  parseLabelFilter,
+  type LabelFilter,
+} from "@/lib/wallet-map";
+import { LabelFilterBar } from "./label-filter-bar";
 import { usePanZoom } from "./use-pan-zoom";
 
 export interface ExplorerNode {
@@ -53,6 +67,8 @@ interface WalletMapExplorerProps {
   initialCenter?: string;
   /** Kedalaman lapis dari URL (`?lapis=`); `null` = semua lapis. */
   initialDepth: number | null;
+  /** Filter label dari URL (`?sembunyikan=` dan `?sumber=`), dibaca di sini. */
+  initialLabelFilter?: { sembunyikan?: string; sumber?: string };
   /** Klaster sesuai urutan warna; `color` kosong untuk klaster yang digabung ke "lainnya". */
   clusters: Array<{ id: string; name: string; color: string | null }>;
 }
@@ -96,13 +112,18 @@ function layerLabel(depth: number | null): string {
   return depth === null ? "Semua" : `${depth} lapis`;
 }
 
-/** Simpan pilihan pusat dan lapis di URL tanpa memuat ulang halaman. */
-function syncUrl(centerAddress: string | null, depth: number | null) {
+/** Simpan pilihan pusat, lapis, dan filter label di URL tanpa memuat ulang halaman. */
+function syncUrl(centerAddress: string | null, depth: number | null, filter: LabelFilter) {
   const url = new URL(window.location.href);
-  if (centerAddress) url.searchParams.set("pusat", centerAddress);
-  else url.searchParams.delete("pusat");
-  if (centerAddress && depth !== null) url.searchParams.set("lapis", String(depth));
-  else url.searchParams.delete("lapis");
+  const params: Record<string, string | undefined> = {
+    pusat: centerAddress ?? undefined,
+    lapis: centerAddress && depth !== null ? String(depth) : undefined,
+    ...labelFilterParams(filter),
+  };
+  for (const [key, value] of Object.entries(params)) {
+    if (value) url.searchParams.set(key, value);
+    else url.searchParams.delete(key);
+  }
   window.history.replaceState(window.history.state, "", url);
 }
 
@@ -128,6 +149,7 @@ export function WalletMapExplorer({
   edges,
   initialCenter,
   initialDepth,
+  initialLabelFilter,
   clusters,
 }: WalletMapExplorerProps) {
   const markerId = useId().replace(/:/g, "");
@@ -141,24 +163,36 @@ export function WalletMapExplorer({
   const [center, setCenter] = useState<string | null>(initialCenterKey);
   const [depth, setDepth] = useState<number | null>(initialCenterKey ? initialDepth : (initialDepth ?? DEFAULT_DEPTH));
 
-  /** Gelembung yang tampil untuk pusat dan kedalaman tertentu. */
-  function visibleFor(nextCenter: string | null, nextDepth: number | null) {
-    if (!nextCenter) return { layers: null, items: nodes };
-    const layers = layersFrom(chain, edges, nextCenter, nextDepth);
-    return { layers, items: nodes.filter((item) => layers.has(addressKey(chain, item.node.address))) };
+  const [labelFilter, setLabelFilter] = useState<LabelFilter>(() =>
+    initialLabelFilter ? parseLabelFilter(initialLabelFilter.sembunyikan, initialLabelFilter.sumber) : EMPTY_LABEL_FILTER,
+  );
+
+  /**
+   * Gelembung yang tampil untuk pusat, kedalaman, dan filter label tertentu.
+   * Wallet pusat selalu tampil walau jenis labelnya disaring.
+   */
+  function visibleFor(nextCenter: string | null, nextDepth: number | null, nextFilter: LabelFilter) {
+    const layers = nextCenter ? layersFrom(chain, edges, nextCenter, nextDepth) : null;
+    const items = nodes.filter((item) => {
+      const key = addressKey(chain, item.node.address);
+      if (layers && !layers.has(key)) return false;
+      return key === nextCenter || matchesLabelFilter(item.node, nextFilter);
+    });
+    return { layers, items, keys: new Set(items.map((item) => addressKey(chain, item.node.address))) };
   }
 
-  const initialVisible = visibleFor(initialCenterKey, initialCenterKey ? initialDepth : null);
+  const initialVisible = visibleFor(initialCenterKey, initialCenterKey ? initialDepth : null, labelFilter);
   const { svgRef, viewport, dragging, zoomIn, zoomOut, reset, isDragClick, svgProps, onKeyDown, showViewport } = usePanZoom(
     viewportFor(initialVisible.items, nodes.length),
   );
-  const { layers, items: visibleNodes } = useMemo(
-    () => (center ? visibleFor(center, depth) : { layers: null, items: nodes }),
+  const { layers, items: visibleNodes, keys: visibleKeys } = useMemo(
+    () => visibleFor(center, depth, labelFilter),
     // visibleFor hanya memakai chain, edges, dan nodes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chain, edges, nodes, center, depth],
+    [chain, edges, nodes, center, depth, labelFilter],
   );
-  const isVisible = (address: string) => !layers || layers.has(addressKey(chain, address));
+  const isVisible = (address: string) => visibleKeys.has(addressKey(chain, address));
+  const filtering = center !== null || isLabelFilterActive(labelFilter);
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -242,19 +276,27 @@ export function WalletMapExplorer({
     requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
-  /** Ganti wallet pusat atau kedalaman, lalu arahkan peta ke wallet yang tampil. */
-  function applyFocus(nextCenter: string | null, nextDepth: number | null) {
+  /**
+   * Terapkan pusat, kedalaman, dan filter label. Pilihan yang ikut
+   * tersembunyi dilepas, dan (bila `fit`) peta diarahkan ke wallet yang tampil.
+   */
+  function applyView(nextCenter: string | null, nextDepth: number | null, nextFilter: LabelFilter, fit: boolean) {
     setCenter(nextCenter);
     setDepth(nextDepth);
+    setLabelFilter(nextFilter);
     setHovered(null);
-    const next = visibleFor(nextCenter, nextDepth);
-    showViewport(viewportFor(next.items, nodes.length));
-    const shown = (key: string) => !next.layers || next.layers.has(key);
-    if (selected && !shown(selected)) setSelected(null);
-    if (selectedEdge && !(shown(addressKey(chain, selectedEdge.from)) && shown(addressKey(chain, selectedEdge.to)))) {
+    const next = visibleFor(nextCenter, nextDepth, nextFilter);
+    if (fit) showViewport(viewportFor(next.items, nodes.length));
+    if (selected && !next.keys.has(selected)) setSelected(null);
+    if (selectedEdge && !(next.keys.has(addressKey(chain, selectedEdge.from)) && next.keys.has(addressKey(chain, selectedEdge.to)))) {
       setSelectedEdgeId(null);
     }
-    syncUrl(nextCenter ? (byKey.get(nextCenter)?.node.address ?? null) : null, nextDepth);
+    syncUrl(nextCenter ? (byKey.get(nextCenter)?.node.address ?? null) : null, nextDepth, nextFilter);
+  }
+
+  /** Ganti wallet pusat atau kedalaman, lalu arahkan peta ke wallet yang tampil. */
+  function applyFocus(nextCenter: string | null, nextDepth: number | null) {
+    applyView(nextCenter, nextDepth, labelFilter, true);
   }
 
   function select(key: string) {
@@ -330,9 +372,15 @@ export function WalletMapExplorer({
               </div>
             </div>
             <p className="pb-1.5 text-[11px] text-muted" aria-live="polite">
-              {center ? `${visibleNodes.length} dari ${nodes.length} wallet tampil` : `${nodes.length} wallet`}
+              {filtering ? `${visibleNodes.length} dari ${nodes.length} wallet tampil` : `${nodes.length} wallet`}
             </p>
           </div>
+
+          <LabelFilterBar
+            nodes={nodes.map((item) => item.node)}
+            filter={labelFilter}
+            onChange={(next) => applyView(center, depth, next, false)}
+          />
 
           {clusters.length > 0 ? (
             <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Kelompok wallet">

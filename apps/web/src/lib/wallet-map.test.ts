@@ -6,6 +6,12 @@ import {
   CLUSTER_COLORS,
   clusterStyles,
   edgesOf,
+  EMPTY_LABEL_FILTER,
+  isLabelFilterActive,
+  labelFilterParams,
+  labelTypeCounts,
+  matchesLabelFilter,
+  parseLabelFilter,
   hullLabelPosition,
   hullPath,
   layersFrom,
@@ -169,5 +175,39 @@ describe("area kelompok", () => {
     expect(hull).toHaveLength(16);
     expect(hullPath(hull)).toMatch(/^M[\d.,L-]+Z$/);
     expect(hullLabelPosition(hull)).toEqual({ x: 60, y: 12 });
+  });
+});
+
+describe("filter label entitas", () => {
+  const exchange = nbla.nodes.find((node) => node.label?.type === "exchange")!;
+  const unlabeled = nbla.nodes.find((node) => !node.label)!;
+  const bundler = nbla.nodes.find((node) => node.label?.type === "bot")!;
+
+  it("menghitung jenis label di peta, tanpa label paling akhir", () => {
+    const counts = labelTypeCounts(nbla.nodes);
+    expect(counts[0]).toEqual({ key: "bot", count: 5 });
+    expect(counts.at(-1)).toEqual({ key: "none", count: 3 });
+    expect(counts.reduce((sum, item) => sum + item.count, 0)).toBe(nbla.nodes.length);
+  });
+
+  it("menyembunyikan jenis tertentu dan menyaring menurut sumber", () => {
+    const hideExchange = { hiddenTypes: new Set(["exchange" as const]), source: "all" as const };
+    expect(matchesLabelFilter(exchange, hideExchange)).toBe(false);
+    expect(matchesLabelFilter(bundler, hideExchange)).toBe(true);
+    const externalOnly = { ...EMPTY_LABEL_FILTER, source: "external" as const };
+    expect(matchesLabelFilter(exchange, externalOnly)).toBe(true);
+    expect(matchesLabelFilter(bundler, externalOnly)).toBe(false);
+    expect(matchesLabelFilter(unlabeled, externalOnly)).toBe(false);
+    expect(isLabelFilterActive(EMPTY_LABEL_FILTER)).toBe(false);
+    expect(isLabelFilterActive(externalOnly)).toBe(true);
+  });
+
+  it("membaca dan menulis filter di URL, nilai asing diabaikan", () => {
+    const filter = parseLabelFilter("exchange,none,palsu", "dugaan");
+    expect([...filter.hiddenTypes].sort()).toEqual(["exchange", "none"]);
+    expect(filter.source).toBe("heuristic");
+    expect(labelFilterParams(filter)).toEqual({ sembunyikan: "exchange,none", sumber: "dugaan" });
+    expect(labelFilterParams(EMPTY_LABEL_FILTER)).toEqual({ sembunyikan: undefined, sumber: undefined });
+    expect(parseLabelFilter(undefined, "aneh")).toEqual(EMPTY_LABEL_FILTER);
   });
 });
