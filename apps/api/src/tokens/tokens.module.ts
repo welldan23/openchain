@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CLOCK, systemClock } from '../common/clock.js';
 import { ContractChecksService } from './contract-checks.service.js';
+import { EvidenceListService } from './evidence-list.service.js';
 import { HoldersService } from './holders.service.js';
 import { SnapshotFreshness } from './snapshot-freshness.js';
 import { TokenLookupService } from './token-lookup.service.js';
@@ -17,6 +18,7 @@ import { TokensRepository } from './tokens.repository.js';
     TokenSummaryService,
     ContractChecksService,
     HoldersService,
+    EvidenceListService,
     { provide: CLOCK, useValue: systemClock },
   ],
 })

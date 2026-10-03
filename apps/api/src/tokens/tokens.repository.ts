@@ -11,6 +11,8 @@ import {
   holders,
   labels,
   providerRuns,
+  riskFindingEvidence,
+  riskFindings,
   tokens,
   tokenSnapshotSources,
   tokenSnapshots,
@@ -112,32 +114,75 @@ export class TokensRepository {
   /** Bukti tiap pemeriksaan kontrak, dikelompokkan per id pemeriksaan. */
   async findContractCheckEvidence(checkIds: number[]): Promise<Map<number, EvidenceRecord[]>> {
     const grouped = new Map<number, EvidenceRecord[]>();
-    if (checkIds.length === 0) return grouped;
+    const links = await this.findCheckEvidenceLinks(checkIds);
+    const records = await this.findEvidenceRecords(links.map((link) => link.evidenceId));
+    for (const link of links) {
+      const record = records.get(link.evidenceId);
+      if (!record) continue;
+      const list = grouped.get(link.checkId) ?? [];
+      list.push(record);
+      grouped.set(link.checkId, list);
+    }
+    for (const list of grouped.values()) list.sort(byBlockAscending);
+    return grouped;
+  }
+
+  /** Temuan risiko pada sebuah snapshot, dalam urutan simpan. */
+  async findRiskFindings(snapshotId: number) {
+    return this.db
+      .select()
+      .from(riskFindings)
+      .where(eq(riskFindings.snapshotId, snapshotId))
+      .orderBy(asc(riskFindings.id));
+  }
+
+  /** Pasangan temuan dan bukti yang mendukungnya. */
+  async findFindingEvidenceLinks(findingIds: number[]) {
+    if (findingIds.length === 0) return [];
+    return this.db
+      .select({ findingId: riskFindingEvidence.findingId, evidenceId: riskFindingEvidence.evidenceId })
+      .from(riskFindingEvidence)
+      .where(inArray(riskFindingEvidence.findingId, findingIds));
+  }
+
+  /** Pasangan pemeriksaan kontrak dan bukti yang mendukungnya. */
+  async findCheckEvidenceLinks(checkIds: number[]) {
+    if (checkIds.length === 0) return [];
+    return this.db
+      .select({ checkId: contractCheckEvidence.checkId, evidenceId: contractCheckEvidence.evidenceId })
+      .from(contractCheckEvidence)
+      .where(inArray(contractCheckEvidence.checkId, checkIds));
+  }
+
+  /** Bukti beserta address sumber, tujuan, dan kontraknya, per id bukti. */
+  async findEvidenceRecords(evidenceIds: number[]): Promise<Map<number, EvidenceRecord>> {
+    const records = new Map<number, EvidenceRecord>();
+    const uniqueIds = [...new Set(evidenceIds)];
+    if (uniqueIds.length === 0) return records;
 
     const source = alias(addresses, 'source');
     const destination = alias(addresses, 'destination');
     const contract = alias(addresses, 'contract');
     const rows = await this.db
       .select({
-        checkId: contractCheckEvidence.checkId,
         evidence,
         sourceAddress: source.address,
         destinationAddress: destination.address,
         contractAddress: contract.address,
       })
-      .from(contractCheckEvidence)
-      .innerJoin(evidence, eq(contractCheckEvidence.evidenceId, evidence.id))
+      .from(evidence)
       .leftJoin(source, eq(evidence.sourceAddressId, source.id))
       .leftJoin(destination, eq(evidence.destinationAddressId, destination.id))
       .leftJoin(contract, eq(evidence.contractAddressId, contract.id))
-      .where(inArray(contractCheckEvidence.checkId, checkIds))
-      .orderBy(asc(evidence.blockNumber), asc(evidence.id));
-
-    for (const { checkId, ...record } of rows) {
-      const list = grouped.get(checkId) ?? [];
-      list.push(record);
-      grouped.set(checkId, list);
-    }
-    return grouped;
+      .where(inArray(evidence.id, uniqueIds));
+    for (const row of rows) records.set(row.evidence.id, row);
+    return records;
   }
+}
+
+/** Bukti lama lebih dulu; bukti tanpa nomor blok di akhir. */
+function byBlockAscending(a: EvidenceRecord, b: EvidenceRecord): number {
+  const blockA = a.evidence.blockNumber ?? Number.MAX_SAFE_INTEGER;
+  const blockB = b.evidence.blockNumber ?? Number.MAX_SAFE_INTEGER;
+  return blockA - blockB || a.evidence.id - b.evidence.id;
 }

@@ -1,4 +1,7 @@
 import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
+import { infoClassification, type InfoClassification } from '../database/schema/enums.js';
+import { EvidenceListService } from './evidence-list.service.js';
+import type { EvidenceListResponse } from './evidence-list.types.js';
 import { HoldersService, MAX_HOLDER_LIMIT } from './holders.service.js';
 import type { HoldersResponse } from './holders.types.js';
 import { ContractChecksService } from './contract-checks.service.js';
@@ -13,6 +16,7 @@ export class TokensController {
     private readonly summaryService: TokenSummaryService,
     private readonly contractChecksService: ContractChecksService,
     private readonly holdersService: HoldersService,
+    private readonly evidenceListService: EvidenceListService,
   ) {}
 
   /**
@@ -58,6 +62,36 @@ export class TokensController {
       limit: parseLimit(limit),
     });
   }
+
+  /**
+   * Bukti transaksi yang mendukung temuan risiko dan cek kontrak pada
+   * snapshot. `?finding=<kode>` hanya menampilkan bukti untuk satu temuan, dan
+   * `?classification=` menyaring menurut jenis informasi.
+   */
+  @Get(':chain/:address/evidence')
+  getEvidence(
+    @Param('chain') chain: string,
+    @Param('address') address: string,
+    @Query('block') block?: string,
+    @Query('finding') finding?: string,
+    @Query('classification') classification?: string,
+  ): Promise<EvidenceListResponse> {
+    return this.evidenceListService.getEvidence(
+      chain,
+      address,
+      { finding: finding ? finding : null, classification: parseClassification(classification) },
+      parseBlock(block),
+    );
+  }
+}
+
+function parseClassification(value: string | undefined): InfoClassification | null {
+  if (value === undefined || value === '') return null;
+  const allowed: readonly string[] = infoClassification.enumValues;
+  if (!allowed.includes(value)) {
+    throw new BadRequestException(`Parameter classification harus salah satu dari: ${allowed.join(', ')}.`);
+  }
+  return value as InfoClassification;
 }
 
 function parseLimit(value: string | undefined): number | undefined {

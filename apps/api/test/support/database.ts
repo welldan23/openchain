@@ -231,3 +231,103 @@ export async function seedHolders(
   ]);
   return rows;
 }
+
+/**
+ * Isi temuan risiko uji beserta buktinya. Temuan pajak memakai bukti yang
+ * sama dengan pemeriksaan kontrak `tax` (dari `seedContractChecks`).
+ */
+export async function seedRiskFindings(
+  db: TestDatabase,
+  chainId: string,
+  snapshotId: number,
+  taxEvidenceId: number,
+) {
+  const fetchedAt = new Date('2026-10-03T04:30:00Z');
+  const evidenceRows = await db
+    .insert(schema.evidence)
+    .values([
+      {
+        evidenceKey: `funding-1-${snapshotId}`,
+        chainId,
+        classification: 'verified_fact',
+        explanation: 'Funder mengirim 1,5 ETH ke wallet bundler pertama.',
+        txHash: testTxHash(`fund-1-${snapshotId}`),
+        blockNumber: 23100100,
+        blockTimestamp: new Date('2026-09-12T08:05:00Z'),
+        asset: 'ETH',
+        amountRaw: '1500000000000000000',
+        fetchedAt,
+      },
+      {
+        evidenceKey: `funding-2-${snapshotId}`,
+        chainId,
+        classification: 'verified_fact',
+        explanation: 'Funder yang sama mengirim 1,5 ETH ke wallet bundler kedua.',
+        txHash: testTxHash(`fund-2-${snapshotId}`),
+        blockNumber: 23100200,
+        blockTimestamp: new Date('2026-09-12T08:09:00Z'),
+        asset: 'ETH',
+        amountRaw: '1500000000000000000',
+        fetchedAt,
+      },
+      {
+        evidenceKey: `bundle-${snapshotId}`,
+        chainId,
+        classification: 'heuristic',
+        explanation: 'Dua wallet didanai funder yang sama dalam 4 menit lalu membeli di blok peluncuran.',
+        txHash: testTxHash(`bundle-${snapshotId}`),
+        blockNumber: 23100300,
+        heuristicName: 'common_direct_funder',
+        confidence: '0.640',
+        fetchedAt,
+      },
+      {
+        evidenceKey: `lp-claim-${snapshotId}`,
+        chainId,
+        classification: 'assumption',
+        explanation: 'Tim mengklaim LP terkunci 12 bulan; transaksi penguncian belum ditemukan.',
+        fetchedAt,
+      },
+    ])
+    .returning();
+  const [funding1, funding2, bundle, lpClaim] = evidenceRows;
+
+  const findings = await db
+    .insert(schema.riskFindings)
+    .values([
+      {
+        snapshotId,
+        code: 'liquidity_lock_claim',
+        title: 'Likuiditas diklaim terkunci 12 bulan',
+        description: 'Klaim tim belum didukung transaksi penguncian.',
+        severity: 'medium',
+        classification: 'assumption',
+      },
+      {
+        snapshotId,
+        code: 'common_funding',
+        title: 'Beberapa wallet dibiayai dari sumber yang sama',
+        description: 'Pola mirip bundler, belum pasti dioperasikan pihak yang sama.',
+        severity: 'medium',
+        classification: 'heuristic',
+      },
+      {
+        snapshotId,
+        code: 'owner_can_change_tax',
+        title: 'Owner masih bisa mengubah pajak transaksi',
+        description: 'Kepemilikan belum di-renounce dan pajak jual sudah dinaikkan.',
+        severity: 'high',
+        classification: 'verified_fact',
+      },
+    ])
+    .returning();
+  const byCode = new Map(findings.map((finding) => [finding.code, finding]));
+  await db.insert(schema.riskFindingEvidence).values([
+    { findingId: byCode.get('owner_can_change_tax')!.id, evidenceId: taxEvidenceId },
+    { findingId: byCode.get('common_funding')!.id, evidenceId: funding1.id },
+    { findingId: byCode.get('common_funding')!.id, evidenceId: funding2.id },
+    { findingId: byCode.get('common_funding')!.id, evidenceId: bundle.id },
+    { findingId: byCode.get('liquidity_lock_claim')!.id, evidenceId: lpClaim.id },
+  ]);
+  return { findings, evidence: evidenceRows };
+}

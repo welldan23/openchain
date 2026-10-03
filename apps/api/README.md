@@ -84,6 +84,23 @@ Sebaran pemegang: konsentrasi supply dan holder teratas pada snapshot.
 - Parameter `?block=`, status data, dan respons error sama dengan endpoint
   ringkasan.
 
+### `GET /api/tokens/:chain/:address/evidence`
+
+Bukti transaksi yang mendukung temuan risiko dan cek kontrak pada snapshot.
+
+- `findings` berisi semua temuan pada snapshot, urut dari yang paling parah,
+  beserta jumlah buktinya. Daftar ini tetap lengkap walau ada filter, supaya
+  pilihan filter di frontend selalu tersedia.
+- Tiap bukti mencantumkan `relatedFindings` dan `relatedChecks`, yaitu kode
+  temuan dan pemeriksaan yang didukungnya. Bukti terbaru tampil lebih dulu;
+  bukti tanpa nomor blok, mis. asumsi, ada di akhir.
+- `?finding=<kode>` hanya menampilkan bukti untuk satu temuan; kode yang tidak
+  ada di snapshot dijawab `404`.
+- `?classification=` menyaring menurut jenis informasi (`verified_fact`,
+  `derived_metric`, `heuristic`, `external_label`, `assumption`,
+  `unavailable`); nilai lain dijawab `400`. Kedua filter bisa digabung.
+- Parameter `?block=` dan status data sama dengan endpoint ringkasan.
+
 ## Skema data token
 
 Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
