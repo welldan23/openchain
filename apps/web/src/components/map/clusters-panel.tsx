@@ -196,6 +196,13 @@ export function MapLegendPanel() {
           </dt>
           <dd className="text-muted">Area kelompok (warna sesuai chip kelompok)</dd>
         </div>
+        <div className="flex items-center gap-2">
+          <dt className="flex w-10 shrink-0 justify-center gap-1">
+            <span aria-hidden className="size-3.5 rounded-full border border-foreground/50" />
+            <span aria-hidden className="size-3.5 rounded-full border border-dashed border-foreground/50" />
+          </dt>
+          <dd className="text-muted">Penanda jenis entitas: tepi utuh = label eksternal, putus-putus = dugaan OpenChain</dd>
+        </div>
       </dl>
     </Panel>
   );

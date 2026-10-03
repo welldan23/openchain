@@ -2,7 +2,8 @@
 
 import type { LucideIcon } from "lucide-react";
 import { BadgeCheck, Calculator, CircleHelp, Lightbulb, Tag } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
+import { usePopover } from "@/components/ui/use-popover";
 import { cn } from "@/lib/cn";
 import { CLASSIFICATION_META } from "@/lib/labels";
 import type { FindingClassification } from "@/lib/types";
@@ -17,7 +18,6 @@ const ICONS: Record<FindingClassification, LucideIcon> = {
 
 /** Lebar popover penjelasan (px), dipakai juga untuk cek ruang di layar. */
 const TOOLTIP_WIDTH = 240;
-const VIEWPORT_MARGIN = 8;
 
 const BADGE_BASE =
   "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset";
@@ -56,71 +56,15 @@ function InteractiveBadge({ classification }: { classification: FindingClassific
   const meta = CLASSIFICATION_META[classification];
   const Icon = ICONS[classification];
   const tooltipId = useId();
-  const rootRef = useRef<HTMLSpanElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
-  // Dibuka lewat klik/tap (pinned), hover mouse, atau fokus keyboard.
-  const [pinned, setPinned] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [keyboardFocused, setKeyboardFocused] = useState(false);
-  const [alignEnd, setAlignEnd] = useState(false);
-  const open = pinned || hovered || keyboardFocused;
-
-  // Rata kanan bila popover akan terpotong di tepi kanan layar.
-  function updateAlignment() {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) setAlignEnd(rect.left + TOOLTIP_WIDTH > window.innerWidth - VIEWPORT_MARGIN);
-  }
-
-  // Tutup saat tap di luar badge atau menekan Escape.
-  useEffect(() => {
-    if (!open) return;
-    function handlePointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setPinned(false);
-        setHovered(false);
-      }
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setPinned(false);
-        setHovered(false);
-        setKeyboardFocused(false);
-      }
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+  const { rootRef, triggerRef, open, alignEnd, triggerProps } = usePopover<HTMLButtonElement>(TOOLTIP_WIDTH);
 
   return (
     <span ref={rootRef} className="relative inline-flex">
       <button
-        ref={buttonRef}
+        ref={triggerRef}
         type="button"
         aria-describedby={open ? tooltipId : undefined}
-        aria-expanded={open}
-        onClick={() => {
-          updateAlignment();
-          setPinned((value) => !value);
-        }}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== "mouse") return;
-          updateAlignment();
-          setHovered(true);
-        }}
-        onPointerLeave={(event) => {
-          if (event.pointerType === "mouse") setHovered(false);
-        }}
-        onFocus={(event) => {
-          if (!event.currentTarget.matches(":focus-visible")) return;
-          updateAlignment();
-          setKeyboardFocused(true);
-        }}
-        onBlur={() => setKeyboardFocused(false)}
+        {...triggerProps}
         className={cn(
           BADGE_BASE,
           meta.className,

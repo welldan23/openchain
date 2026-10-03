@@ -19,6 +19,7 @@ import {
 import { useEffect, useId, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { EntityLabelBadge } from "@/components/badges";
+import { ENTITY_ICONS } from "@/components/entity-label-badge";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { EvidenceProvider, EvidenceTrigger } from "@/components/evidence/evidence-dialog";
 import { HashLink } from "@/components/ui/hash-link";
@@ -510,6 +511,9 @@ export function WalletMapExplorer({
                         strokeWidth={2}
                         vectorEffect="non-scaling-stroke"
                       />
+                      {item.node.label && item.node.label.type !== "unknown" ? (
+                        <EntityMarker x={item.x} y={item.y} r={item.r} type={item.node.label.type} heuristic={item.node.label.source === "heuristic"} />
+                      ) : null}
                       {key === center ? (
                         <circle
                           cx={item.x}
@@ -576,6 +580,12 @@ export function WalletMapExplorer({
                     {hoveredItem.clusterName ? ` · ${hoveredItem.clusterName}` : " · tanpa klaster"}
                     {layers ? ` · ${layerText(layers.get(hovered!) ?? 0)}` : ""}
                   </p>
+                  {hoveredItem.node.label ? (
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      Label {hoveredItem.node.label.source === "external" ? "eksternal" : "dugaan OpenChain"} ·{" "}
+                      {hoveredItem.node.label.sourceName}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -710,6 +720,44 @@ function EdgeEvidencePanel({
         </p>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Penanda kecil jenis entitas di tepi kanan atas gelembung berlabel. Garis
+ * tepinya putus-putus bila labelnya dugaan OpenChain, utuh bila eksternal.
+ */
+function EntityMarker({
+  x,
+  y,
+  r,
+  type,
+  heuristic,
+}: {
+  x: number;
+  y: number;
+  r: number;
+  type: keyof typeof ENTITY_ICONS;
+  heuristic: boolean;
+}) {
+  const Icon = ENTITY_ICONS[type];
+  const cx = x + r * Math.SQRT1_2;
+  const cy = y - r * Math.SQRT1_2;
+  return (
+    <g pointerEvents="none" aria-hidden>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={7.5}
+        fill={CHART_SURFACE}
+        stroke="var(--foreground)"
+        strokeOpacity={0.55}
+        strokeWidth={1}
+        strokeDasharray={heuristic ? "2 1.5" : undefined}
+        vectorEffect="non-scaling-stroke"
+      />
+      <Icon x={cx - 4.5} y={cy - 4.5} width={9} height={9} strokeWidth={2.4} className="text-foreground/85" />
+    </g>
   );
 }
 

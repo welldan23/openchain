@@ -97,7 +97,7 @@ export default async function Home() {
                   <span className="block font-medium">{addressTitle(flow.label)}</span>
                   <span className="mt-1 flex flex-wrap items-center gap-1.5">
                     <ChainBadge chain={flow.chain} />
-                    {flow.label ? <EntityLabelBadge label={flow.label} /> : null}
+                    {flow.label ? <EntityLabelBadge label={flow.label} interactive={false} /> : null}
                     <span className="font-mono text-[11px] text-muted">{shortenHash(flow.address)}</span>
                     <span className="text-[11px] text-muted">· {flow.transferCount} transfer</span>
                   </span>

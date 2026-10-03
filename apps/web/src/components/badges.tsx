@@ -1,6 +1,6 @@
 import { getChain } from "@/lib/chains";
-import { ENTITY_LABEL_META, RISK_LEVEL_META, SEVERITY_META } from "@/lib/labels";
-import type { ChainId, EntityLabel, RiskLevel, RiskSeverity } from "@/lib/types";
+import { RISK_LEVEL_META, SEVERITY_META } from "@/lib/labels";
+import type { ChainId, RiskLevel, RiskSeverity } from "@/lib/types";
 import { Badge } from "./ui/badge";
 
 export function ChainBadge({ chain }: { chain: ChainId }) {
@@ -18,14 +18,4 @@ export function RiskLevelBadge({ level }: { level: RiskLevel }) {
   return <Badge className={meta.className}>{meta.label}</Badge>;
 }
 
-/** Label entitas beserta sumbernya, supaya asal label selalu transparan. */
-export function EntityLabelBadge({ label }: { label: EntityLabel }) {
-  const meta = ENTITY_LABEL_META[label.type];
-  const sourceText = label.source === "external" ? "Label eksternal" : "Heuristic";
-  return (
-    <Badge className={meta.className} title={`${sourceText} · sumber: ${label.sourceName}`}>
-      {label.name ?? meta.label}
-      <span className="opacity-70">· {label.source === "external" ? "eksternal" : "heuristic"}</span>
-    </Badge>
-  );
-}
+export { EntityLabelBadge } from "./entity-label-badge";
