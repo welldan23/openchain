@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { ClustersPanel } from "@/components/map/clusters-panel";
+import { ClustersPanel, MapLegendPanel } from "@/components/map/clusters-panel";
 import { MapHeader } from "@/components/map/map-header";
 import { MapStats } from "@/components/map/map-stats";
 import { MapTable } from "@/components/map/map-table";
@@ -62,11 +62,12 @@ export default async function MapPage({ params, searchParams }: PageProps<"/map/
 
       {/* grid-cols-1 = minmax(0,1fr): cegah tabel lebar mendorong kolom melebihi layar HP. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
+        <div className="min-w-0 space-y-5 lg:col-span-2">
+          <ClustersPanel chain={map.chain} styles={styles} />
           <MapTable chain={map.chain} symbol={map.token.symbol} nodes={nodes} connections={connections} />
         </div>
-        <aside className="min-w-0 space-y-5" aria-label="Klaster dan keterangan">
-          <ClustersPanel styles={styles} />
+        <aside className="min-w-0 space-y-5" aria-label="Legenda dan keterangan">
+          <MapLegendPanel />
           <ClassificationLegend />
         </aside>
       </div>

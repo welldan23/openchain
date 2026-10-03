@@ -7,7 +7,7 @@
  */
 import type { AddressFlow, EntityLabel, MapCluster, MapEdge, MapNode, TokenInvestigation, WalletMap } from "../types";
 import { MOCK_FLOWS } from "./flows";
-import { mockEvmAddress, mockSolanaAddress } from "./ids";
+import { mockEvmAddress, mockEvmTxHash, mockSolanaAddress } from "./ids";
 import { MOCK_TOKENS } from "./tokens";
 
 const BUNDLER_LABEL: EntityLabel = {
@@ -67,6 +67,11 @@ function edgesFromFlows(flows: AddressFlow[], nodes: MapNode[]): MapEdge[] {
   return [...edges.values()];
 }
 
+/** Hash transaksi garis dari `from` ke `to`; daftar kosong bila tidak ada garisnya. */
+function txBetween(edges: MapEdge[], pairs: Array<[string, string]>): string[] {
+  return pairs.flatMap(([from, to]) => edges.filter((edge) => edge.from === from && edge.to === to).map((edge) => edge.txHash));
+}
+
 function withClusters(nodes: MapNode[], members: Record<string, string[]>): MapNode[] {
   const clusterOf = new Map(Object.entries(members).flatMap(([id, addresses]) => addresses.map((a) => [a, id])));
   return nodes.map((node) => {
@@ -108,17 +113,94 @@ const nblaNodes: MapNode[] = [
   },
 ];
 
+const nblaEdges = edgesFromFlows(flowsOn("ethereum"), nblaNodes);
+const nblaExchange = mockEvmAddress("nbla:exchange-hot");
+
 const nblaClusters: MapCluster[] = [
   {
     id: "nbla-pendana-bersama",
     name: "Pendana bersama",
     reason:
       "Lima wallet menerima ETH dari satu pendana dalam 9 menit, lalu membeli NBLA di blok yang sama dengan penambahan likuiditas. Dua di antaranya mengembalikan ETH ke pendana setelah menjual.",
+    labels: ["common_funding", "bundled_or_sniper_activity"],
+    confidence: "medium",
+    signals: [
+      {
+        id: "common-funder",
+        label: "Pendana langsung yang sama",
+        detail: "Kelima wallet menerima modal ETH pertama dari address yang sama.",
+        matched: true,
+        evidenceTxHashes: txBetween(nblaEdges, nbla.bundlers.map((bundler): [string, string] => [nbla.funder, bundler])),
+      },
+      {
+        id: "funding-window",
+        label: "Didanai dalam waktu berdekatan",
+        detail: "Semua pendanaan terjadi dalam rentang 9 menit.",
+        matched: true,
+        evidenceTxHashes: [],
+      },
+      {
+        id: "same-block-buy",
+        label: "Beli di blok yang sama dengan penambahan likuiditas",
+        detail: "Pembelian pertama kelima wallet ada di blok penambahan likuiditas.",
+        matched: true,
+        evidenceTxHashes: [mockEvmTxHash("nbla:bundler-buy")],
+      },
+      {
+        id: "consolidation",
+        label: "Dana kembali ke pendana",
+        detail: "Dua wallet mengirim ETH kembali ke pendana setelah menjual, satu mengirim NBLA.",
+        matched: true,
+        evidenceTxHashes: txBetween(nblaEdges, nbla.bundlers.slice(0, 3).map((bundler): [string, string] => [bundler, nbla.funder])),
+      },
+      {
+        id: "exchange-source",
+        label: "Sumber dana dari exchange",
+        detail: "Pendana mendapat ETH dari hot wallet exchange, jadi asal dana sebelum itu tidak bisa dilacak lebih jauh.",
+        matched: false,
+        evidenceTxHashes: txBetween(nblaEdges, [[nblaExchange, nbla.funder]]),
+      },
+    ],
+    caveats: [
+      "Pendana bersama belum tentu pemilik yang sama; bisa juga layanan yang mendanai banyak pengguna.",
+      "Tiga dari lima wallet belum mengembalikan dana, jadi pola konsolidasi belum lengkap.",
+    ],
   },
   {
     id: "nbla-lingkaran-deployer",
     name: "Lingkaran deployer",
     reason: "Menerima NBLA langsung dari deployer, sebelum dan sesudah likuiditas ditambahkan.",
+    labels: ["likely_linked", "false_positive_possible"],
+    confidence: "low",
+    signals: [
+      {
+        id: "deployer-allocation",
+        label: "Menerima token langsung dari deployer",
+        detail: "Treasury dan satu holder menerima NBLA langsung dari deployer.",
+        matched: true,
+        evidenceTxHashes: txBetween(nblaEdges, [
+          [nbla.deployer, nbla.treasury],
+          [nbla.deployer, nbla.holder3],
+        ]),
+      },
+      {
+        id: "common-funder",
+        label: "Pendana langsung yang sama",
+        detail: "Tidak ada pendana ETH bersama di antara anggota.",
+        matched: false,
+        evidenceTxHashes: [],
+      },
+      {
+        id: "coordinated-sell",
+        label: "Jual terkoordinasi",
+        detail: "Belum ada penjualan bersamaan dari anggota kelompok ini.",
+        matched: false,
+        evidenceTxHashes: [],
+      },
+    ],
+    caveats: [
+      "Penerima token dari deployer bisa juga mitra, alokasi marketing, atau airdrop yang sah. Tidak cukup bukti untuk menyebutnya tim atau orang dalam.",
+    ],
   },
 ];
 
@@ -129,7 +211,7 @@ const nblaMap: WalletMap = {
     "nbla-pendana-bersama": [nbla.funder, ...nbla.bundlers],
     "nbla-lingkaran-deployer": [nbla.deployer, nbla.treasury, nbla.holder3],
   }),
-  edges: edgesFromFlows(flowsOn("ethereum"), nblaNodes),
+  edges: nblaEdges,
   clusters: nblaClusters,
   snapshot: nblaToken.snapshot,
 };
@@ -155,16 +237,44 @@ const kodoNodes: MapNode[] = [
   },
 ];
 
+const kodoEdges = edgesFromFlows(flowsOn("solana"), kodoNodes);
+
 const kodoMap: WalletMap = {
   chain: "solana",
   token: { address: kodoToken.token.address, name: kodoToken.token.name, symbol: kodoToken.token.symbol },
   nodes: withClusters(kodoNodes, { "kodo-pembuat-bundler": [kodo.creator, ...kodo.bundlers] }),
-  edges: edgesFromFlows(flowsOn("solana"), kodoNodes),
+  edges: kodoEdges,
   clusters: [
     {
       id: "kodo-pembuat-bundler",
       name: "Pembuat & bundler",
       reason: "Tiga wallet bundler menerima SOL dari pembuat token dalam 2 menit, sebelum token diluncurkan.",
+      labels: ["common_funding", "insider_or_team"],
+      confidence: "high",
+      signals: [
+        {
+          id: "creator-funding",
+          label: "Didanai langsung oleh pembuat token",
+          detail: "Ketiga wallet menerima SOL langsung dari wallet yang membuat token.",
+          matched: true,
+          evidenceTxHashes: txBetween(kodoEdges, kodo.bundlers.map((bundler): [string, string] => [kodo.creator, bundler])),
+        },
+        {
+          id: "funding-window",
+          label: "Didanai dalam waktu berdekatan",
+          detail: "Semua pendanaan terjadi dalam rentang 2 menit, sebelum peluncuran.",
+          matched: true,
+          evidenceTxHashes: [],
+        },
+        {
+          id: "consolidation",
+          label: "Dana kembali ke pembuat",
+          detail: "Belum ada dana yang kembali ke pembuat token.",
+          matched: false,
+          evidenceTxHashes: [],
+        },
+      ],
+      caveats: ["Pendanaan langsung dari pembuat adalah bukti kuat keterkaitan, tapi belum membuktikan niat menjual bersama."],
     },
   ],
   snapshot: kodoToken.snapshot,

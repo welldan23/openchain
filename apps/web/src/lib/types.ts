@@ -339,12 +339,45 @@ export interface MapEdge {
   timestamp: string;
 }
 
+/**
+ * Label klaster sesuai PRD. Semuanya hasil heuristic; insider/team hanya
+ * dipakai bila ada bukti transaksi langsung.
+ */
+export type ClusterLabel =
+  | "visual_cluster"
+  | "common_funding"
+  | "coordinated_execution"
+  | "bundled_or_sniper_activity"
+  | "market_maker_possible"
+  | "likely_linked"
+  | "insider_or_team"
+  | "false_positive_possible"
+  | "inconclusive";
+
+export type ClusterConfidence = "low" | "medium" | "high";
+
+/** Satu pola yang dicek untuk sebuah klaster, terpenuhi atau tidak. */
+export interface ClusterSignal {
+  id: string;
+  /** Nama pola, mis. "Pendana langsung yang sama". */
+  label: string;
+  /** Penjelasan singkat hasil pengecekan. */
+  detail: string;
+  matched: boolean;
+  evidenceTxHashes: string[];
+}
+
 /** Kelompok wallet yang diduga terkait; selalu heuristic. */
 export interface MapCluster {
   id: string;
   name: string;
   /** Alasan pengelompokan dalam bahasa sederhana. */
   reason: string;
+  labels: ClusterLabel[];
+  confidence: ClusterConfidence;
+  signals: ClusterSignal[];
+  /** Hal yang bisa membuat dugaan ini keliru. */
+  caveats: string[];
 }
 
 /**

@@ -39,6 +39,10 @@ export interface ClusterStyle {
   memberCount: number;
   /** Persen supply yang dipegang anggota klaster. */
   sharePct: number;
+  /** Nilai USD pendanaan native coin yang diterima anggota, dari wallet mana pun. */
+  fundingUsd: number;
+  /** Jumlah garis yang kedua ujungnya anggota klaster ini. */
+  internalLinkCount: number;
 }
 
 export interface MapSummary {
@@ -64,11 +68,19 @@ export function bubbleRadius(sharePct: number, maxSharePct: number): number {
 export function clusterStyles(map: WalletMap): ClusterStyle[] {
   return map.clusters.map((cluster, index) => {
     const members = map.nodes.filter((node) => node.clusterId === cluster.id);
+    const keys = new Set(members.map((node) => addressKey(map.chain, node.address)));
+    const isMember = (address: string) => keys.has(addressKey(map.chain, address));
     return {
       cluster,
       color: index < CLUSTER_COLORS.length ? CLUSTER_COLORS[index] : null,
       memberCount: members.length,
       sharePct: round2(members.reduce((sum, node) => sum + node.sharePct, 0)),
+      fundingUsd: round2(
+        map.edges
+          .filter((edge) => edge.kind === "funding" && isMember(edge.to))
+          .reduce((sum, edge) => sum + (edge.amountUsd ?? 0), 0),
+      ),
+      internalLinkCount: map.edges.filter((edge) => isMember(edge.from) && isMember(edge.to)).length,
     };
   });
 }

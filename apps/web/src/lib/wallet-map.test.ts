@@ -53,12 +53,16 @@ describe("klaster dan ringkasan", () => {
       ["nbla-pendana-bersama", CLUSTER_COLORS[0], 6, 14.9],
       ["nbla-lingkaran-deployer", CLUSTER_COLORS[1], 3, 21.4],
     ]);
+    // Pendanaan ke anggota: 12 ETH ke pendana + 5 kiriman ke bundler + 2 ETH yang kembali ke pendana.
+    expect(styles[0]).toMatchObject({ fundingUsd: 29_400 + 25_235 + 9_310 + 7_105, internalLinkCount: 8 });
+    // Deployer menerima 10 ETH dari hot wallet exchange.
+    expect(styles[1]).toMatchObject({ fundingUsd: 24_500, internalLinkCount: 2 });
     const pool = nbla.nodes.find((node) => node.label?.type === "liquidity_pool")!;
     expect(nodeColor(pool, styles)).toBe(NEUTRAL_NODE_COLOR);
   });
 
   it("klaster ke-4 dst. tidak diberi hue sendiri", () => {
-    const many = { ...nbla, clusters: ["a", "b", "c", "d"].map((id) => ({ id, name: id, reason: "-" })) };
+    const many = { ...nbla, clusters: ["a", "b", "c", "d"].map((id) => ({ ...nbla.clusters[0], id, name: id })) };
     expect(clusterStyles(many).map((style) => style.color)).toEqual([...CLUSTER_COLORS, null]);
   });
 

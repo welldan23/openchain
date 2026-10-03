@@ -1,5 +1,7 @@
 import type {
   ActivityType,
+  ClusterConfidence,
+  ClusterLabel,
   ContractCheckStatus,
   EntityLabelType,
   FindingClassification,
@@ -153,4 +155,59 @@ export const CHECK_STATUS_META: Record<ContractCheckStatus, Meta & { iconClass: 
 export const FLOW_DIRECTION_META: Record<FlowDirection, Meta> = {
   in: { label: "Masuk", className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30" },
   out: { label: "Keluar", className: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
+};
+
+/** Label klaster dari PRD dengan penjelasan sederhana. */
+export const CLUSTER_LABEL_META: Record<ClusterLabel, Meta & { description: string }> = {
+  visual_cluster: {
+    label: "Berdekatan di peta",
+    description: "Tampak berkelompok di peta, tapi belum ada pola transaksi yang menguatkan.",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+  },
+  common_funding: {
+    label: "Pendana sama",
+    description: "Wallet-wallet ini mendapat modal dari sumber yang sama.",
+    className: "bg-sky-500/15 text-sky-300 ring-sky-400/30",
+  },
+  coordinated_execution: {
+    label: "Gerak terkoordinasi",
+    description: "Beli atau jual di waktu, blok, atau nominal yang sangat mirip.",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/30",
+  },
+  bundled_or_sniper_activity: {
+    label: "Pola bundler/sniper",
+    description: "Membeli di blok peluncuran atau bersamaan dengan penambahan likuiditas.",
+    className: "bg-orange-500/15 text-orange-300 ring-orange-400/30",
+  },
+  market_maker_possible: {
+    label: "Mungkin market maker",
+    description: "Pola transaksi mirip penyedia likuiditas profesional.",
+    className: "bg-indigo-500/15 text-indigo-300 ring-indigo-400/30",
+  },
+  likely_linked: {
+    label: "Kemungkinan terkait",
+    description: "Ada hubungan transaksi langsung, tapi belum cukup untuk menyebut pemilik yang sama.",
+    className: "bg-teal-500/15 text-teal-300 ring-teal-400/30",
+  },
+  insider_or_team: {
+    label: "Orang dalam/tim",
+    description: "Ada bukti transaksi langsung dengan pembuat token atau deployer.",
+    className: "bg-rose-500/15 text-rose-300 ring-rose-400/40",
+  },
+  false_positive_possible: {
+    label: "Bisa salah duga",
+    description: "Ada penjelasan lain yang wajar untuk pola ini.",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+  },
+  inconclusive: {
+    label: "Belum bisa disimpulkan",
+    description: "Data belum cukup untuk menilai hubungan wallet-wallet ini.",
+    className: "bg-slate-500/20 text-slate-400 ring-slate-400/20",
+  },
+};
+
+export const CLUSTER_CONFIDENCE_META: Record<ClusterConfidence, { label: string; level: number }> = {
+  low: { label: "Keyakinan rendah", level: 1 },
+  medium: { label: "Keyakinan sedang", level: 2 },
+  high: { label: "Keyakinan tinggi", level: 3 },
 };
