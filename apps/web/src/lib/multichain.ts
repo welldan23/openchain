@@ -345,3 +345,23 @@ export function bridgeMatchChecks(move: BridgeMove, now: string): BridgeMatchChe
 export function bridgeEvidenceAnchor(id: string): string {
   return `bukti-bridge-${id}`;
 }
+
+/** Tampilan halaman: bandingkan beberapa jaringan, atau fokus ke satu jaringan. */
+export type MultichainViewMode = "compare" | "single";
+
+/** `?tampilan=satu` untuk satu chain; selain itu perbandingan. */
+export function parseViewMode(value: string | undefined): MultichainViewMode {
+  return value === "satu" ? "single" : "compare";
+}
+
+/**
+ * Jaringan untuk tampilan satu chain: yang pertama dari pilihan bila
+ * pilihannya satu, selain itu chain aktif tersibuk di antara pilihan,
+ * lalu chain pertama yang datanya tersedia.
+ */
+export function pickSingleChain(chains: ChainActivity[], selected: ChainId[]): ChainId | null {
+  const pool = chains.filter((item) => selected.includes(item.chain));
+  if (pool.length === 1) return pool[0].chain;
+  const busiest = sortChainActivity(pool).find(isActive);
+  return busiest?.chain ?? pool.find((item) => item.status !== "unavailable")?.chain ?? pool[0]?.chain ?? null;
+}

@@ -8,9 +8,9 @@ import { ChainComparisonTable } from "@/components/multichain/chain-comparison-t
 import { CrossChainActivityPanel } from "@/components/multichain/cross-chain-activity-panel";
 import { DataStatusBanner } from "@/components/multichain/data-status-banner";
 import { InfrastructurePanel } from "@/components/multichain/infrastructure-panel";
-import { MultichainChainPicker } from "@/components/multichain/chain-picker";
 import { MultichainHeader } from "@/components/multichain/multichain-header";
 import { MultichainStats } from "@/components/multichain/multichain-stats";
+import { MultichainViewControls } from "@/components/multichain/view-controls";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { listFlowChains } from "@/lib/api/flows";
 import { getMultichainProfile } from "@/lib/api/multichain";
@@ -23,6 +23,8 @@ import {
   filterProfileChains,
   isActive,
   parseChainSelection,
+  parseViewMode,
+  pickSingleChain,
   summarizeMultichain,
 } from "@/lib/multichain";
 
@@ -45,7 +47,11 @@ export default async function MultichainPage({ params, searchParams }: PageProps
   if (!fullProfile) notFound();
 
   const available = fullProfile.chains.map((item) => item.chain);
-  const selected = parseChainSelection(firstParam(query.jaringan), available);
+  const mode = parseViewMode(firstParam(query.tampilan));
+  const requested = parseChainSelection(firstParam(query.jaringan), available);
+  // Tampilan satu chain memakai satu jaringan saja, meski URL menyebut lebih.
+  const singleChain = pickSingleChain(fullProfile.chains, requested);
+  const selected = mode === "single" && singleChain ? [singleChain] : requested;
   const profile = filterProfileChains(fullProfile, selected);
   const summary = summarizeMultichain(profile);
   const flowChains = (await listFlowChains("ethereum", profile.address))
@@ -57,8 +63,10 @@ export default async function MultichainPage({ params, searchParams }: PageProps
       <MockDataNotice />
       <MultichainHeader profile={fullProfile} summary={summarizeMultichain(fullProfile)} />
       <div className="flex flex-wrap items-center gap-3">
-        <MultichainChainPicker
+        <MultichainViewControls
+          mode={mode}
           selected={selected}
+          singleChain={singleChain}
           options={fullProfile.chains.map((item) => ({
             chain: item.chain,
             detail:
@@ -70,7 +78,7 @@ export default async function MultichainPage({ params, searchParams }: PageProps
             muted: !isActive(item),
           }))}
         />
-        {selected.length < available.length ? (
+        {mode === "compare" && selected.length < available.length ? (
           <p className="text-[11px] text-muted">
             Ringkasan, kartu, dan bridge di bawah hanya untuk {selected.length} jaringan terpilih.
           </p>
@@ -82,7 +90,7 @@ export default async function MultichainPage({ params, searchParams }: PageProps
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <div className="min-w-0 space-y-5 lg:col-span-2">
-          {profile.chains.length > 1 ? <ChainComparisonTable rows={comparisonRows(profile)} /> : null}
+          {mode === "compare" && profile.chains.length > 1 ? <ChainComparisonTable rows={comparisonRows(profile)} /> : null}
           <ChainActivityGrid address={profile.address} chains={profile.chains} flowChains={flowChains} />
           <BridgesPanel bridges={profile.bridges} snapshotAt={profile.fetchedAt} />
           <CrossChainActivityPanel owner={{ address: profile.address, label: profile.label }} activities={profile.activities} />

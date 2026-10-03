@@ -13,6 +13,8 @@ import {
   isEvmAddress,
   matchesActivityFilter,
   parseChainSelection,
+  parseViewMode,
+  pickSingleChain,
   serializeChainSelection,
   sortComparison,
   sortChainActivity,
@@ -203,5 +205,23 @@ describe("status data per jaringan", () => {
     expect(summary.totalTx).toBe(142 + 65 + 31);
     expect(summary.balanceUsd).toBe(96_400 + 52_700 + 4_100);
     expect(comparisonRows(broken).find((row) => row.chain === "bsc")).toMatchObject({ active: false, status: "unavailable", txSharePct: 0 });
+  });
+});
+
+describe("tampilan satu chain", () => {
+  it("membaca mode dari URL", () => {
+    expect(parseViewMode("satu")).toBe("single");
+    expect(parseViewMode(undefined)).toBe("compare");
+    expect(parseViewMode("aneh")).toBe("compare");
+  });
+
+  it("memilih jaringan tersibuk dari pilihan, atau satu-satunya pilihan", () => {
+    const all = busy.chains.map((item) => item.chain);
+    expect(pickSingleChain(busy.chains, all)).toBe("ethereum");
+    expect(pickSingleChain(busy.chains, ["arbitrum", "base"])).toBe("base");
+    expect(pickSingleChain(busy.chains, ["arbitrum"])).toBe("arbitrum");
+    // Pendana: Arbitrum gagal dimuat dan BSC tidak aktif, jadi BSC yang dipilih.
+    expect(pickSingleChain(funder.chains, ["arbitrum", "bsc"])).toBe("bsc");
+    expect(pickSingleChain(quiet.chains, quiet.chains.map((item) => item.chain))).toBe("ethereum");
   });
 });

@@ -115,7 +115,7 @@ export function ChainActivityGrid({
       icon={Layers}
       action={<ClassificationBadge classification="fact" />}
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className={cn("grid grid-cols-1 gap-3", chains.length > 1 && "sm:grid-cols-2")}>
         {sortChainActivity(chains).map((activity) => (
           <ChainCard
             key={activity.chain}
