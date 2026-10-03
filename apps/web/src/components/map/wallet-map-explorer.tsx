@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowDownLeft, ArrowUpRight, MousePointerClick, Network, X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, Maximize2, MousePointerClick, Network, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { EntityLabelBadge } from "@/components/badges";
 import { ClassificationBadge } from "@/components/classification-badge";
@@ -13,7 +13,8 @@ import { formatDateTime, formatPct, formatTokenAmount, formatUsdCompact, shorten
 import { addressKey, addressTitle } from "@/lib/fund-flow";
 import type { ChainId, MapEdge, MapNode } from "@/lib/types";
 import { CHART_SURFACE } from "@/lib/chart-colors";
-import { MAP_HEIGHT, MAP_WIDTH } from "@/lib/wallet-map";
+import { MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf } from "@/lib/map-viewport";
+import { usePanZoom } from "./use-pan-zoom";
 
 export interface ExplorerNode {
   node: MapNode;
@@ -57,7 +58,8 @@ function edgeEnds(from: ExplorerNode, to: ExplorerNode) {
 
 export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExplorerProps) {
   const markerId = useId().replace(/:/g, "");
-  const containerRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
+  const { svgRef, viewport, dragging, zoomIn, zoomOut, reset, isDragClick, svgProps, onKeyDown } = usePanZoom();
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const byKey = useMemo(() => new Map(nodes.map((item) => [addressKey(chain, item.node.address), item])), [chain, nodes]);
@@ -88,6 +90,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
   const selectedItem = selected ? byKey.get(selected) : undefined;
 
   function select(key: string) {
+    if (isDragClick()) return;
     const next = selected === key ? null : key;
     setSelected(next);
     // Di layar sempit panel detail ada di bawah peta; bawa ke sana supaya terlihat.
@@ -115,15 +118,27 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
         className="min-w-0 lg:col-span-2"
         action={<ClassificationBadge classification="heuristic" />}
       >
-        {/* Di layar sempit peta tetap selebar 560px dan bisa digeser, supaya gelembung kecil masih bisa di-tap. */}
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <div ref={containerRef} className="relative min-w-[560px]">
+        <div
+          className="-mx-2 sm:mx-0"
+          onKeyDown={(event) => {
+            if (onKeyDown(event)) setHovered(null);
+          }}
+        >
+          <div className="relative overflow-hidden rounded-lg">
             <svg
-              viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className="block h-auto w-full touch-manipulation select-none"
+              ref={svgRef}
+              viewBox={viewBoxOf(viewport)}
+              className={cn(
+                "block h-auto w-full select-none",
+                viewport.scale > 1 ? (dragging ? "cursor-grabbing" : "cursor-grab") : undefined,
+              )}
+              // Saat diperbesar, sentuhan dipakai untuk menggeser peta; saat belum, untuk menggulir halaman.
+              style={{ touchAction: viewport.scale > 1 ? "none" : "pan-y" }}
               role="group"
               aria-label={`Peta hubungan ${nodes.length} wallet holder ${symbol}`}
+              aria-describedby={hintId}
               onPointerLeave={() => setHovered(null)}
+              {...svgProps}
             >
               <defs>
                 <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -146,6 +161,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                       strokeWidth={touches ? 2 : 1.5}
                       strokeDasharray={edge.kind === "funding" ? "5 4" : undefined}
                       strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
                       markerEnd={touches ? `url(#${markerId})` : undefined}
                       opacity={focusKey && !touches ? 0.25 : 1}
                     />
@@ -168,7 +184,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                     className="cursor-pointer outline-none [&:focus-visible>circle:first-child]:stroke-accent"
                     opacity={dimmed ? 0.3 : 1}
                     onPointerEnter={(event) => {
-                      if (event.pointerType === "mouse") setHovered(key);
+                      if (event.pointerType === "mouse" && !dragging) setHovered(key);
                     }}
                     onFocus={() => setHovered(key)}
                     onBlur={() => setHovered(null)}
@@ -185,9 +201,10 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                       fillOpacity={holder ? 0.9 : 1}
                       stroke={holder ? CHART_SURFACE : item.color}
                       strokeWidth={2}
+                      vectorEffect="non-scaling-stroke"
                     />
                     {isSelected ? (
-                      <circle cx={item.x} cy={item.y} r={item.r + 4} fill="none" stroke="var(--foreground)" strokeWidth={1.5} />
+                      <circle cx={item.x} cy={item.y} r={item.r + 4} fill="none" stroke="var(--foreground)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
                     ) : null}
                     {showLabel ? (
                       <text
@@ -198,6 +215,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                         stroke={CHART_SURFACE}
                         strokeWidth={3}
                         strokeOpacity={0.6}
+                        vectorEffect="non-scaling-stroke"
                         style={{ paintOrder: "stroke" }}
                         className="pointer-events-none fill-foreground text-[11px] font-medium"
                       >
@@ -209,13 +227,22 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
               })}
             </svg>
   
-            {hoveredItem ? (
+            <div className="absolute top-2 right-2 flex flex-col items-center gap-1 rounded-lg border border-line bg-surface-raised/90 p-1 backdrop-blur">
+              <MapControl label="Perbesar" onClick={zoomIn} disabled={viewport.scale >= MAX_SCALE} icon={ZoomIn} />
+              <MapControl label="Perkecil" onClick={zoomOut} disabled={viewport.scale <= MIN_SCALE} icon={ZoomOut} />
+              <MapControl label="Tampilkan seluruh peta" onClick={reset} disabled={viewport.scale <= MIN_SCALE} icon={Maximize2} />
+              <span className="px-0.5 pb-0.5 text-[10px] tabular-nums text-muted" aria-live="polite">
+                {Math.round(viewport.scale * 100)}%
+              </span>
+            </div>
+
+            {hoveredItem && !dragging ? (
               <div
                 role="tooltip"
-                style={{
-                  left: `${(hoveredItem.x / MAP_WIDTH) * 100}%`,
-                  top: `${((hoveredItem.y - hoveredItem.r) / MAP_HEIGHT) * 100}%`,
-                }}
+                style={(() => {
+                  const position = toViewportPercent(viewport, hoveredItem.x, hoveredItem.y - hoveredItem.r);
+                  return { left: `${position.left}%`, top: `${position.top}%` };
+                })()}
                 className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-lg border border-line bg-surface-raised px-3 py-2 shadow-xl shadow-black/40"
               >
                 <p className="text-sm font-semibold">
@@ -235,7 +262,10 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
         </div>
         <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted">
           <MousePointerClick className="size-3.5" aria-hidden />
-          Tap atau klik gelembung untuk melihat detail dan hubungannya. Angka di gelembung besar adalah porsi supply. Di HP, geser peta ke samping.
+          <span id={hintId}>
+            Tap atau klik gelembung untuk melihat detail. Perbesar dengan tombol +/−, Ctrl/⌘ + scroll, atau dua
+            jari, lalu seret untuk menggeser. Keyboard: + − 0 dan panah.
+          </span>
         </p>
       </Panel>
 
@@ -248,6 +278,31 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
         onClose={() => setSelected(null)}
       />
     </div>
+  );
+}
+
+function MapControl({
+  label,
+  onClick,
+  disabled,
+  icon: Icon,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled: boolean;
+  icon: typeof ZoomIn;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="inline-grid size-8 place-items-center rounded-md text-foreground/80 transition hover:bg-surface hover:text-accent focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground/80"
+    >
+      <Icon className="size-4" aria-hidden />
+    </button>
   );
 }
 
