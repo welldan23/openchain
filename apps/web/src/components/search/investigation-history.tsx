@@ -1,18 +1,11 @@
-import { ChevronRight, Coins, Footprints, Globe2, History, Network, NotebookPen, Waypoints, type LucideIcon } from "lucide-react";
+import { ChevronRight, History, NotebookPen } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge } from "@/components/badges";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
 import { formatDateTime, formatNumber, formatRelativeTime } from "@/lib/format";
-import type { InvestigationEntry, InvestigationKind } from "@/lib/types";
-
-const KIND_META: Record<InvestigationKind, { label: string; icon: LucideIcon }> = {
-  token: { label: "Token", icon: Coins },
-  flow: { label: "Aliran dana", icon: Waypoints },
-  trace: { label: "Telusur jalur", icon: Footprints },
-  map: { label: "Peta hubungan", icon: Network },
-  multichain: { label: "Multichain", icon: Globe2 },
-};
+import type { InvestigationEntry } from "@/lib/types";
+import { INVESTIGATION_KIND_META } from "./kind-meta";
 
 /** Investigasi yang pernah dibuka, terbaru dulu, supaya bisa dilanjutkan. */
 export function InvestigationHistory({
@@ -41,7 +34,7 @@ export function InvestigationHistory({
       ) : (
         <ol className="space-y-2">
           {entries.map((entry) => {
-            const meta = KIND_META[entry.kind];
+            const meta = INVESTIGATION_KIND_META[entry.kind];
             const Icon = meta.icon;
             return (
               <li key={entry.id}>

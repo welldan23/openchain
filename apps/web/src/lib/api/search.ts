@@ -11,6 +11,7 @@ import { classifyQuery, dedupeResults, normalizeText } from "../search";
 import type { InvestigationEntry, SearchQueryKind, SearchResult } from "../types";
 
 const MOCK_LATENCY_MS = 400;
+const SUGGEST_LATENCY_MS = 150;
 /** Teks lebih pendek dari ini terlalu umum untuk dicari sebagian. */
 export const MIN_TEXT_QUERY = 2;
 
@@ -24,12 +25,8 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
-/**
- * Cari token, address, atau transaksi. Address EVM dan hash EVM dicocokkan
- * tanpa peduli huruf besar/kecil; address dan signature Solana harus persis.
- */
-export async function searchInvestigations(rawQuery: string): Promise<SearchResponse> {
-  await delay(MOCK_LATENCY_MS);
+/** Pencocokan atas indeks tiruan; dipakai bersama oleh pencarian penuh dan saran. */
+function runMockSearch(rawQuery: string): SearchResponse {
   const query = rawQuery.trim();
   const kind = classifyQuery(query);
   if (query.toLowerCase() === MOCK_FAILING_QUERY.toLowerCase()) {
@@ -54,6 +51,33 @@ export async function searchInvestigations(rawQuery: string): Promise<SearchResp
   const matchedBy = kind.endsWith("_tx") ? "Hash transaksi persis" : "Address persis";
   const results = MOCK_SEARCH_INDEX.filter((entry) => entry.exact.some(same)).map((entry) => ({ ...entry.result, matchedBy }));
   return { query, kind, results: dedupeResults(results) };
+}
+
+/**
+ * Cari token, address, atau transaksi. Address EVM dan hash EVM dicocokkan
+ * tanpa peduli huruf besar/kecil; address dan signature Solana harus persis.
+ */
+export async function searchInvestigations(rawQuery: string): Promise<SearchResponse> {
+  await delay(MOCK_LATENCY_MS);
+  return runMockSearch(rawQuery);
+}
+
+export interface SearchSuggestions extends SearchResponse {
+  /** Jumlah semua hasil; bisa lebih banyak dari `results` yang dipotong. */
+  total: number;
+}
+
+export const SUGGESTION_LIMIT = 6;
+
+/**
+ * Saran singkat untuk kolom pencarian (asumsi kontrak:
+ * `GET /search/suggest?q=&limit=` → `SearchSuggestions`). Lebih cepat dari
+ * pencarian penuh dan hanya mengembalikan beberapa hasil teratas.
+ */
+export async function suggestSearch(rawQuery: string, limit = SUGGESTION_LIMIT): Promise<SearchSuggestions> {
+  await delay(SUGGEST_LATENCY_MS);
+  const response = runMockSearch(rawQuery);
+  return { ...response, results: response.results.slice(0, limit), total: response.results.length };
 }
 
 /** Investigasi yang pernah dibuka, terbaru dulu. */

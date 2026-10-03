@@ -1,17 +1,12 @@
-import { ArrowLeftRight, ChevronRight, Coins, SearchX, Wallet, type LucideIcon } from "lucide-react";
+import { ChevronRight, SearchX, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge } from "@/components/badges";
 import { EmptyState } from "@/components/ui/states";
 import type { SearchResponse } from "@/lib/api/search";
 import { MIN_TEXT_QUERY } from "@/lib/api/search";
 import { normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
-import type { SearchResult, SearchResultKind } from "@/lib/types";
-
-const GROUPS: Array<{ kind: SearchResultKind; title: string; icon: LucideIcon }> = [
-  { kind: "token", title: "Token", icon: Coins },
-  { kind: "address", title: "Address", icon: Wallet },
-  { kind: "transaction", title: "Transaksi", icon: ArrowLeftRight },
-];
+import type { SearchResult } from "@/lib/types";
+import { RESULT_GROUPS } from "./kind-meta";
 
 function ResultRow({ result, icon: Icon }: { result: SearchResult; icon: LucideIcon }) {
   return (
@@ -73,7 +68,7 @@ export function SearchResults({ response }: { response: SearchResponse }) {
   if (response.results.length === 0) return <NoResults response={response} />;
   return (
     <div className="space-y-6">
-      {GROUPS.map((group) => {
+      {RESULT_GROUPS.map((group) => {
         const items = response.results.filter((result) => result.kind === group.kind);
         if (items.length === 0) return null;
         const headingId = `hasil-${group.kind}`;

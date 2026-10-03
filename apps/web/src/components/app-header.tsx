@@ -1,6 +1,6 @@
 import { Radar, Search } from "lucide-react";
-import Form from "next/form";
 import Link from "next/link";
+import { HeaderSearch } from "./search/header-search";
 
 export function AppHeader() {
   return (
@@ -14,23 +14,9 @@ export function AppHeader() {
             OpenChain <span className="hidden text-muted sm:inline">Intelligence</span>
           </span>
         </Link>
-        <Form action="/cari" role="search" aria-label="Cari cepat" className="hidden min-w-0 max-w-sm flex-1 md:block">
-          <label htmlFor="cari-header" className="sr-only">
-            Cari address, hash transaksi, atau token
-          </label>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" aria-hidden />
-            <input
-              id="cari-header"
-              name="q"
-              type="search"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="Cari address, hash, atau token"
-              className="h-8 w-full rounded-lg border border-line bg-surface pl-8 pr-3 text-xs text-foreground placeholder:text-muted/80 focus:border-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-            />
-          </div>
-        </Form>
+        <div className="hidden min-w-0 max-w-sm flex-1 md:block">
+          <HeaderSearch />
+        </div>
         <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/cari"

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { InvestigationHistory } from "@/components/search/investigation-history";
-import { SearchForm } from "@/components/search/search-form";
+import { GlobalSearch } from "@/components/search/global-search";
 import { SearchResults } from "@/components/search/search-results";
 import { listInvestigationHistory, listSearchExamples, searchInvestigations, searchPath } from "@/lib/api/search";
 import { firstParam } from "@/lib/flow-filter";
@@ -67,7 +67,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/cari">) {
           Tempel address, hash transaksi, atau ketik nama token. Jenis isian dikenali otomatis.
         </p>
       </div>
-      <SearchForm query={query} />
+      <GlobalSearch key={query} variant="page" defaultValue={query} autoFocus={query === ""} />
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-5">
         <div className="min-w-0 space-y-4 lg:col-span-3">

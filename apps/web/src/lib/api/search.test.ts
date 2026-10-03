@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_FLOWS } from "../mock/flows";
 import { MOCK_FAILING_QUERY } from "../mock/search";
 import { MOCK_TOKENS } from "../mock/tokens";
-import { listInvestigationHistory, searchInvestigations, searchPath } from "./search";
+import { listInvestigationHistory, searchInvestigations, searchPath, suggestSearch } from "./search";
 
 async function settle<T>(promise: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(5_000);
@@ -54,6 +54,19 @@ describe("API pencarian (mock)", () => {
   it("melempar error untuk isian simulasi gagal", async () => {
     const pending = searchInvestigations(MOCK_FAILING_QUERY);
     const assertion = expect(pending).rejects.toThrow(/tidak bisa dihubungi/);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await assertion;
+  });
+
+  it("saran memotong hasil tapi tetap melaporkan jumlah semuanya", async () => {
+    const address = MOCK_FLOWS[0].address;
+    const full = await settle(searchInvestigations(address));
+    const suggestions = await settle(suggestSearch(address, 2));
+    expect(full.results.length).toBeGreaterThan(2);
+    expect(suggestions.results).toEqual(full.results.slice(0, 2));
+    expect(suggestions.total).toBe(full.results.length);
+    const failing = suggestSearch(MOCK_FAILING_QUERY);
+    const assertion = expect(failing).rejects.toThrow(/tidak bisa dihubungi/);
     await vi.advanceTimersByTimeAsync(5_000);
     await assertion;
   });

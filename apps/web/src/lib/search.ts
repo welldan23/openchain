@@ -43,3 +43,36 @@ export function dedupeResults(results: SearchResult[]): SearchResult[] {
     .sort((a, b) => order[a.result.kind] - order[b.result.kind] || a.index - b.index)
     .map(({ result }) => result);
 }
+
+export interface HighlightPart {
+  text: string;
+  match: boolean;
+}
+
+/**
+ * Pecah `text` agar bagian yang cocok dengan `query` bisa ditebalkan. Hanya
+ * kemunculan pertama, tanpa peduli huruf besar/kecil; spasi ganda di `query`
+ * dianggap satu spasi.
+ */
+export function highlightMatch(text: string, query: string): HighlightPart[] {
+  const needle = normalizeText(query);
+  const start = needle ? text.toLowerCase().indexOf(needle) : -1;
+  if (start < 0) return [{ text, match: false }];
+  const end = start + needle.length;
+  return [
+    { text: text.slice(0, start), match: false },
+    { text: text.slice(start, end), match: true },
+    { text: text.slice(end), match: false },
+  ].filter((part) => part.text !== "");
+}
+
+/**
+ * Pindah sorotan di daftar saran dengan panah. `-1` berarti belum ada yang
+ * disorot; panah bawah mulai dari atas, panah atas mulai dari bawah, dan
+ * sorotan berputar di kedua ujung.
+ */
+export function moveActiveIndex(current: number, delta: 1 | -1, count: number): number {
+  if (count <= 0) return -1;
+  if (current < 0) return delta === 1 ? 0 : count - 1;
+  return (current + delta + count) % count;
+}
