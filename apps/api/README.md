@@ -117,13 +117,30 @@ Semuanya opsional dan tidak pernah dicetak. Daftar lengkapnya ada di
 
 | Variabel | Fungsi |
 | --- | --- |
-| `RPC_URL_<CHAIN>` | Ganti RPC publik sebuah chain, mis. `RPC_URL_BSC`, dengan RPC berbayar ber-API key |
+| `RPC_URL_<CHAIN>` | Ganti RPC sebuah chain, mis. `RPC_URL_BSC`, dengan RPC berbayar ber-API key. Beberapa URL dipisah koma, urut prioritas |
 | `BLOCKSCOUT_API_KEY` | Pakai Blockscout PRO API (API key gratis di dev.blockscout.com) untuk chain yang di-host Blockscout. Dikirim lewat header, bukan URL |
 | `BLOCKSCOUT_URL_<CHAIN>` | Ganti instance Blockscout sebuah chain |
 | `PROVIDER_TIMEOUT_MS` | Batas waktu tiap request provider (default 15000) |
 
 Request yang gagal karena batas rate (HTTP 429), error server (5xx), timeout,
 atau gangguan koneksi dicoba ulang sampai 3 kali dengan jeda yang makin panjang.
+
+Setiap chain bisa memakai beberapa endpoint RPC. Bila endpoint pertama gagal
+atau menolak sebuah method, panggilan pindah ke endpoint berikutnya. Revert
+kontrak tidak memicu perpindahan karena itu jawaban sah dari chain. Chain ID
+ditanyakan ke semua endpoint dan wajib sama, supaya URL yang salah chain
+langsung ketahuan. Default saat ini:
+
+| Chain | RPC utama | Cadangan |
+| --- | --- | --- |
+| Robinhood Chain | rpc.mainnet.chain.robinhood.com (resmi) | publicnode |
+| Ethereum | publicnode | dRPC |
+| Base | mainnet.base.org (resmi) | publicnode |
+| BNB Chain | bsc-dataseed.bnbchain.org (resmi) | publicnode |
+| Arbitrum One | arb1.arbitrum.io (resmi) | publicnode |
+| OP Mainnet | mainnet.optimism.io (resmi) | publicnode |
+| Polygon PoS | publicnode | dRPC |
+| HyperEVM | rpc.hyperliquid.xyz (resmi) | belum ada |
 
 Di jaringan yang wajib lewat proxy HTTP, jalankan Node dengan
 `NODE_USE_ENV_PROXY=1` supaya `fetch` memakai `HTTPS_PROXY`.
@@ -148,7 +165,7 @@ Hasil smoke test dari lingkungan pengembangan pada 3 Oktober 2026:
 | Robinhood Chain (4663) | lolos | ditolak proteksi bot Cloudflare (HTTP 403) | lolos | `experimental` |
 | Ethereum (1) | lolos | lolos | lolos | `validated` |
 | Base (8453) | lolos | lolos | lolos | `validated` |
-| BNB Chain (56) | gagal | belum ada | lolos | `planned` |
+| BNB Chain (56) | lolos | belum ada | lolos | `experimental` |
 | Arbitrum One (42161) | lolos | lolos | lolos | `validated` |
 | OP Mainnet (10) | lolos | lolos | lolos | `validated` |
 | Polygon PoS (137) | lolos | lolos | lolos | `validated` |
@@ -162,12 +179,12 @@ server yang dipakai. Beberapa catatan:
   dari server dengan proteksi bot. Isi `BLOCKSCOUT_API_KEY` supaya data holder
   dan verifikasi kontrak lewat PRO API. Tanpa itu, snapshot Robinhood berstatus
   `partial`.
-- **BNB Chain:** belum ada RPC publik gratis yang melayani semua method minimum.
-  RPC resmi menolak `eth_getLogs`, dan publicnode menolak receipt tanpa token.
-  Isi `RPC_URL_BSC`. Dari daftar RPC publik chainlist, `https://xrpc.cl/bsc`
-  lolos smoke test RPC (3 Oktober 2026), tapi penyedianya pihak ketiga yang
-  belum dikenal, jadi tidak dijadikan default. Blockscout juga tidak meng-host
-  BNB Chain, jadi explorer menyusul.
+- **BNB Chain:** tidak ada RPC publik gratis yang melayani semua method
+  sendirian. RPC resmi menolak `eth_getLogs`, dan publicnode menolak receipt
+  tanpa token, jadi keduanya digabung lewat fallback. Dari 16 RPC publik BSC
+  yang diuji (chainlist dan daftar komunitas), sisanya mati, sudah berbayar,
+  atau langsung kena batas rate. Blockscout tidak meng-host BNB Chain, jadi
+  explorer menyusul.
 - **HyperEVM:** explorer Blockscout-nya sedang dialihkan, jadi explorer dan
   indexer menyusul.
 - **Node non-archive:** sering tidak menyimpan indeks transaksi lama. Data

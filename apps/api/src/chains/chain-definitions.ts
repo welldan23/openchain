@@ -20,7 +20,11 @@ export interface EvmChainDefinition {
   blockModel: 'evm_block';
   /** Event berupa log (address, topics, data) per transaksi. */
   eventModel: 'evm_log';
-  rpc: { defaultUrl: string };
+  /**
+   * Endpoint RPC sesuai prioritas. Bila satu endpoint gagal atau menolak
+   * sebuah method, panggilan pindah ke endpoint berikutnya.
+   */
+  rpc: { defaultUrls: readonly string[] };
   /**
    * Blockscout sebagai explorer sekaligus indexer. `proApi` berarti instance
    * di-host Blockscout sehingga bisa diakses lewat PRO API dengan API key.
@@ -55,7 +59,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'Robinhood Chain',
     ...EVM_MODELS,
     evmChainId: 4663,
-    rpc: { defaultUrl: 'https://rpc.mainnet.chain.robinhood.com' },
+    rpc: { defaultUrls: ['https://rpc.mainnet.chain.robinhood.com', 'https://robinhood-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://robinhoodchain.blockscout.com', proApi: true },
     dexscreenerSlug: 'robinhood',
     smokeTestToken: { address: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', symbol: 'WETH' },
@@ -65,7 +69,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'Ethereum',
     ...EVM_MODELS,
     evmChainId: 1,
-    rpc: { defaultUrl: 'https://ethereum-rpc.publicnode.com' },
+    rpc: { defaultUrls: ['https://ethereum-rpc.publicnode.com', 'https://eth.drpc.org'] },
     blockscout: { instanceUrl: 'https://eth.blockscout.com', proApi: true },
     dexscreenerSlug: 'ethereum',
     smokeTestToken: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH' },
@@ -75,7 +79,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'Base',
     ...EVM_MODELS,
     evmChainId: 8453,
-    rpc: { defaultUrl: 'https://mainnet.base.org' },
+    rpc: { defaultUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://base.blockscout.com', proApi: true },
     dexscreenerSlug: 'base',
     // Daftar holder WETH di Blockscout Base terlalu lambat (>60 detik); AERO cepat.
@@ -86,10 +90,10 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'BNB Chain',
     ...EVM_MODELS,
     evmChainId: 56,
-    // Belum ada RPC publik gratis yang melayani semua method minimum: RPC resmi
-    // ini menolak eth_getLogs, publicnode menolak receipt. Isi RPC_URL_BSC
-    // dengan RPC lengkap supaya smoke test lolos.
-    rpc: { defaultUrl: 'https://bsc-dataseed.bnbchain.org' },
+    // Tidak ada RPC publik gratis yang melayani semua method sendirian: RPC
+    // resmi menolak eth_getLogs, publicnode menolak receipt. Digabung lewat
+    // fallback, keduanya saling menutup.
+    rpc: { defaultUrls: ['https://bsc-dataseed.bnbchain.org', 'https://bsc-rpc.publicnode.com'] },
     // Blockscout tidak meng-host BNB Chain; explorer lain menyusul.
     blockscout: null,
     dexscreenerSlug: 'bsc',
@@ -100,7 +104,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'Arbitrum One',
     ...EVM_MODELS,
     evmChainId: 42161,
-    rpc: { defaultUrl: 'https://arb1.arbitrum.io/rpc' },
+    rpc: { defaultUrls: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://arbitrum.blockscout.com', proApi: true },
     dexscreenerSlug: 'arbitrum',
     // Daftar holder WETH di Blockscout Arbitrum terlalu lambat (>60 detik); ARB cepat.
@@ -111,7 +115,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'OP Mainnet',
     ...EVM_MODELS,
     evmChainId: 10,
-    rpc: { defaultUrl: 'https://mainnet.optimism.io' },
+    rpc: { defaultUrls: ['https://mainnet.optimism.io', 'https://optimism-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://explorer.optimism.io', proApi: true },
     dexscreenerSlug: 'optimism',
     smokeTestToken: { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH' },
@@ -121,7 +125,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'Polygon PoS',
     ...EVM_MODELS,
     evmChainId: 137,
-    rpc: { defaultUrl: 'https://polygon-bor-rpc.publicnode.com' },
+    rpc: { defaultUrls: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'] },
     blockscout: { instanceUrl: 'https://polygon.blockscout.com', proApi: true },
     dexscreenerSlug: 'polygon',
     smokeTestToken: { address: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270', symbol: 'WPOL' },
@@ -131,7 +135,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'HyperEVM',
     ...EVM_MODELS,
     evmChainId: 999,
-    rpc: { defaultUrl: 'https://rpc.hyperliquid.xyz/evm' },
+    rpc: { defaultUrls: ['https://rpc.hyperliquid.xyz/evm'] },
     // Explorer Blockscout HyperEVM (hyperscan.com) sedang dialihkan; menyusul.
     blockscout: null,
     dexscreenerSlug: 'hyperevm',
@@ -142,7 +146,10 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
 /** Chain non-EVM yang adapternya dijadwalkan di fase 4. */
 export const PHASE_4_CHAINS: readonly string[] = ['solana', 'bitcoin', 'tron', 'ton'];
 
-/** Nama environment variable untuk mengganti URL RPC, mis. `RPC_URL_ROBINHOOD`. */
+/**
+ * Nama environment variable untuk mengganti URL RPC, mis. `RPC_URL_ROBINHOOD`.
+ * Beberapa URL dipisah koma, urut prioritas.
+ */
 export function rpcEnvVar(chainId: string): string {
   return `RPC_URL_${chainId.toUpperCase().replace(/-/g, '_')}`;
 }

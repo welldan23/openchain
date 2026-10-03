@@ -3,6 +3,7 @@
  *
  * Environment variable yang dibaca (semuanya opsional):
  * - `RPC_URL_<CHAIN>`: ganti RPC publik, mis. dengan RPC berbayar ber-API key.
+ *   Beberapa URL dipisah koma; urutannya menjadi urutan fallback.
  * - `BLOCKSCOUT_API_KEY`: pakai Blockscout PRO API untuk chain yang di-host
  *   Blockscout, termasuk Robinhood Chain.
  * - `BLOCKSCOUT_URL_<CHAIN>`: ganti instance Blockscout sebuah chain.
@@ -13,6 +14,7 @@
 import { BLOCKSCOUT_PRO_API_URL, BlockscoutProvider } from '../providers/blockscout.provider.js';
 import { DexscreenerProvider } from '../providers/dexscreener.provider.js';
 import { EvmJsonRpcProvider } from '../providers/evm-rpc.provider.js';
+import { FallbackRpcProvider } from '../providers/fallback-rpc.provider.js';
 import { DEFAULT_TIMEOUT_MS, HttpClient } from '../providers/http-client.js';
 import type { ChainAdapter } from './chain-adapter.types.js';
 import {
@@ -76,7 +78,7 @@ export class ChainRegistry {
     return new EvmChainAdapter(
       definition,
       {
-        rpc: new EvmJsonRpcProvider(`${definition.id}-rpc`, this.rpcUrl(definition), this.http, { timeoutMs }),
+        rpc: this.rpcProvider(definition, timeoutMs),
         explorer,
         indexer: explorer,
         market: definition.dexscreenerSlug ? new DexscreenerProvider(definition.dexscreenerSlug, 'evm', this.http) : null,
@@ -98,14 +100,30 @@ export class ChainRegistry {
       chainId: definition.id,
       name: definition.name,
       evmChainId: definition.evmChainId,
-      rpc: this.value(rpcVar) ? `dari ${rpcVar}` : 'RPC publik default',
+      rpc: `${this.value(rpcVar) ? `dari ${rpcVar}` : 'RPC publik default'} (${this.rpcUrls(definition).length} endpoint)`,
       explorer,
       market: definition.dexscreenerSlug ? `Dexscreener (${definition.dexscreenerSlug})` : 'tidak ada',
     };
   }
 
-  private rpcUrl(definition: EvmChainDefinition): string {
-    return this.value(rpcEnvVar(definition.id)) ?? definition.rpc.defaultUrl;
+  /** Satu endpoint dipakai langsung; lebih dari satu dibungkus fallback. */
+  private rpcProvider(definition: EvmChainDefinition, timeoutMs: number) {
+    const name = `${definition.id}-rpc`;
+    const endpoints = this.rpcUrls(definition).map(
+      (url, index, urls) =>
+        new EvmJsonRpcProvider(urls.length === 1 ? name : `${name}-${index + 1}`, url, this.http, { timeoutMs }),
+    );
+    return endpoints.length === 1 ? endpoints[0] : new FallbackRpcProvider(name, endpoints);
+  }
+
+  private rpcUrls(definition: EvmChainDefinition): string[] {
+    const override = this.value(rpcEnvVar(definition.id));
+    if (!override) return [...definition.rpc.defaultUrls];
+    const urls = override
+      .split(',')
+      .map((url) => url.trim())
+      .filter((url) => url !== '');
+    return urls.length > 0 ? urls : [...definition.rpc.defaultUrls];
   }
 
   private blockscoutConfig(definition: EvmChainDefinition): { baseUrl: string; apiKey: string | null } | null {

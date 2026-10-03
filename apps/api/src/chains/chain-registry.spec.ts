@@ -59,13 +59,34 @@ describe('ChainRegistry', () => {
       chainId: 'robinhood',
       name: 'Robinhood Chain',
       evmChainId: 4663,
-      rpc: 'dari RPC_URL_ROBINHOOD',
+      rpc: 'dari RPC_URL_ROBINHOOD (1 endpoint)',
       explorer: 'Blockscout PRO API (BLOCKSCOUT_API_KEY)',
       market: 'Dexscreener (robinhood)',
     });
-    expect(new ChainRegistry({}).describe('bsc')).toMatchObject({ rpc: 'RPC publik default', explorer: 'tidak ada' });
+    expect(new ChainRegistry({}).describe('bsc')).toMatchObject({ rpc: 'RPC publik default (2 endpoint)', explorer: 'tidak ada' });
     expect(new ChainRegistry({ BLOCKSCOUT_URL_BSC: 'https://bsc.contoh.test' }).describe('bsc').explorer).toBe(
       'Blockscout dari BLOCKSCOUT_URL_BSC',
     );
+  });
+
+  it('memakai beberapa RPC dari env sesuai urutan, lalu pindah ke berikutnya bila gagal', async () => {
+    const urls: string[] = [];
+    const fake = fakeFetch([], (request) => {
+      urls.push(request.url);
+      const body = request.body as { id: number; method: string };
+      if (request.url === 'https://rpc-satu.contoh.test') {
+        return jsonResponse({ jsonrpc: '2.0', id: body.id, error: { code: -32005, message: 'limit exceeded' } });
+      }
+      return jsonResponse({ jsonrpc: '2.0', id: body.id, result: '0x38' });
+    });
+    const registry = new ChainRegistry({ RPC_URL_BSC: ' https://rpc-satu.contoh.test , https://rpc-dua.contoh.test ' }, fake.http);
+    expect(registry.describe('bsc').rpc).toBe('dari RPC_URL_BSC (2 endpoint)');
+    const report = await registry.adapter('bsc').smokeTest();
+    expect(report.checks[0]).toMatchObject({ code: 'rpc.chain_id', ok: true, detail: 'Chain ID 56' });
+    expect(urls.slice(0, 2).sort()).toEqual(['https://rpc-dua.contoh.test', 'https://rpc-satu.contoh.test']);
+  });
+
+  it('kembali ke RPC default bila env hanya berisi pemisah', () => {
+    expect(new ChainRegistry({ RPC_URL_BSC: ' , ' }).describe('bsc').rpc).toBe('dari RPC_URL_BSC (2 endpoint)');
   });
 });
