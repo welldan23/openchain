@@ -1,17 +1,19 @@
-import { ChevronRight, Footprints, TriangleAlert, Waypoints } from "lucide-react";
+import { ChevronRight, Footprints, Network, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { flowFailureDemoPath, flowPath, listSampleFlows } from "@/lib/api/flows";
+import { listSampleMaps, mapFailureDemoPath, mapPath } from "@/lib/api/maps";
 import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
 import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
 import { shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
 
 export default async function Home() {
-  const [samples, flows, traces] = await Promise.all([
+  const [samples, flows, traces, maps] = await Promise.all([
     listSampleTokens(),
     listSampleFlows(),
     listSampleTraces(),
+    listSampleMaps(),
   ]);
 
   return (
@@ -151,6 +153,48 @@ export default async function Home() {
         </ul>
       </section>
 
+      <section aria-labelledby="sample-map-title" className="mt-10">
+        <h2 id="sample-map-title" className="text-sm font-semibold">
+          Coba peta hubungan wallet
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Lihat holder sebuah token sebagai gelembung, lengkap dengan klaster dan transfer di antaranya.
+        </p>
+        <ul className="mt-4 space-y-3">
+          {maps.map((map) => (
+            <li key={`${map.chain}:${map.tokenAddress}`}>
+              <Link
+                href={mapPath(map.chain, map.tokenAddress)}
+                className="group flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-accent/50"
+              >
+                <span
+                  aria-hidden
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent ring-1 ring-accent/30"
+                >
+                  <Network className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">Holder {map.name}</span>
+                    <span className="text-xs text-muted">{map.symbol}</span>
+                  </span>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <ChainBadge chain={map.chain} />
+                    <span className="text-[11px] text-muted">
+                      {map.walletCount} wallet · {map.clusterCount} klaster
+                    </span>
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent"
+                  aria-hidden
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section aria-labelledby="states-title" className="mt-10">
         <h2 id="states-title" className="text-sm font-semibold">
           Coba tampilan status
@@ -208,6 +252,24 @@ export default async function Home() {
             <span className="block font-medium">Simulasi jalur dana gagal dimuat</span>
             <span className="mt-0.5 block text-xs text-muted">
               Membuka jalur yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
+        <Link
+          href={mapFailureDemoPath()}
+          className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi peta hubungan gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka peta yang sengaja dibuat gagal untuk melihat tampilan error.
             </span>
           </span>
           <ChevronRight

@@ -1,0 +1,182 @@
+/**
+ * Data tiruan halaman Peta Hubungan Wallet selama fase frontend.
+ *
+ * Gelembung diambil dari holder di `mock/tokens.ts` dan garis dari transfer di
+ * `mock/flows.ts`, jadi peta, halaman token, dan aliran dana saling cocok.
+ * Semua nilai FIKTIF.
+ */
+import type { AddressFlow, EntityLabel, MapCluster, MapEdge, MapNode, TokenInvestigation, WalletMap } from "../types";
+import { MOCK_FLOWS } from "./flows";
+import { mockEvmAddress, mockSolanaAddress } from "./ids";
+import { MOCK_TOKENS } from "./tokens";
+
+const BUNDLER_LABEL: EntityLabel = {
+  type: "bot",
+  name: "Kemungkinan bundler",
+  source: "heuristic",
+  sourceName: "OpenChain heuristic",
+};
+
+function tokenBySymbol(symbol: string): TokenInvestigation {
+  const token = MOCK_TOKENS.find((item) => item.token.symbol === symbol);
+  if (!token) throw new Error(`Data tiruan token ${symbol} tidak ada.`);
+  return token;
+}
+
+function flowsOn(chain: WalletMap["chain"]): AddressFlow[] {
+  return MOCK_FLOWS.filter((flow) => flow.chain === chain);
+}
+
+/** Holder teratas token sebagai gelembung; pool likuiditas ditandai kontrak. */
+function holderNodes(token: TokenInvestigation): MapNode[] {
+  return token.holders.top.map((holder) => ({
+    address: holder.address,
+    label: holder.label,
+    sharePct: holder.sharePct,
+    isContract: holder.label?.type === "liquidity_pool",
+  }));
+}
+
+/**
+ * Garis dari transfer di data aliran dana, hanya yang kedua ujungnya ada di
+ * peta. Transfer yang sama dari dua sisi (masuk di satu wallet, keluar di
+ * wallet lain) cukup satu garis.
+ */
+function edgesFromFlows(flows: AddressFlow[], nodes: MapNode[]): MapEdge[] {
+  const onMap = new Set(nodes.map((node) => node.address));
+  const edges = new Map<string, MapEdge>();
+  for (const flow of flows) {
+    for (const transfer of flow.transfers) {
+      const [from, to] =
+        transfer.direction === "in" ? [transfer.counterparty, flow.address] : [flow.address, transfer.counterparty];
+      if (!onMap.has(from) || !onMap.has(to)) continue;
+      const id = `${transfer.txHash}:${from}:${to}:${transfer.asset.symbol}`;
+      edges.set(id, {
+        id,
+        from,
+        to,
+        kind: transfer.asset.address === null ? "funding" : "token_transfer",
+        asset: transfer.asset,
+        amount: transfer.amount,
+        amountUsd: transfer.amountUsd,
+        txHash: transfer.txHash,
+        timestamp: transfer.timestamp,
+      });
+    }
+  }
+  return [...edges.values()];
+}
+
+function withClusters(nodes: MapNode[], members: Record<string, string[]>): MapNode[] {
+  const clusterOf = new Map(Object.entries(members).flatMap(([id, addresses]) => addresses.map((a) => [a, id])));
+  return nodes.map((node) => {
+    const clusterId = clusterOf.get(node.address);
+    return clusterId ? { ...node, clusterId } : node;
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Nebula Finance (NBLA) — Ethereum                                            */
+/* -------------------------------------------------------------------------- */
+
+const nblaToken = tokenBySymbol("NBLA");
+const nbla = {
+  funder: mockEvmAddress("nbla:common-funder"),
+  deployer: mockEvmAddress("nbla:deployer"),
+  treasury: mockEvmAddress("nbla:treasury"),
+  holder3: mockEvmAddress("nbla:holder-3"),
+  bundlers: [
+    mockEvmAddress("nbla:bundler-1"),
+    mockEvmAddress("nbla:bundler-2"),
+    mockEvmAddress("flow:nbla-bundler-3"),
+    mockEvmAddress("flow:nbla-bundler-4"),
+    mockEvmAddress("flow:nbla-bundler-5"),
+  ],
+};
+
+const nblaNodes: MapNode[] = [
+  ...holderNodes(nblaToken),
+  // Bundler #3–5 ada di peringkat 11–50, pendananya tidak memegang NBLA.
+  { address: nbla.bundlers[2], label: BUNDLER_LABEL, sharePct: 1.8, isContract: false },
+  { address: nbla.bundlers[3], label: BUNDLER_LABEL, sharePct: 1.6, isContract: false },
+  { address: nbla.bundlers[4], label: BUNDLER_LABEL, sharePct: 1.5, isContract: false },
+  {
+    address: nbla.funder,
+    label: { type: "unknown", name: "Pendana bersama 5 wallet", source: "heuristic", sourceName: "OpenChain heuristic" },
+    sharePct: 0,
+    isContract: false,
+  },
+];
+
+const nblaClusters: MapCluster[] = [
+  {
+    id: "nbla-pendana-bersama",
+    name: "Pendana bersama",
+    reason:
+      "Lima wallet menerima ETH dari satu pendana dalam 9 menit, lalu membeli NBLA di blok yang sama dengan penambahan likuiditas. Dua di antaranya mengembalikan ETH ke pendana setelah menjual.",
+  },
+  {
+    id: "nbla-lingkaran-deployer",
+    name: "Lingkaran deployer",
+    reason: "Menerima NBLA langsung dari deployer, sebelum dan sesudah likuiditas ditambahkan.",
+  },
+];
+
+const nblaMap: WalletMap = {
+  chain: "ethereum",
+  token: { address: nblaToken.token.address, name: nblaToken.token.name, symbol: nblaToken.token.symbol },
+  nodes: withClusters(nblaNodes, {
+    "nbla-pendana-bersama": [nbla.funder, ...nbla.bundlers],
+    "nbla-lingkaran-deployer": [nbla.deployer, nbla.treasury, nbla.holder3],
+  }),
+  edges: edgesFromFlows(flowsOn("ethereum"), nblaNodes),
+  clusters: nblaClusters,
+  snapshot: nblaToken.snapshot,
+};
+
+/* -------------------------------------------------------------------------- */
+/* Kodo Cat (KODO) — Solana                                                    */
+/* -------------------------------------------------------------------------- */
+
+const kodoToken = tokenBySymbol("KODO");
+const kodo = {
+  creator: mockSolanaAddress("kodo:creator"),
+  exchange: mockSolanaAddress("flow:kodo-exchange-hot"),
+  bundlers: [mockSolanaAddress("kodo:bundler-1"), mockSolanaAddress("kodo:bundler-2"), mockSolanaAddress("kodo:bundler-3")],
+};
+
+const kodoNodes: MapNode[] = [
+  ...holderNodes(kodoToken),
+  {
+    address: kodo.exchange,
+    label: { type: "exchange", name: "Hot wallet exchange", source: "external", sourceName: "Label publik explorer" },
+    sharePct: 0,
+    isContract: false,
+  },
+];
+
+const kodoMap: WalletMap = {
+  chain: "solana",
+  token: { address: kodoToken.token.address, name: kodoToken.token.name, symbol: kodoToken.token.symbol },
+  nodes: withClusters(kodoNodes, { "kodo-pembuat-bundler": [kodo.creator, ...kodo.bundlers] }),
+  edges: edgesFromFlows(flowsOn("solana"), kodoNodes),
+  clusters: [
+    {
+      id: "kodo-pembuat-bundler",
+      name: "Pembuat & bundler",
+      reason: "Tiga wallet bundler menerima SOL dari pembuat token dalam 2 menit, sebelum token diluncurkan.",
+    },
+  ],
+  snapshot: kodoToken.snapshot,
+};
+
+export const MOCK_MAPS: WalletMap[] = [nblaMap, kodoMap];
+
+/**
+ * Token yang sengaja membuat API tiruan gagal, untuk mencoba tampilan status
+ * gagal di halaman peta.
+ */
+export const MOCK_FAILING_MAP = {
+  chain: "arbitrum",
+  address: mockEvmAddress("demo:peta-gagal-dimuat"),
+} as const;

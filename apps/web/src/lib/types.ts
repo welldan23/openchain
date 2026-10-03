@@ -304,3 +304,68 @@ export interface TxEvidence {
   timestamp: string;
   movements: TxMovement[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* Peta Hubungan Wallet                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Jenis garis di peta: `funding` = kiriman native coin (modal awal/gas),
+ * `token_transfer` = kiriman token yang dipetakan.
+ */
+export type MapEdgeKind = "funding" | "token_transfer";
+
+/** Wallet di peta; gelembungnya sebanding dengan porsi supply. */
+export interface MapNode {
+  address: string;
+  label?: EntityLabel;
+  /** Persen supply token; 0 untuk wallet penghubung yang bukan holder. */
+  sharePct: number;
+  isContract: boolean;
+  /** Id klaster bila wallet ini masuk kelompok hasil heuristic. */
+  clusterId?: string;
+}
+
+/** Hubungan dua wallet lewat satu transfer on-chain. */
+export interface MapEdge {
+  id: string;
+  from: string;
+  to: string;
+  kind: MapEdgeKind;
+  asset: FlowAsset;
+  amount: number;
+  amountUsd?: number;
+  txHash: string;
+  timestamp: string;
+}
+
+/** Kelompok wallet yang diduga terkait; selalu heuristic. */
+export interface MapCluster {
+  id: string;
+  name: string;
+  /** Alasan pengelompokan dalam bahasa sederhana. */
+  reason: string;
+}
+
+/**
+ * Peta hubungan holder satu token.
+ * Asumsi kontrak API: `GET /maps/:chain/:token` → `WalletMap`.
+ */
+export interface WalletMap {
+  chain: ChainId;
+  token: { address: string; name: string; symbol: string };
+  nodes: MapNode[];
+  edges: MapEdge[];
+  clusters: MapCluster[];
+  snapshot: DataSnapshot;
+}
+
+/** Ringkasan peta untuk daftar/tautan, mis. di beranda. */
+export interface WalletMapSummary {
+  chain: ChainId;
+  tokenAddress: string;
+  name: string;
+  symbol: string;
+  walletCount: number;
+  clusterCount: number;
+}
