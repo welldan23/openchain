@@ -252,6 +252,19 @@ Endpoint internal situs Dexscreener (`io.dexscreener.com`) **tidak** dipakai.
 Endpoint itu tidak termasuk API resmi, dilindungi Cloudflare, dan formatnya bisa
 berubah kapan saja.
 
+Kandidat untuk fitur label dan klaster holder (fase 3), dicek Oktober 2026 tapi
+**belum dipasang**:
+
+| Sumber | Yang gratis | Kenapa belum dipasang |
+| --- | --- | --- |
+| InsightX API | Paket Free: 5 request/menit, 1.000 request/bulan. Isinya label address (maks. 100 per request), ringkasan konsentrasi holder, dan klaster | Butuh API key gratis dari `hub.insightx.network` (header `X-API-Key`). Halaman syarat pakai tidak ditemukan. Spesifikasi resmi hanya mencantumkan `eth`, `base`, `bsc` (plus `sol`, `monad`, `xlayer`, `abs`), padahal tabel jaringannya menyebut Robinhood. Tag label bebas tanpa daftar baku, dan format respons klaster tidak didokumentasikan. Sniper, bundler, dan insider hanya untuk Solana |
+| BubbleMaps iframe | Peta holder bisa disematkan dengan `partnerId=demo`, tapi hanya di `localhost` | Untuk production butuh partner ID dari BubbleMaps. Cocok untuk mencoba tampilan frontend saat development |
+| BubbleMaps Data API | Tidak ada | Berbayar (kredit paket Pro) |
+
+Endpoint internal situs BubbleMaps (`api.bubblemaps.io`) juga **tidak** dipakai,
+dengan alasan yang sama seperti Dexscreener. InsightX baru layak dipasang
+setelah ada API key untuk diuji ke respons asli, dan syarat pakainya jelas.
+
 Label dari Blockscout bersifat eksternal (`external_label`) dan probabilistik,
 bukan bukti kepemilikan. Yang dipetakan hanya tag kategori yang jelas, mis.
 exchange, liquidity pool, bridge, dan burn. Tag lain dibiarkan.
