@@ -447,9 +447,20 @@ export interface WalletMapSummary {
 /* Jelajah Multichain                                                          */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Status data satu chain: `ok` lengkap, `stale` tertinggal dari snapshot
+ * chain lain, `unavailable` gagal dimuat sehingga aktivitasnya tidak diketahui.
+ */
+export type ChainDataStatus = "ok" | "stale" | "unavailable";
+
 /** Aktivitas satu address di satu chain selama periode data. */
 export interface ChainActivity {
   chain: ChainId;
+  status: ChainDataStatus;
+  /** Penjelasan untuk status selain `ok`, mis. "RPC tidak menjawab". */
+  statusReason?: string;
+  /** Waktu data chain ini diambil, bila berbeda dari snapshot utama. */
+  fetchedAt?: string;
   txCount: number;
   inUsd: number;
   outUsd: number;

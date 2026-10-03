@@ -6,6 +6,7 @@ import { BridgesPanel } from "@/components/multichain/bridges-panel";
 import { ChainActivityGrid } from "@/components/multichain/chain-activity-grid";
 import { ChainComparisonTable } from "@/components/multichain/chain-comparison-table";
 import { CrossChainActivityPanel } from "@/components/multichain/cross-chain-activity-panel";
+import { DataStatusBanner } from "@/components/multichain/data-status-banner";
 import { InfrastructurePanel } from "@/components/multichain/infrastructure-panel";
 import { MultichainChainPicker } from "@/components/multichain/chain-picker";
 import { MultichainHeader } from "@/components/multichain/multichain-header";
@@ -60,7 +61,12 @@ export default async function MultichainPage({ params, searchParams }: PageProps
           selected={selected}
           options={fullProfile.chains.map((item) => ({
             chain: item.chain,
-            detail: isActive(item) ? `${formatNumber(item.txCount)} transaksi` : "tidak aktif",
+            detail:
+              item.status === "unavailable"
+                ? "tidak tersedia"
+                : isActive(item)
+                  ? `${formatNumber(item.txCount)} transaksi${item.status === "stale" ? " · tertinggal" : ""}`
+                  : "tidak aktif",
             muted: !isActive(item),
           }))}
         />
@@ -70,6 +76,7 @@ export default async function MultichainPage({ params, searchParams }: PageProps
           </p>
         ) : null}
       </div>
+      <DataStatusBanner unavailable={summary.unavailableChains} stale={summary.staleChains} />
       <MultichainStats summary={summary} chainCount={profile.chains.length} />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}

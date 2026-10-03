@@ -25,7 +25,9 @@ describe("ringkasan lintas chain", () => {
   it("pendana bersama aktif di Ethereum dan Base, angkanya cocok dengan aliran dana", () => {
     const summary = summarizeMultichain(funder);
     expect(summary.activeChains).toEqual(["ethereum", "base"]);
-    expect(summary.inactiveChains).toEqual(["bsc", "arbitrum"]);
+    expect(summary.inactiveChains).toEqual(["bsc"]);
+    // RPC Arbitrum gagal: aktivitasnya tidak diketahui, jadi tidak disebut "tidak aktif".
+    expect(summary.unavailableChains).toEqual(["arbitrum"]);
     const ethereumFlow = MOCK_FLOWS.find((flow) => flow.chain === "ethereum" && flow.address === funder.address)!;
     const ethereum = funder.chains.find((item) => item.chain === "ethereum")!;
     expect(ethereum.txCount).toBe(ethereumFlow.transfers.length);
@@ -50,7 +52,7 @@ describe("ringkasan lintas chain", () => {
 
 describe("urutan dan detail", () => {
   it("chain aktif dulu, transaksi terbanyak di atas", () => {
-    expect(sortChainActivity(funder.chains).map((item) => item.chain)).toEqual(["ethereum", "base", "arbitrum", "bsc"]);
+    expect(sortChainActivity(funder.chains).map((item) => item.chain)).toEqual(["ethereum", "base", "bsc", "arbitrum"]);
   });
 
   it("menghitung selisih bridge dan memeriksa format address", () => {
@@ -127,7 +129,7 @@ describe("tabel perbandingan antar chain", () => {
 
   it("mengurutkan per kolom, chain tidak aktif selalu di bawah", () => {
     const rows = comparisonRows(funder);
-    expect(sortComparison(rows, "txCount", "asc").map((row) => row.chain)).toEqual(["base", "ethereum", "arbitrum", "bsc"]);
+    expect(sortComparison(rows, "txCount", "asc").map((row) => row.chain)).toEqual(["base", "ethereum", "bsc", "arbitrum"]);
     expect(sortComparison(rows, "chain", "desc").map((row) => row.chain)).toEqual(["ethereum", "base", "bsc", "arbitrum"]);
   });
 
@@ -186,5 +188,20 @@ describe("alasan pencocokan bridge", () => {
     const move = { ...funder.bridges[0], amountReceived: 1.4, receivedAt: "2026-09-24T09:31:00.000Z" };
     expect(bridgeMatchChecks(move, now).map((check) => check.passed)).toEqual([true, false, false]);
     expect(bridgeEvidenceAnchor("x")).toBe("bukti-bridge-x");
+  });
+});
+
+describe("status data per jaringan", () => {
+  it("chain tertinggal tetap dihitung tapi disebut, chain gagal tidak dihitung", () => {
+    expect(summarizeMultichain(busy)).toMatchObject({ staleChains: ["base"], unavailableChains: [] });
+    const broken = {
+      ...busy,
+      chains: busy.chains.map((item) => (item.chain === "bsc" ? { ...item, status: "unavailable" as const } : item)),
+    };
+    const summary = summarizeMultichain(broken);
+    expect(summary.activeChains).toEqual(["ethereum", "base", "arbitrum"]);
+    expect(summary.totalTx).toBe(142 + 65 + 31);
+    expect(summary.balanceUsd).toBe(96_400 + 52_700 + 4_100);
+    expect(comparisonRows(broken).find((row) => row.chain === "bsc")).toMatchObject({ active: false, status: "unavailable", txSharePct: 0 });
   });
 });

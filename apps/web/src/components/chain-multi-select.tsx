@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Layers } from "lucide-react";
+import { Check, ChevronDown, Layers, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { ChainBadge } from "@/components/badges";
 import { getChain } from "@/lib/chains";
@@ -85,8 +85,9 @@ export function ChainMultiSelect({ options, selected, onChange, label = "Jaringa
         <ChevronDown className={cn("size-3.5 text-muted transition", open && "rotate-180")} aria-hidden />
       </button>
       {busy ? (
-        <span role="status" className="ml-2 text-[11px] text-muted">
-          Memuat…
+        <span role="status" className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted">
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+          Memuat data jaringan…
         </span>
       ) : null}
 

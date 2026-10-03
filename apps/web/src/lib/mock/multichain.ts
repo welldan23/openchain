@@ -37,7 +37,7 @@ const EVM_CHAINS = (Object.keys(CHAINS) as ChainId[]).filter(
 const ETH: BridgeMove["asset"] = { symbol: "ETH", address: null };
 
 function inactive(chain: Exclude<ChainId, "solana">): ChainActivity {
-  return { chain, txCount: 0, inUsd: 0, outUsd: 0, counterpartyCount: 0, balanceUsd: 0, snapshotBlock: SNAPSHOT_BLOCKS[chain] };
+  return { chain, status: "ok", txCount: 0, inUsd: 0, outUsd: 0, counterpartyCount: 0, balanceUsd: 0, snapshotBlock: SNAPSHOT_BLOCKS[chain] };
 }
 
 /** Aktivitas dari data aliran dana; chain tanpa data dianggap tidak aktif. */
@@ -49,6 +49,7 @@ function activityFromFlows(address: string, balances: Partial<Record<ChainId, nu
     const times = flow.transfers.map((transfer) => transfer.timestamp).sort();
     return {
       chain,
+      status: "ok",
       txCount: new Set(flow.transfers.map((transfer) => transfer.txHash)).size,
       inUsd: totals.inUsd,
       outUsd: totals.outUsd,
@@ -120,7 +121,15 @@ const funderProfile: MultichainProfile = {
   label: { type: "unknown", name: "Pendana bersama 5 wallet", source: "heuristic", sourceName: "OpenChain heuristic" },
   window: WINDOW,
   // Sisa saldo ETH dihitung dari transfer: 3,4 ETH di Ethereum dan 0,0485 ETH di Base.
-  chains: activityFromFlows(funderAddress, { ethereum: 3.4 * 2_450, base: 0.0485 * 2_450 }),
+  chains: activityFromFlows(funderAddress, { ethereum: 3.4 * 2_450, base: 0.0485 * 2_450 }).map((activity) =>
+    activity.chain === "arbitrum"
+      ? {
+          ...activity,
+          status: "unavailable",
+          statusReason: "Semua RPC Arbitrum menolak permintaan (batas rate). Aktivitas di jaringan ini belum diketahui.",
+        }
+      : activity,
+  ),
   bridges: funderBridges,
   activities: activitiesFromFlows(funderAddress, funderBridges),
   fetchedAt: SNAPSHOT_AT,
@@ -204,6 +213,7 @@ const busyProfile: MultichainProfile = {
   chains: [
     {
       chain: "ethereum",
+      status: "ok",
       txCount: 142,
       inUsd: 1_284_500,
       outUsd: 1_201_300,
@@ -215,6 +225,7 @@ const busyProfile: MultichainProfile = {
     },
     {
       chain: "bsc",
+      status: "ok",
       txCount: 88,
       inUsd: 412_800,
       outUsd: 455_100,
@@ -226,6 +237,9 @@ const busyProfile: MultichainProfile = {
     },
     {
       chain: "base",
+      status: "stale",
+      statusReason: "Indexer Base tertinggal; data diambil 2 jam sebelum snapshot jaringan lain.",
+      fetchedAt: "2026-10-03T02:30:00.000Z",
       txCount: 65,
       inUsd: 298_400,
       outUsd: 251_900,
@@ -237,6 +251,7 @@ const busyProfile: MultichainProfile = {
     },
     {
       chain: "arbitrum",
+      status: "ok",
       txCount: 31,
       inUsd: 120_600,
       outUsd: 118_900,

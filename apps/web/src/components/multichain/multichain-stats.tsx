@@ -17,7 +17,17 @@ export function MultichainStats({ summary, chainCount }: { summary: MultichainSu
   return (
     <section aria-label="Ringkasan lintas chain" className="space-y-2">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Chain aktif" value={`${summary.activeChains.length} / ${chainCount}`} sub={summary.busiestChain ? `Tersibuk: ${getChain(summary.busiestChain).name}` : "Belum aktif"} />
+        <Stat
+          label="Chain aktif"
+          value={`${summary.activeChains.length} / ${chainCount}`}
+          sub={
+            summary.unavailableChains.length > 0
+              ? `${summary.unavailableChains.length} tidak bisa dicek`
+              : summary.busiestChain
+                ? `Tersibuk: ${getChain(summary.busiestChain).name}`
+                : "Belum aktif"
+          }
+        />
         <Stat label="Total transaksi" value={formatNumber(summary.totalTx)} sub="Semua chain" />
         <Stat label="Dana masuk" value={formatUsdCompact(summary.inUsd)} />
         <Stat label="Dana keluar" value={formatUsdCompact(summary.outUsd)} />

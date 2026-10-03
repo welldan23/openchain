@@ -104,7 +104,13 @@ export function ChainComparisonTable({ rows }: { rows: ComparisonRow[] }) {
                 <th scope="row" className="py-2.5 pl-4 pr-2 font-normal sm:pl-5">
                   <span className="flex items-center gap-2">
                     <ChainBadge chain={row.chain} />
-                    {!row.active ? <span className="text-[11px] text-muted">tidak aktif</span> : null}
+                    {row.status === "unavailable" ? (
+                      <span className="text-[11px] text-rose-200">tidak tersedia</span>
+                    ) : !row.active ? (
+                      <span className="text-[11px] text-muted">tidak aktif</span>
+                    ) : row.status === "stale" ? (
+                      <span className="text-[11px] text-amber-200">tertinggal</span>
+                    ) : null}
                   </span>
                   {row.bridgesOut + row.bridgesIn > 0 ? (
                     <span className="mt-1 block text-[11px] text-muted">
