@@ -2,7 +2,17 @@
  * Bukti transaksi untuk modal "Bukti hash": dikumpulkan per hash transaksi,
  * dan bisa dibuka langsung lewat tautan `#bukti-<hash>`.
  */
-import type { ChainId, CoordinationEvent, EntityLabel, FlowTransfer, MapEdge, MapNode, TraceHop, TxEvidence } from "./types";
+import type {
+  ChainId,
+  CoordinationEvent,
+  CrossChainActivity,
+  EntityLabel,
+  FlowTransfer,
+  MapEdge,
+  MapNode,
+  TraceHop,
+  TxEvidence,
+} from "./types";
 
 const ANCHOR_PREFIX = "bukti-";
 /** Hash EVM (0x + 64 hex) atau signature Solana (base58). */
@@ -115,5 +125,28 @@ export function evidenceFromCoordination(chain: ChainId, events: CoordinationEve
 export function mergeEvidence(...lists: TxEvidence[][]): TxEvidence[] {
   const map = new Map<string, TxEvidence>();
   for (const item of lists.flat()) if (!map.has(item.txHash)) map.set(item.txHash, item);
+  return [...map.values()];
+}
+
+/** Bukti dari linimasa lintas chain; tiap bukti memakai chain aktivitasnya sendiri. */
+export function evidenceFromCrossChain(
+  owner: { address: string; label?: EntityLabel },
+  activities: CrossChainActivity[],
+): TxEvidence[] {
+  const map = new Map<string, TxEvidence>();
+  for (const activity of activities) {
+    const other = { address: activity.counterparty, label: activity.counterpartyLabel };
+    const incoming = activity.kind === "in" || activity.kind === "bridge_in";
+    const [from, to] = incoming ? [other, owner] : [owner, other];
+    addMovement(map, activity.chain, activity.txHash, activity.timestamp, {
+      from: from.address,
+      fromLabel: from.label,
+      to: to.address,
+      toLabel: to.label,
+      asset: activity.asset,
+      amount: activity.amount,
+      amountUsd: activity.amountUsd,
+    });
+  }
   return [...map.values()];
 }

@@ -4,6 +4,7 @@ import { cache } from "react";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { BridgesPanel } from "@/components/multichain/bridges-panel";
 import { ChainActivityGrid } from "@/components/multichain/chain-activity-grid";
+import { CrossChainActivityPanel } from "@/components/multichain/cross-chain-activity-panel";
 import { MultichainChainPicker } from "@/components/multichain/chain-picker";
 import { MultichainHeader } from "@/components/multichain/multichain-header";
 import { MultichainStats } from "@/components/multichain/multichain-stats";
@@ -67,6 +68,7 @@ export default async function MultichainPage({ params, searchParams }: PageProps
         <div className="min-w-0 space-y-5 lg:col-span-2">
           <ChainActivityGrid address={profile.address} chains={profile.chains} flowChains={flowChains} />
           <BridgesPanel bridges={profile.bridges} />
+          <CrossChainActivityPanel owner={{ address: profile.address, label: profile.label }} activities={profile.activities} />
         </div>
         <aside className="min-w-0" aria-label="Keterangan">
           <ClassificationLegend />

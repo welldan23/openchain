@@ -484,6 +484,25 @@ export interface BridgeMove {
   status: BridgeMatchStatus;
 }
 
+/** Jenis aktivitas di linimasa lintas chain. */
+export type CrossChainActivityKind = "in" | "out" | "bridge_out" | "bridge_in";
+
+/** Satu transfer di salah satu chain, dilihat dari address yang dijelajahi. */
+export interface CrossChainActivity {
+  id: string;
+  chain: ChainId;
+  kind: CrossChainActivityKind;
+  timestamp: string;
+  counterparty: string;
+  counterpartyLabel?: EntityLabel;
+  asset: FlowAsset;
+  amount: number;
+  amountUsd?: number;
+  txHash: string;
+  /** Id perpindahan bridge bila aktivitas ini salah satu kakinya. */
+  bridgeId?: string;
+}
+
 /**
  * Aktivitas satu address EVM di semua chain EVM yang didukung.
  * Asumsi kontrak API: `GET /multichain/:address` → `MultichainProfile`.
@@ -495,6 +514,8 @@ export interface MultichainProfile {
   /** Semua chain dengan format address yang sama, termasuk yang tidak aktif. */
   chains: ChainActivity[];
   bridges: BridgeMove[];
+  /** Linimasa aktivitas di semua chain, untuk panel aktivitas lintas chain. */
+  activities: CrossChainActivity[];
   fetchedAt: string;
   sources: string[];
 }

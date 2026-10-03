@@ -2,7 +2,8 @@
  * Logika halaman Jelajah Multichain: merangkum aktivitas satu address di
  * beberapa chain dan perpindahan dananya lewat bridge.
  */
-import type { ChainActivity, ChainId, MultichainProfile } from "./types";
+import { wibDateValue } from "./flow-filter";
+import type { ChainActivity, ChainId, CrossChainActivity, MultichainProfile } from "./types";
 
 export interface MultichainSummary {
   activeChains: ChainId[];
@@ -86,5 +87,28 @@ export function filterProfileChains(profile: MultichainProfile, selected: ChainI
     ...profile,
     chains: profile.chains.filter((item) => set.has(item.chain)),
     bridges: profile.bridges.filter((move) => set.has(move.fromChain) || set.has(move.toChain)),
+    activities: profile.activities.filter((item) => set.has(item.chain)),
   };
+}
+
+/** Tab linimasa: semua, dana masuk, dana keluar, atau kaki bridge. */
+export type ActivityFilter = "all" | "in" | "out" | "bridge";
+
+export function matchesActivityFilter(activity: CrossChainActivity, filter: ActivityFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "bridge") return activity.kind === "bridge_in" || activity.kind === "bridge_out";
+  return activity.kind === filter;
+}
+
+/** Linimasa per hari (tanggal WIB), hari dan aktivitas terbaru di atas. */
+export function groupActivitiesByDay(activities: CrossChainActivity[]): Array<{ day: string; items: CrossChainActivity[] }> {
+  const sorted = [...activities].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp) || a.id.localeCompare(b.id));
+  const groups: Array<{ day: string; items: CrossChainActivity[] }> = [];
+  for (const activity of sorted) {
+    const day = wibDateValue(activity.timestamp);
+    const last = groups[groups.length - 1];
+    if (last?.day === day) last.items.push(activity);
+    else groups.push({ day, items: [activity] });
+  }
+  return groups;
 }

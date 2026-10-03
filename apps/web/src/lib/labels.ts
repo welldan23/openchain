@@ -4,6 +4,7 @@ import type {
   ClusterLabel,
   CoordinationKind,
   CoordinationTxAction,
+  CrossChainActivityKind,
   ContractCheckStatus,
   EntityLabelType,
   FindingClassification,
@@ -257,4 +258,11 @@ export const BRIDGE_STATUS_META: Record<"matched" | "pending" | "unmatched", Met
     description: "Penerimaan di chain tujuan belum ditemukan. Bisa ke address lain atau lewat jalur yang belum terbaca.",
     className: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
   },
+};
+
+export const CROSS_CHAIN_KIND_META: Record<CrossChainActivityKind, Meta> = {
+  in: { label: "Masuk", className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30" },
+  out: { label: "Keluar", className: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
+  bridge_out: { label: "Kirim ke bridge", className: "bg-cyan-500/15 text-cyan-300 ring-cyan-400/30" },
+  bridge_in: { label: "Terima dari bridge", className: "bg-cyan-500/15 text-cyan-300 ring-cyan-400/30" },
 };

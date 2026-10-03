@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evidenceAnchor,
   evidenceFromCoordination,
+  evidenceFromCrossChain,
   evidenceFromEdges,
   evidenceFromHops,
   evidenceFromTransfers,
@@ -10,6 +11,7 @@ import {
   parseEvidenceAnchor,
 } from "./evidence";
 import { MOCK_MAPS } from "./mock/maps";
+import { MOCK_MULTICHAIN } from "./mock/multichain";
 import { MOCK_FLOWS } from "./mock/flows";
 import { MOCK_TRACES } from "./mock/traces";
 
@@ -83,5 +85,17 @@ describe("bukti dari transaksi koordinasi", () => {
     const merged = mergeEvidence(fromEdges, evidenceFromCoordination(nbla.chain, nbla.coordination, nbla.nodes));
     expect(merged.length).toBeGreaterThan(fromEdges.length);
     expect(merged.slice(0, fromEdges.length)).toEqual(fromEdges);
+  });
+});
+
+describe("bukti dari linimasa lintas chain", () => {
+  it("tiap bukti memakai chain aktivitasnya dan arah sesuai jenisnya", () => {
+    const [funder] = MOCK_MULTICHAIN;
+    const evidence = evidenceFromCrossChain({ address: funder.address, label: funder.label }, funder.activities);
+    const bridgeIn = funder.activities.find((item) => item.kind === "bridge_in")!;
+    const found = evidence.find((item) => item.txHash === bridgeIn.txHash)!;
+    expect(found.chain).toBe("base");
+    expect(found.movements[0].to).toBe(funder.address);
+    expect(new Set(evidence.map((item) => item.chain))).toEqual(new Set(["ethereum", "base"]));
   });
 });

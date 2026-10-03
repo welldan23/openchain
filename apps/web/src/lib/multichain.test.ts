@@ -4,7 +4,9 @@ import { MOCK_MULTICHAIN } from "./mock/multichain";
 import {
   bridgeFeePct,
   filterProfileChains,
+  groupActivitiesByDay,
   isEvmAddress,
+  matchesActivityFilter,
   parseChainSelection,
   serializeChainSelection,
   sortChainActivity,
@@ -75,5 +77,33 @@ describe("pilihan jaringan", () => {
     expect(onlyBsc.bridges.map((move) => move.id)).toEqual(["busy-bsc-base"]);
     expect(summarizeMultichain(onlyBsc).totalTx).toBe(88);
     expect(filterProfileChains(busy, ["ethereum"]).bridges).toHaveLength(2);
+  });
+});
+
+describe("linimasa lintas chain", () => {
+  it("kaki bridge pendana ditandai di kedua chain", () => {
+    const legs = funder.activities.filter((item) => item.bridgeId === "funder-eth-base");
+    expect(legs.map((item) => [item.chain, item.kind])).toEqual([
+      ["ethereum", "bridge_out"],
+      ["base", "bridge_in"],
+    ]);
+    expect(funder.activities).toHaveLength(13 + 3);
+  });
+
+  it("menyaring per jenis dan per jaringan terpilih", () => {
+    // Kiriman ETH→Arbitrum punya dua kaki; dua kiriman lain belum diterima, jadi satu kaki saja.
+    expect(busy.activities.filter((item) => matchesActivityFilter(item, "bridge"))).toHaveLength(4);
+    expect(busy.activities.filter((item) => matchesActivityFilter(item, "in")).every((item) => item.kind === "in")).toBe(true);
+    expect(filterProfileChains(busy, ["arbitrum"]).activities.map((item) => item.id)).toEqual(["arb-bridge", "arb-1"]);
+  });
+
+  it("mengelompokkan per hari WIB, terbaru di atas", () => {
+    const groups = groupActivitiesByDay(busy.activities);
+    expect(groups[0].day).toBe("2026-10-03");
+    expect(groups[0].items.map((item) => item.id)).toEqual(["eth-3", "base-bridge", "bsc-2"]);
+    // 2 Okt 21.15 UTC = 3 Okt 04.15 WIB, jadi masuk hari 3 Okt.
+    expect(groups.find((group) => group.day === "2026-10-02")).toBeUndefined();
+    expect(groups.flatMap((group) => group.items)).toHaveLength(busy.activities.length);
+    expect(groupActivitiesByDay([])).toEqual([]);
   });
 });
