@@ -537,3 +537,43 @@ export interface MultichainProfileSummary {
   label?: EntityLabel;
   activeChains: ChainId[];
 }
+
+/* -------------------------------------------------------------------------- */
+/* Pencarian & Riwayat                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** Jenis isian pencarian, dikenali dari bentuknya. */
+export type SearchQueryKind = "empty" | "evm_address" | "solana_address" | "evm_tx" | "solana_tx" | "text";
+
+export type SearchResultKind = "token" | "address" | "transaction";
+
+/** Satu hasil pencarian yang bisa dibuka. */
+export interface SearchResult {
+  id: string;
+  kind: SearchResultKind;
+  title: string;
+  /** Keterangan kecil, mis. simbol token atau address pendek. */
+  subtitle: string;
+  chain?: ChainId;
+  label?: EntityLabel;
+  href: string;
+  /** Kenapa hasil ini cocok, mis. "Nama token" atau "Address persis". */
+  matchedBy: string;
+}
+
+/** Jenis halaman investigasi yang tercatat di riwayat. */
+export type InvestigationKind = "token" | "flow" | "trace" | "map" | "multichain";
+
+/** Satu investigasi yang pernah dibuka. */
+export interface InvestigationEntry {
+  id: string;
+  kind: InvestigationKind;
+  title: string;
+  chain?: ChainId;
+  href: string;
+  openedAt: string;
+  /** Catatan singkat user, bila ada. */
+  note?: string;
+  /** Jumlah temuan yang tercatat saat terakhir dibuka. */
+  findingCount?: number;
+}
