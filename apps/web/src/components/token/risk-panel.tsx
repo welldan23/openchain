@@ -5,6 +5,7 @@ import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
 import { explorerTxUrl } from "@/lib/chains";
+import { findingAnchorId } from "@/lib/anchors";
 import { RISK_LEVEL_META } from "@/lib/labels";
 import type { ChainId, RiskSummary } from "@/lib/types";
 
@@ -64,7 +65,11 @@ export function RiskPanel({ chain, risk }: RiskPanelProps) {
       ) : (
         <ul className="mt-5 divide-y divide-line">
           {risk.findings.map((finding) => (
-            <li key={finding.id} className="py-4 first:pt-0 last:pb-0">
+            <li
+              key={finding.id}
+              id={findingAnchorId(finding.id)}
+              className="scroll-mt-20 py-4 first:pt-0 last:pb-0"
+            >
               <div className="flex flex-wrap items-center gap-1.5">
                 <SeverityBadge severity={finding.severity} />
                 <ClassificationBadge classification={finding.classification} />
