@@ -1,5 +1,6 @@
 import { Users } from "lucide-react";
-import { ClassificationBadge, EntityLabelBadge } from "@/components/badges";
+import { EntityLabelBadge } from "@/components/badges";
+import { ClassificationBadge } from "@/components/classification-badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl } from "@/lib/chains";

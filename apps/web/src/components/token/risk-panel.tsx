@@ -1,5 +1,6 @@
 import { ShieldAlert } from "lucide-react";
-import { ClassificationBadge, RiskLevelBadge, SeverityBadge } from "@/components/badges";
+import { RiskLevelBadge, SeverityBadge } from "@/components/badges";
+import { ClassificationBadge } from "@/components/classification-badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerTxUrl } from "@/lib/chains";

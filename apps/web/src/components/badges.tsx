@@ -1,32 +1,11 @@
 import { getChain } from "@/lib/chains";
-import {
-  CLASSIFICATION_META,
-  ENTITY_LABEL_META,
-  RISK_LEVEL_META,
-  SEVERITY_META,
-} from "@/lib/labels";
-import type {
-  ChainId,
-  EntityLabel,
-  FindingClassification,
-  RiskLevel,
-  RiskSeverity,
-} from "@/lib/types";
+import { ENTITY_LABEL_META, RISK_LEVEL_META, SEVERITY_META } from "@/lib/labels";
+import type { ChainId, EntityLabel, RiskLevel, RiskSeverity } from "@/lib/types";
 import { Badge } from "./ui/badge";
 
 export function ChainBadge({ chain }: { chain: ChainId }) {
   const info = getChain(chain);
   return <Badge className={info.badgeClass}>{info.name}</Badge>;
-}
-
-/** Tag transparansi: fakta, kalkulasi, heuristic, label eksternal, atau asumsi. */
-export function ClassificationBadge({ classification }: { classification: FindingClassification }) {
-  const meta = CLASSIFICATION_META[classification];
-  return (
-    <Badge className={meta.className} title={meta.description}>
-      {meta.label}
-    </Badge>
-  );
 }
 
 export function SeverityBadge({ severity }: { severity: RiskSeverity }) {

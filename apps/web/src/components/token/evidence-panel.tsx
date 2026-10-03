@@ -1,5 +1,5 @@
 import { Receipt } from "lucide-react";
-import { ClassificationBadge } from "@/components/badges";
+import { ClassificationBadge } from "@/components/classification-badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerTxUrl } from "@/lib/chains";

@@ -12,6 +12,15 @@ interface Meta {
   className: string;
 }
 
+/** Urutan baku tag klasifikasi, dari bukti terkuat ke terlemah. */
+export const CLASSIFICATION_ORDER: FindingClassification[] = [
+  "fact",
+  "calculation",
+  "external_label",
+  "heuristic",
+  "assumption",
+];
+
 export const CLASSIFICATION_META: Record<
   FindingClassification,
   Meta & { description: string }
