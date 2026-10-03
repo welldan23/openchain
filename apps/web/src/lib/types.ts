@@ -617,3 +617,84 @@ export interface InvestigationEntry {
   /** Jumlah temuan yang tercatat saat terakhir dibuka. */
   findingCount?: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Kasus investigasi                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** Tahap kasus: masih diselidiki, dipantau, atau sudah ditutup. */
+export type CaseStatus = "open" | "monitoring" | "closed";
+
+/** Kelengkapan data kasus saat snapshot diambil (sesuai PRD). */
+export type CaseDataStatus = "complete" | "partial" | "unavailable" | "stale";
+
+/** Entitas yang diselidiki dalam kasus. */
+export interface CaseSubject {
+  kind: "token" | "address";
+  chain?: ChainId;
+  address: string;
+  title: string;
+  label?: EntityLabel;
+  href: string;
+}
+
+/** Temuan kasus; setiap temuan menunjuk ke hash transaksi buktinya. */
+export interface CaseFinding {
+  id: string;
+  title: string;
+  detail: string;
+  classification: FindingClassification;
+  evidenceTxHashes: string[];
+}
+
+export interface CaseNote {
+  id: string;
+  body: string;
+  createdAt: string;
+}
+
+/**
+ * Satu kasus investigasi yang disimpan: entitas yang diselidiki, temuan,
+ * bukti transaksi, langkah investigasi, catatan pribadi, dan snapshot data
+ * supaya hasilnya bisa direproduksi.
+ * Asumsi kontrak API: `GET /cases/:id` → `InvestigationCase`.
+ */
+export interface InvestigationCase {
+  id: string;
+  title: string;
+  summary: string;
+  status: CaseStatus;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  subjects: CaseSubject[];
+  findings: CaseFinding[];
+  evidence: TxEvidence[];
+  /** Halaman investigasi yang dibuka untuk kasus ini, terbaru dulu. */
+  steps: InvestigationEntry[];
+  notes: CaseNote[];
+  snapshot: {
+    fetchedAt: string;
+    blocks: Array<{ chain: ChainId; blockNumber: number }>;
+    sources: string[];
+    dataStatus: CaseDataStatus;
+    /** Penjelasan untuk status selain `complete`. */
+    statusReason?: string;
+  };
+}
+
+/** Ringkasan kasus untuk daftar. Asumsi kontrak API: `GET /cases` → `CaseSummary[]`. */
+export interface CaseSummary {
+  id: string;
+  title: string;
+  summary: string;
+  status: CaseStatus;
+  updatedAt: string;
+  tags: string[];
+  chains: ChainId[];
+  subjectCount: number;
+  findingCount: number;
+  evidenceCount: number;
+  noteCount: number;
+  dataStatus: CaseDataStatus;
+}

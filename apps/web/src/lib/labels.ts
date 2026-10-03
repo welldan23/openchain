@@ -1,5 +1,7 @@
 import type {
   ActivityType,
+  CaseDataStatus,
+  CaseStatus,
   ClusterConfidence,
   ClusterLabel,
   CoordinationKind,
@@ -265,4 +267,47 @@ export const CROSS_CHAIN_KIND_META: Record<CrossChainActivityKind, Meta> = {
   out: { label: "Keluar", className: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
   bridge_out: { label: "Kirim ke bridge", className: "bg-cyan-500/15 text-cyan-300 ring-cyan-400/30" },
   bridge_in: { label: "Terima dari bridge", className: "bg-cyan-500/15 text-cyan-300 ring-cyan-400/30" },
+};
+
+/** Tahap kasus investigasi. */
+export const CASE_STATUS_META: Record<CaseStatus, Meta & { description: string }> = {
+  open: {
+    label: "Diselidiki",
+    description: "Kasus masih aktif diselidiki.",
+    className: "bg-sky-500/15 text-sky-300 ring-sky-400/30",
+  },
+  monitoring: {
+    label: "Dipantau",
+    description: "Temuan utama sudah ada; kasus dibuka lagi bila ada aktivitas baru.",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/30",
+  },
+  closed: {
+    label: "Ditutup",
+    description: "Penyelidikan selesai. Snapshot data tetap tersimpan untuk dibuka ulang.",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+  },
+};
+
+/** Kelengkapan data kasus saat snapshot diambil. */
+export const CASE_DATA_STATUS_META: Record<CaseDataStatus, Meta & { description: string }> = {
+  complete: {
+    label: "Data lengkap",
+    description: "Semua sumber data menjawab saat snapshot diambil.",
+    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30",
+  },
+  partial: {
+    label: "Data sebagian",
+    description: "Sebagian sumber data tidak lengkap; temuan bisa berubah setelah data lengkap.",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/30",
+  },
+  stale: {
+    label: "Data tertinggal",
+    description: "Snapshot sudah lama atau tertinggal dari jaringan; aktivitas terbaru belum masuk.",
+    className: "bg-orange-500/15 text-orange-300 ring-orange-400/30",
+  },
+  unavailable: {
+    label: "Data tidak tersedia",
+    description: "Sumber data gagal dihubungi; hasil tidak dikarang.",
+    className: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
+  },
 };

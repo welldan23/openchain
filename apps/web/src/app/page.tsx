@@ -1,10 +1,11 @@
-import { ChevronRight, Footprints, Globe2, Network, Search, TriangleAlert, Waypoints } from "lucide-react";
+import { ChevronRight, FolderOpen, Footprints, Globe2, Network, Search, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { flowFailureDemoPath, flowPath, listSampleFlows } from "@/lib/api/flows";
 import { listSampleMaps, mapFailureDemoPath, mapPath } from "@/lib/api/maps";
 import { listSampleMultichain, multichainFailureDemoPath, multichainPath } from "@/lib/api/multichain";
 import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
+import { caseFailureDemoPath } from "@/lib/api/cases";
 import { searchFailureDemoPath } from "@/lib/api/search";
 import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
 import { shortenHash } from "@/lib/format";
@@ -40,6 +41,17 @@ export default async function Home() {
         <span className="min-w-0 flex-1 truncate">Cari address, hash transaksi, atau nama token…</span>
         <span className="hidden text-xs sm:inline">Riwayat investigasi</span>
         <ChevronRight className="size-4 shrink-0 transition group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden />
+      </Link>
+      <Link
+        href="/kasus"
+        className="group mt-3 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm transition hover:border-accent/50"
+      >
+        <FolderOpen className="size-4 shrink-0 text-accent" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">Kasus investigasi tersimpan</span>
+          <span className="mt-0.5 block text-xs text-muted">Temuan, bukti transaksi, catatan, dan snapshot data per kasus.</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden />
       </Link>
 
       <section aria-labelledby="sample-title" className="mt-10">
@@ -360,6 +372,24 @@ export default async function Home() {
             <span className="block font-medium">Simulasi pencarian gagal</span>
             <span className="mt-0.5 block text-xs text-muted">
               Mencari address yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
+        <Link
+          href={caseFailureDemoPath()}
+          className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi kasus gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka kasus yang sengaja dibuat gagal untuk melihat tampilan error.
             </span>
           </span>
           <ChevronRight
