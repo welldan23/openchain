@@ -1,12 +1,12 @@
 /**
  * Cek kontrak EVM dari data yang bisa diverifikasi: status verifikasi source
  * code (explorer), owner (`owner()`), dan pola proxy (slot EIP-1967 dan clone
- * EIP-1167). Pemeriksaan yang butuh analisis kode atau simulasi transaksi
- * ditandai `unknown` sampai fitur analisis risiko (fase 3) tersedia.
+ * EIP-1167). Pajak, blacklist, mint, pause, kunci likuiditas, dan simulasi
+ * jual diambil dari penyedia analisis keamanan (GoPlus, honeypot.is).
  *
  * Kode dan label pemeriksaan sama dengan yang dipakai frontend.
  */
-import type { ExplorerContractInfo, ProviderRunRecord } from '../../providers/provider.types.js';
+import type { ExplorerContractInfo, ProviderRunRecord, TokenSecurityReport } from '../../providers/provider.types.js';
 import type { CollectedCheck, CollectedEvidence } from '../chain-adapter.types.js';
 
 export type OwnerState =
@@ -209,48 +209,173 @@ export function proxyCheck(proxy: ProxyState, context: StateContext): CollectedC
   }
 }
 
-/** Pemeriksaan yang butuh analisis kode atau simulasi; menyusul di fase 3. */
-const UNANALYZED: ReadonlyArray<{ code: string; label: string; value: string; description: string }> = [
-  {
-    code: 'tax',
-    label: 'Pajak transaksi',
-    value: 'Belum dianalisis',
-    description: 'Pajak yang bisa diubah owner dapat dinaikkan sampai token sulit dijual.',
-  },
-  {
-    code: 'blacklist',
-    label: 'Fungsi blacklist',
-    value: 'Belum dianalisis',
-    description: 'Address yang di-blacklist tidak bisa mentransfer atau menjual token.',
-  },
-  {
-    code: 'mint',
-    label: 'Fungsi mint',
-    value: 'Belum dianalisis',
-    description: 'Fungsi mint memungkinkan supply baru dicetak dan menekan harga.',
-  },
-  {
-    code: 'pause',
-    label: 'Pause transfer',
-    value: 'Belum dianalisis',
-    description: 'Fungsi pause bisa menghentikan semua transfer token.',
-  },
-  {
-    code: 'liquidity-lock',
-    label: 'Kunci likuiditas',
-    value: 'Belum dianalisis',
-    description: 'LP yang tidak terkunci bisa ditarik kapan saja oleh pemiliknya.',
-  },
-  {
-    code: 'honeypot',
-    label: 'Simulasi jual',
-    value: 'Belum disimulasikan',
-    description: 'Simulasi memastikan token benar-benar bisa dijual kembali.',
-  },
-];
+/** Hasil satu sumber analisis keamanan beserta run provider-nya. */
+export interface SecurityFinding {
+  run: ProviderRunRecord;
+  report: TokenSecurityReport;
+}
 
-export function unanalyzedChecks(): CollectedCheck[] {
-  return UNANALYZED.map((check) => unknown(check.code, check.label, check.value, check.description));
+const WHY = {
+  tax: 'Pajak yang bisa diubah owner dapat dinaikkan sampai token sulit dijual.',
+  blacklist: 'Address yang di-blacklist tidak bisa mentransfer atau menjual token.',
+  mint: 'Fungsi mint memungkinkan supply baru dicetak dan menekan harga.',
+  pause: 'Fungsi pause bisa menghentikan semua transfer token.',
+  'liquidity-lock': 'LP yang tidak terkunci bisa ditarik kapan saja oleh pemiliknya.',
+  honeypot: 'Simulasi memastikan token benar-benar bisa dijual kembali.',
+} as const;
+
+const LABELS = {
+  tax: 'Pajak transaksi',
+  blacklist: 'Fungsi blacklist',
+  mint: 'Fungsi mint',
+  pause: 'Pause transfer',
+  'liquidity-lock': 'Kunci likuiditas',
+  honeypot: 'Simulasi jual',
+} as const;
+
+type SecurityCode = keyof typeof LABELS;
+type SecurityField = Exclude<keyof TokenSecurityReport, 'sourceName' | 'missingFields'>;
+
+/** Pajak di atas batas ini dianggap berisiko. */
+const HIGH_TAX_PCT = 10;
+/** LP yang terkunci atau dibakar minimal sebesar ini dianggap aman. */
+const SAFE_LOCKED_LP_PCT = 95;
+/** LP tanpa kunci di satu wallet biasa: mulai perlu perhatian, dan mulai berisiko. */
+const WATCH_WALLET_LP_PCT = 20;
+const RISKY_WALLET_LP_PCT = 50;
+const FUNCTION_NOTE = 'Fungsi ini ada di kode kontrak; siapa yang masih bisa memanggilnya belum dianalisis.';
+
+/**
+ * Sumber pertama yang punya nilai untuk field tertentu. Simulasi honeypot.is
+ * didahulukan untuk honeypot dan pajak karena benar-benar menjalankan jual-beli.
+ */
+function pick(findings: SecurityFinding[], field: SecurityField): SecurityFinding | null {
+  const simulationFirst = field === 'honeypot' || field.endsWith('TaxPct');
+  const ordered = simulationFirst
+    ? [...findings].sort((a, b) => Number(b.run.provider === 'honeypot.is') - Number(a.run.provider === 'honeypot.is'))
+    : findings;
+  return ordered.find((finding) => finding.report[field] !== null) ?? null;
+}
+
+function securityCheck(
+  code: SecurityCode,
+  status: 'fail' | 'warn' | 'pass',
+  value: string,
+  note: string | null,
+  source: SecurityFinding,
+  claim: string,
+  context: StateContext,
+): CollectedCheck {
+  return {
+    code,
+    label: LABELS[code],
+    status,
+    value,
+    description: [WHY[code], note, `Sumber: ${source.report.sourceName}.`].filter(Boolean).join(' '),
+    classification: 'external_label',
+    evidence: [
+      {
+        classification: 'external_label',
+        explanation: `${source.report.sourceName}: ${claim}`,
+        subject: `${context.token}:${code}@${context.blockNumber}:${source.run.provider}`,
+        runKey: source.run.key,
+        contractAddress: context.token,
+      },
+    ],
+  };
+}
+
+function notAnalyzed(code: SecurityCode, reason: string | null): CollectedCheck {
+  const value = code === 'honeypot' ? 'Belum disimulasikan' : 'Belum dianalisis';
+  return unknown(code, LABELS[code], value, reason ? `${WHY[code]} ${reason}` : WHY[code]);
+}
+
+/**
+ * Cek pajak, blacklist, mint, pause, kunci likuiditas, dan simulasi jual dari
+ * penyedia analisis keamanan. Hasilnya klaim pihak ketiga, jadi klasifikasinya
+ * `external_label`. Tanpa data, cek tetap `unknown` beserta alasannya.
+ */
+export function securityChecks(findings: SecurityFinding[], unavailableReason: string | null, context: StateContext): CollectedCheck[] {
+  const checks: CollectedCheck[] = [];
+
+  const buySource = pick(findings, 'buyTaxPct');
+  const sellSource = pick(findings, 'sellTaxPct');
+  const taxSource = buySource ?? sellSource;
+  if (taxSource) {
+    const buy = taxSource.report.buyTaxPct;
+    const sell = taxSource.report.sellTaxPct;
+    const modifiable = pick(findings, 'taxModifiable')?.report.taxModifiable === true;
+    const highest = Math.max(Number(buy ?? 0), Number(sell ?? 0));
+    const status = highest >= HIGH_TAX_PCT ? 'fail' : highest > 0 || modifiable ? 'warn' : 'pass';
+    const value = `Beli ${buy ?? '?'}% · Jual ${sell ?? '?'}%${modifiable ? ', bisa diubah owner' : ''}`;
+    checks.push(securityCheck('tax', status, value, null, taxSource, `pajak beli ${buy ?? 'tidak diketahui'}%, pajak jual ${sell ?? 'tidak diketahui'}%${modifiable ? ', dan pajak bisa diubah' : ''}.`, context));
+  } else {
+    checks.push(notAnalyzed('tax', unavailableReason));
+  }
+
+  const functionCheck = (code: 'blacklist' | 'mint' | 'pause', field: 'blacklist' | 'mintable' | 'pausable', name: string) => {
+    const source = pick(findings, field);
+    if (!source) return notAnalyzed(code, unavailableReason);
+    return source.report[field]
+      ? securityCheck(code, 'warn', `Ada fungsi ${name}`, FUNCTION_NOTE, source, `kontrak punya fungsi ${name}.`, context)
+      : securityCheck(code, 'pass', `Tidak ada fungsi ${name}`, null, source, `kontrak tidak punya fungsi ${name}.`, context);
+  };
+  checks.push(functionCheck('blacklist', 'blacklist', 'blacklist'));
+  checks.push(functionCheck('mint', 'mintable', 'mint'));
+  checks.push(functionCheck('pause', 'pausable', 'pause'));
+
+  const lpSource = pick(findings, 'lpLockedPct');
+  if (lpSource) {
+    const locked = Number(lpSource.report.lpLockedPct);
+    const wallet = Number(lpSource.report.lpTopWalletPct ?? 0);
+    if (locked >= SAFE_LOCKED_LP_PCT) {
+      const text = `${lpSource.report.lpLockedPct}% LP terkunci atau dibakar`;
+      checks.push(securityCheck('liquidity-lock', 'pass', text, null, lpSource, `${text}.`, context));
+    } else if (wallet >= WATCH_WALLET_LP_PCT) {
+      const text = `Satu wallet memegang ${lpSource.report.lpTopWalletPct}% LP tanpa kunci`;
+      checks.push(
+        securityCheck(
+          'liquidity-lock',
+          wallet >= RISKY_WALLET_LP_PCT ? 'fail' : 'warn',
+          text,
+          'Wallet ini bisa menarik likuiditas sebanyak itu kapan saja.',
+          lpSource,
+          `${text}; ${lpSource.report.lpLockedPct}% terkunci atau dibakar.`,
+          context,
+        ),
+      );
+    } else {
+      checks.push(
+        notAnalyzed(
+          'liquidity-lock',
+          `Tidak ada kunci LP yang terdeteksi (${lpSource.report.lpLockedPct}% terkunci atau dibakar), tapi LP tersebar atau dipegang kontrak, jadi risikonya belum bisa dipastikan.`,
+        ),
+      );
+    }
+  } else {
+    checks.push(notAnalyzed('liquidity-lock', unavailableReason ?? 'Data pemegang LP tidak tersedia.'));
+  }
+
+  const honeypotSource = pick(findings, 'honeypot');
+  if (honeypotSource) {
+    const simulated = honeypotSource.run.provider === 'honeypot.is';
+    checks.push(
+      honeypotSource.report.honeypot
+        ? securityCheck('honeypot', 'fail', 'Terdeteksi honeypot, token tidak bisa dijual', null, honeypotSource, 'token terdeteksi sebagai honeypot.', context)
+        : securityCheck(
+            'honeypot',
+            'pass',
+            simulated ? 'Bisa dijual dalam simulasi' : 'Tidak terdeteksi honeypot',
+            null,
+            honeypotSource,
+            simulated ? 'simulasi beli dan jual berhasil.' : 'token tidak terdeteksi sebagai honeypot.',
+            context,
+          ),
+    );
+  } else {
+    checks.push(notAnalyzed('honeypot', unavailableReason));
+  }
+  return checks;
 }
 
 function capitalize(value: string): string {

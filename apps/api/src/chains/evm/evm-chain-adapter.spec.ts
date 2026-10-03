@@ -11,7 +11,9 @@ import {
   type IndexedTokenInfo,
   type MarketDataProvider,
   type RpcProvider,
+  type SecurityProvider,
   type TokenMarketData,
+  type TokenSecurityReport,
 } from '../../providers/provider.types.js';
 import { createHash } from 'node:crypto';
 import { decodeAggregate3Calls, encodeAggregate3Result } from '../../../test/support/multicall.js';
@@ -197,7 +199,7 @@ function world() {
       return market;
     },
   };
-  const providers: EvmAdapterProviders = { rpc, explorer, indexer: explorer, market: marketProvider };
+  const providers: EvmAdapterProviders = { rpc, explorer, indexer: explorer, market: marketProvider, security: [] };
   return {
     rpc,
     providers,
@@ -258,6 +260,7 @@ describe('EvmChainAdapter.collectToken', () => {
       ['explorer', 'blockscout', 'explorer', 'complete'],
       ['indexer', 'blockscout', 'indexed_data', 'complete'],
       ['market', 'dexscreener', 'market_data', 'complete'],
+      ['security', 'none', 'security', 'unavailable'],
     ]);
     expect(collection.runs[0]).toMatchObject({ blockFrom: HEAD, blockTo: HEAD, subject: TOKEN, operation: 'token.state' });
   });
@@ -397,6 +400,7 @@ describe('EvmChainAdapter.collectToken', () => {
       ['explorer', 'unavailable', 'HTTP 403: diblokir proteksi bot (Cloudflare)'],
       ['indexer', 'unavailable', 'HTTP 403: diblokir proteksi bot (Cloudflare)'],
       ['market', 'unavailable', 'Tidak ada pair DEX untuk token ini'],
+      ['security', 'unavailable', 'Belum ada penyedia analisis keamanan untuk chain ini'],
     ]);
     expect(collection.checks[0]).toMatchObject({
       code: 'verified',
@@ -438,6 +442,7 @@ describe('EvmChainAdapter.collectToken', () => {
       ['none', 'unavailable', 'Belum ada explorer yang bisa dipakai untuk chain ini'],
       ['none', 'unavailable', 'Belum ada indexer yang bisa dipakai untuk chain ini'],
       ['none', 'unavailable', 'Belum ada sumber data pasar untuk chain ini'],
+      ['none', 'unavailable', 'Belum ada penyedia analisis keamanan untuk chain ini'],
     ]);
   });
 
@@ -482,7 +487,7 @@ describe('EvmChainAdapter.collectToken', () => {
     const collection = await adapter().collectToken(TOKEN);
     expect(collection.failure).toContain(reason);
     expect(collection.token).toBeNull();
-    expect(collection.runs).toHaveLength(4);
+    expect(collection.runs).toHaveLength(5);
   });
 
   it('menolak token yang menurut indexer bukan ERC-20', async () => {
@@ -563,5 +568,133 @@ describe('EvmChainAdapter.smokeTest', () => {
     const report = await adapter().smokeTest();
     expect(report.status).toBe('planned');
     expect(report.checks.find((check) => check.code === 'rpc.call')?.ok).toBe(false);
+  });
+});
+
+describe('EvmChainAdapter: analisis keamanan', () => {
+  const goplusReport = (overrides: Partial<TokenSecurityReport> = {}): TokenSecurityReport => ({
+    sourceName: 'GoPlus Security',
+    honeypot: false,
+    buyTaxPct: '0',
+    sellTaxPct: '0',
+    transferTaxPct: '0',
+    taxModifiable: false,
+    mintable: false,
+    blacklist: false,
+    pausable: false,
+    lpLockedPct: '99.5',
+    lpTopWalletPct: '0.5',
+    missingFields: [],
+    ...overrides,
+  });
+  const provider = (name: string, result: TokenSecurityReport | null | ProviderError): SecurityProvider => ({
+    name,
+    async getTokenSecurity() {
+      if (result instanceof ProviderError) throw result;
+      return result;
+    },
+  });
+  const statuses = (checks: Array<{ code: string; status: string; value: string }>) =>
+    Object.fromEntries(checks.slice(3).map((check) => [check.code, [check.status, check.value]]));
+
+  it('mengisi cek pajak, blacklist, mint, pause, LP, dan honeypot dari GoPlus', async () => {
+    const { adapter } = world();
+    const collection = await adapter({ security: [provider('goplus', goplusReport())] }).collectToken(TOKEN);
+    expect(statuses(collection.checks)).toEqual({
+      tax: ['pass', 'Beli 0% · Jual 0%'],
+      blacklist: ['pass', 'Tidak ada fungsi blacklist'],
+      mint: ['pass', 'Tidak ada fungsi mint'],
+      pause: ['pass', 'Tidak ada fungsi pause'],
+      'liquidity-lock': ['pass', '99.5% LP terkunci atau dibakar'],
+      honeypot: ['pass', 'Tidak terdeteksi honeypot'],
+    });
+    const tax = collection.checks.find((check) => check.code === 'tax')!;
+    expect(tax).toMatchObject({ classification: 'external_label' });
+    expect(tax.description).toContain('Sumber: GoPlus Security.');
+    expect(tax.evidence).toEqual([
+      expect.objectContaining({ classification: 'external_label', runKey: 'security:goplus', explanation: expect.stringMatching(/^GoPlus Security: /) }),
+    ]);
+    expect(collection.runs.at(-1)).toMatchObject({ key: 'security:goplus', kind: 'security', status: 'complete' });
+  });
+
+  it('menandai risiko: pajak tinggi, fungsi berbahaya, LP tidak terkunci, dan honeypot', async () => {
+    const { adapter } = world();
+    const report = goplusReport({ honeypot: true, buyTaxPct: '3', sellTaxPct: '25', taxModifiable: true, mintable: true, blacklist: true, pausable: true, lpLockedPct: '0', lpTopWalletPct: '92.4' });
+    const collection = await adapter({ security: [provider('goplus', report)] }).collectToken(TOKEN);
+    expect(statuses(collection.checks)).toEqual({
+      tax: ['fail', 'Beli 3% · Jual 25%, bisa diubah owner'],
+      blacklist: ['warn', 'Ada fungsi blacklist'],
+      mint: ['warn', 'Ada fungsi mint'],
+      pause: ['warn', 'Ada fungsi pause'],
+      'liquidity-lock': ['fail', 'Satu wallet memegang 92.4% LP tanpa kunci'],
+      honeypot: ['fail', 'Terdeteksi honeypot, token tidak bisa dijual'],
+    });
+    expect(collection.checks.find((check) => check.code === 'mint')?.description).toContain('siapa yang masih bisa memanggilnya belum dianalisis');
+  });
+
+  it('mendahulukan simulasi honeypot.is untuk pajak dan honeypot', async () => {
+    const { adapter } = world();
+    const simulation = goplusReport({
+      sourceName: 'honeypot.is',
+      buyTaxPct: '1',
+      sellTaxPct: '2',
+      taxModifiable: null,
+      mintable: null,
+      blacklist: null,
+      pausable: null,
+      lpLockedPct: null,
+      lpTopWalletPct: null,
+    });
+    const collection = await adapter({
+      security: [provider('goplus', goplusReport()), provider('honeypot.is', simulation)],
+    }).collectToken(TOKEN);
+    const checks = statuses(collection.checks);
+    expect(checks.tax).toEqual(['warn', 'Beli 1% · Jual 2%']);
+    expect(checks.honeypot).toEqual(['pass', 'Bisa dijual dalam simulasi']);
+    expect(checks.mint).toEqual(['pass', 'Tidak ada fungsi mint']);
+  });
+
+  it('tetap unknown beserta alasannya bila semua penyedia gagal', async () => {
+    const { adapter } = world();
+    const collection = await adapter({
+      security: [provider('goplus', new ProviderError('goplus', 'HTTP 429: kena batas rate provider')), provider('honeypot.is', null)],
+    }).collectToken(TOKEN);
+    expect(collection.runs.slice(-2).map((run) => [run.provider, run.status, run.errorReason])).toEqual([
+      ['goplus', 'unavailable', 'HTTP 429: kena batas rate provider'],
+      ['honeypot.is', 'unavailable', 'Penyedia belum mengenal token ini'],
+    ]);
+    const tax = collection.checks.find((check) => check.code === 'tax')!;
+    expect(tax).toMatchObject({ status: 'unknown', value: 'Belum dianalisis', classification: null });
+    expect(tax.description).toContain('Analisis keamanan gagal: HTTP 429: kena batas rate provider');
+  });
+
+  it('mencatat field yang tidak diberikan penyedia', async () => {
+    const { adapter } = world();
+    const collection = await adapter({
+      security: [provider('goplus', goplusReport({ buyTaxPct: null, sellTaxPct: null, missingFields: ['security.buyTaxPct', 'security.sellTaxPct'] }))],
+    }).collectToken(TOKEN);
+    expect(collection.runs.at(-1)).toMatchObject({ status: 'partial', missingFields: ['security.buyTaxPct', 'security.sellTaxPct'] });
+    expect(statuses(collection.checks).tax).toEqual(['unknown', 'Belum dianalisis']);
+  });
+
+  it('LP yang dipegang kontrak tidak dianggap aman maupun berisiko', async () => {
+    const { adapter } = world();
+    const collection = await adapter({
+      security: [provider('goplus', goplusReport({ lpLockedPct: '0.0091', lpTopWalletPct: '0.02' }))],
+    }).collectToken(TOKEN);
+    const lp = collection.checks.find((check) => check.code === 'liquidity-lock')!;
+    expect(lp).toMatchObject({ status: 'unknown', classification: null });
+    expect(lp.description).toContain('LP tersebar atau dipegang kontrak');
+  });
+
+  it('satu wallet yang memegang sebagian LP tanpa kunci perlu perhatian', async () => {
+    const { adapter } = world();
+    const collection = await adapter({
+      security: [provider('goplus', goplusReport({ lpLockedPct: '10', lpTopWalletPct: '48.27' }))],
+    }).collectToken(TOKEN);
+    expect(collection.checks.find((check) => check.code === 'liquidity-lock')).toMatchObject({
+      status: 'warn',
+      value: 'Satu wallet memegang 48.27% LP tanpa kunci',
+    });
   });
 });

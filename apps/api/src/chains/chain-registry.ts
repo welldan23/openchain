@@ -8,6 +8,8 @@
  *   Blockscout, termasuk Robinhood Chain.
  * - `BLOCKSCOUT_URL_<CHAIN>`: ganti instance Blockscout sebuah chain.
  * - `PROVIDER_TIMEOUT_MS`: batas waktu tiap request provider (default 15000).
+ * - `SECURITY_PROVIDERS`: penyedia analisis keamanan yang dipakai, dipisah
+ *   koma (`goplus`, `honeypotis`); default keduanya, `none` mematikan.
  *
  * URL dan API key tidak pernah dicetak; `describe` hanya menyebut asalnya.
  */
@@ -15,6 +17,9 @@ import { BLOCKSCOUT_PRO_API_URL, BlockscoutProvider } from '../providers/blocksc
 import { DexscreenerProvider } from '../providers/dexscreener.provider.js';
 import { EvmJsonRpcProvider } from '../providers/evm-rpc.provider.js';
 import { FallbackRpcProvider } from '../providers/fallback-rpc.provider.js';
+import { GoPlusProvider } from '../providers/goplus.provider.js';
+import { HoneypotIsProvider } from '../providers/honeypot-is.provider.js';
+import type { SecurityProvider } from '../providers/provider.types.js';
 import { DEFAULT_TIMEOUT_MS, HttpClient } from '../providers/http-client.js';
 import type { ChainAdapter } from './chain-adapter.types.js';
 import {
@@ -23,10 +28,13 @@ import {
   PHASE_4_CHAINS,
   rpcEnvVar,
   type EvmChainDefinition,
+  type SecurityProviderId,
 } from './chain-definitions.js';
 import { EvmChainAdapter, type EvmAdapterOptions } from './evm/evm-chain-adapter.js';
 
 export type Env = Readonly<Record<string, string | undefined>>;
+
+const SECURITY_NAMES: Record<SecurityProviderId, string> = { goplus: 'GoPlus', honeypotis: 'honeypot.is' };
 
 /** Chain tidak dikenal atau adapternya belum ada. */
 export class ChainNotSupportedError extends Error {
@@ -44,6 +52,7 @@ export interface ChainSetup {
   rpc: string;
   explorer: string;
   market: string;
+  security: string;
 }
 
 export class ChainRegistry {
@@ -82,6 +91,7 @@ export class ChainRegistry {
         explorer,
         indexer: explorer,
         market: definition.dexscreenerSlug ? new DexscreenerProvider(definition.dexscreenerSlug, 'evm', this.http) : null,
+        security: this.securityProviders(definition),
       },
       this.adapterOptions,
     );
@@ -103,6 +113,7 @@ export class ChainRegistry {
       rpc: `${this.value(rpcVar) ? `dari ${rpcVar}` : 'RPC publik default'} (${this.rpcUrls(definition).length} endpoint)`,
       explorer,
       market: definition.dexscreenerSlug ? `Dexscreener (${definition.dexscreenerSlug})` : 'tidak ada',
+      security: this.securityIds(definition).map((id) => SECURITY_NAMES[id]).join(', ') || 'tidak ada',
     };
   }
 
@@ -114,6 +125,22 @@ export class ChainRegistry {
         new EvmJsonRpcProvider(urls.length === 1 ? name : `${name}-${index + 1}`, url, this.http, { timeoutMs }),
     );
     return endpoints.length === 1 ? endpoints[0] : new FallbackRpcProvider(name, endpoints);
+  }
+
+  private securityProviders(definition: EvmChainDefinition): SecurityProvider[] {
+    return this.securityIds(definition).map((id) =>
+      id === 'goplus'
+        ? new GoPlusProvider(definition.evmChainId, this.http)
+        : new HoneypotIsProvider(definition.evmChainId, this.http),
+    );
+  }
+
+  /** Penyedia yang didukung chain dan tidak dimatikan lewat `SECURITY_PROVIDERS`. */
+  private securityIds(definition: EvmChainDefinition): SecurityProviderId[] {
+    const raw = this.value('SECURITY_PROVIDERS');
+    if (!raw) return [...definition.securityProviders];
+    const enabled = new Set(raw.split(',').map((id) => id.trim().toLowerCase()));
+    return definition.securityProviders.filter((id) => enabled.has(id));
   }
 
   private rpcUrls(definition: EvmChainDefinition): string[] {

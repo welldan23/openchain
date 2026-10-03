@@ -62,6 +62,7 @@ describe('ChainRegistry', () => {
       rpc: 'dari RPC_URL_ROBINHOOD (1 endpoint)',
       explorer: 'Blockscout PRO API (BLOCKSCOUT_API_KEY)',
       market: 'Dexscreener (robinhood)',
+      security: 'GoPlus',
     });
     expect(new ChainRegistry({}).describe('bsc')).toMatchObject({ rpc: 'RPC publik default (2 endpoint)', explorer: 'tidak ada' });
     expect(new ChainRegistry({ BLOCKSCOUT_URL_BSC: 'https://bsc.contoh.test' }).describe('bsc').explorer).toBe(
@@ -88,5 +89,12 @@ describe('ChainRegistry', () => {
 
   it('kembali ke RPC default bila env hanya berisi pemisah', () => {
     expect(new ChainRegistry({ RPC_URL_BSC: ' , ' }).describe('bsc').rpc).toBe('dari RPC_URL_BSC (2 endpoint)');
+  });
+
+  it('memilih penyedia analisis keamanan sesuai dukungan chain dan SECURITY_PROVIDERS', () => {
+    expect(new ChainRegistry({}).describe('base').security).toBe('GoPlus, honeypot.is');
+    expect(new ChainRegistry({}).describe('hyperevm').security).toBe('tidak ada');
+    expect(new ChainRegistry({ SECURITY_PROVIDERS: 'honeypotis' }).describe('base').security).toBe('honeypot.is');
+    expect(new ChainRegistry({ SECURITY_PROVIDERS: 'none' }).describe('base').security).toBe('tidak ada');
   });
 });

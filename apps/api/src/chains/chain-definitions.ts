@@ -34,11 +34,19 @@ export interface EvmChainDefinition {
   /** Id chain versi Dexscreener; `null` bila belum didukung Dexscreener. */
   dexscreenerSlug: string | null;
   /**
+   * Penyedia analisis keamanan gratis yang mendukung chain ini, urut prioritas.
+   * Dukungannya sudah dicek langsung ke API masing-masing.
+   */
+  securityProviders: ReadonlyArray<SecurityProviderId>;
+  /**
    * Token contoh untuk smoke test: token populer yang punya pair DEX dan daftar
    * holder yang cepat dibaca (umumnya wrapped native token).
    */
   smokeTestToken: { address: string; symbol: string };
 }
+
+/** `goplus`: GoPlus Security; `honeypotis`: simulasi jual honeypot.is. */
+export type SecurityProviderId = 'goplus' | 'honeypotis';
 
 const EVM_MODELS = {
   family: 'evm',
@@ -62,6 +70,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     rpc: { defaultUrls: ['https://rpc.mainnet.chain.robinhood.com', 'https://robinhood-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://robinhoodchain.blockscout.com', proApi: true },
     dexscreenerSlug: 'robinhood',
+    securityProviders: ['goplus'],
     smokeTestToken: { address: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', symbol: 'WETH' },
   },
   {
@@ -74,6 +83,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     rpc: { defaultUrls: ['https://ethereum-rpc.publicnode.com', 'https://0xrpc.io/eth', 'https://eth.drpc.org'] },
     blockscout: { instanceUrl: 'https://eth.blockscout.com', proApi: true },
     dexscreenerSlug: 'ethereum',
+    securityProviders: ['goplus', 'honeypotis'],
     smokeTestToken: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH' },
   },
   {
@@ -84,6 +94,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     rpc: { defaultUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://base.blockscout.com', proApi: true },
     dexscreenerSlug: 'base',
+    securityProviders: ['goplus', 'honeypotis'],
     // Daftar holder WETH di Blockscout Base terlalu lambat (>60 detik); AERO cepat.
     smokeTestToken: { address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', symbol: 'AERO' },
   },
@@ -99,6 +110,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     // Blockscout tidak meng-host BNB Chain; explorer lain menyusul.
     blockscout: null,
     dexscreenerSlug: 'bsc',
+    securityProviders: ['goplus', 'honeypotis'],
     smokeTestToken: { address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', symbol: 'WBNB' },
   },
   {
@@ -109,6 +121,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     rpc: { defaultUrls: ['https://arb1.arbitrum.io/rpc', 'https://arbitrum-one-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://arbitrum.blockscout.com', proApi: true },
     dexscreenerSlug: 'arbitrum',
+    securityProviders: ['goplus'],
     // Daftar holder WETH di Blockscout Arbitrum terlalu lambat (>60 detik); ARB cepat.
     smokeTestToken: { address: '0x912CE59144191C1204E64559FE8253a0e49E6548', symbol: 'ARB' },
   },
@@ -120,6 +133,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     rpc: { defaultUrls: ['https://mainnet.optimism.io', 'https://optimism-rpc.publicnode.com'] },
     blockscout: { instanceUrl: 'https://explorer.optimism.io', proApi: true },
     dexscreenerSlug: 'optimism',
+    securityProviders: ['goplus'],
     smokeTestToken: { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH' },
   },
   {
@@ -130,6 +144,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     rpc: { defaultUrls: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'] },
     blockscout: { instanceUrl: 'https://polygon.blockscout.com', proApi: true },
     dexscreenerSlug: 'polygon',
+    securityProviders: ['goplus'],
     smokeTestToken: { address: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270', symbol: 'WPOL' },
   },
   {
@@ -141,6 +156,7 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     // Explorer Blockscout HyperEVM (hyperscan.com) sedang dialihkan; menyusul.
     blockscout: null,
     dexscreenerSlug: 'hyperevm',
+    securityProviders: [],
     smokeTestToken: { address: '0x5555555555555555555555555555555555555555', symbol: 'WHYPE' },
   },
 ];

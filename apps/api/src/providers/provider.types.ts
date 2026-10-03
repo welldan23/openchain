@@ -192,9 +192,8 @@ export interface MarketDataProvider {
 }
 
 // ---------------------------------------------------------------------------
-// EntityLabelProvider dan SecurityProvider: interface untuk sumber khusus.
-// Implementasinya menyusul di fitur Risiko & Label (fase 3). Saat ini label
-// eksternal ikut dari data holder Blockscout.
+// EntityLabelProvider: interface untuk sumber label khusus (fase 3). Saat ini
+// label eksternal ikut dari data holder Blockscout.
 // ---------------------------------------------------------------------------
 
 export interface EntityLabelProvider {
@@ -202,15 +201,42 @@ export interface EntityLabelProvider {
   getLabels(addresses: string[]): Promise<Map<string, ExternalLabel[]>>;
 }
 
+// ---------------------------------------------------------------------------
+// SecurityProvider: hasil analisis keamanan token dari pihak ketiga, mis.
+// GoPlus Security atau simulasi jual honeypot.is. Hasilnya klaim eksternal,
+// bukan fakta on-chain.
+// ---------------------------------------------------------------------------
+
 export interface TokenSecurityReport {
-  /** Hasil simulasi jual; `null` bila tidak disimulasikan. */
-  sellable: boolean | null;
+  /** Nama sumber untuk ditampilkan, mis. "GoPlus Security". */
+  sourceName: string;
+  /** Hasil simulasi jual; `null` bila tidak diketahui. */
+  honeypot: boolean | null;
+  /** Pajak dalam persen, mis. "5" untuk 5%. */
   buyTaxPct: string | null;
   sellTaxPct: string | null;
+  transferTaxPct: string | null;
+  /** Pajak bisa diubah pemilik kontrak. */
+  taxModifiable: boolean | null;
+  /** Ada fungsi untuk mencetak supply baru. */
+  mintable: boolean | null;
+  /** Ada fungsi untuk memblokir address tertentu. */
+  blacklist: boolean | null;
+  /** Ada fungsi untuk menghentikan semua transfer. */
+  pausable: boolean | null;
+  /** Persen LP yang terkunci atau dibakar (0–100). */
+  lpLockedPct: string | null;
+  /**
+   * Persen LP terbesar yang dipegang satu wallet biasa (bukan kontrak) tanpa
+   * kunci. Wallet seperti ini bisa menarik likuiditas sebanyak itu kapan saja.
+   */
+  lpTopWalletPct: string | null;
+  /** Field yang seharusnya diberikan sumber ini tapi tidak tersedia. */
   missingFields: string[];
 }
 
 export interface SecurityProvider {
   readonly name: string;
-  getTokenSecurity(address: string): Promise<TokenSecurityReport>;
+  /** `null` bila sumber belum mengenal token ini. */
+  getTokenSecurity(address: string): Promise<TokenSecurityReport | null>;
 }

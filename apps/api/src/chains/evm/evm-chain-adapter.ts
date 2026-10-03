@@ -30,6 +30,7 @@ import {
   type MarketDataProvider,
   type ProviderRunRecord,
   type RpcProvider,
+  type SecurityProvider,
   type TokenMarketData,
 } from '../../providers/provider.types.js';
 import type { EvmChainDefinition } from '../chain-definitions.js';
@@ -60,8 +61,9 @@ import {
 import {
   ownershipCheck,
   proxyCheck,
-  unanalyzedChecks,
+  securityChecks,
   verifiedCheck,
+  type SecurityFinding,
   type OwnerState,
   type ProxyState,
 } from './evm-contract-checks.js';
@@ -71,6 +73,8 @@ export interface EvmAdapterProviders {
   explorer: ExplorerProvider | null;
   indexer: IndexedDataProvider | null;
   market: MarketDataProvider | null;
+  /** Penyedia analisis keamanan sesuai prioritas; boleh kosong. */
+  security: SecurityProvider[];
 }
 
 export interface EvmAdapterOptions {
@@ -180,13 +184,14 @@ export class EvmChainAdapter implements ChainAdapter {
     const address = rawAddress.trim();
     const token = normalizeAddress('evm', address);
 
-    const [explorer, indexer, market] = await Promise.all([
+    const [explorer, indexer, market, security] = await Promise.all([
       this.collectExplorer(token),
       this.collectIndexer(token),
       this.collectMarket(token),
+      this.collectSecurity(token),
     ]);
     const onchain = await this.collectOnchain(token, indexer.holders, explorer.info?.creationTxHash ?? null);
-    const runs = [onchain.run, explorer.run, indexer.run, market.run];
+    const runs = [onchain.run, explorer.run, indexer.run, market.run, ...security.runs];
 
     const failure = onchain.failure ?? this.notErc20Reason(indexer.info, onchain);
     const base: TokenCollection = {
@@ -233,7 +238,7 @@ export class EvmChainAdapter implements ChainAdapter {
         verifiedCheck(explorer.info, explorer.run, context),
         ownershipCheck(onchain.owner, context),
         proxyCheck(onchain.proxy, context),
-        ...unanalyzedChecks(),
+        ...securityChecks(security.findings, security.unavailableReason, context),
       ],
     };
   }
@@ -298,6 +303,42 @@ export class EvmChainAdapter implements ChainAdapter {
     } catch (error) {
       return { run: this.unavailable(meta, reasonOf(error)), data: null };
     }
+  }
+
+  /**
+   * Analisis keamanan dari semua penyedia yang tersedia. Setiap penyedia punya
+   * run sendiri, supaya kegagalan satu sumber tetap tercatat.
+   */
+  private async collectSecurity(
+    token: string,
+  ): Promise<{ runs: ProviderRunRecord[]; findings: SecurityFinding[]; unavailableReason: string | null }> {
+    const providers = this.providers.security;
+    if (providers.length === 0) {
+      const reason = 'Belum ada penyedia analisis keamanan untuk chain ini';
+      const meta = this.meta('security', NOT_CONFIGURED, 'security', 'token.security', token);
+      return { runs: [this.unavailable(meta, reason)], findings: [], unavailableReason: reason };
+    }
+    const results = await Promise.all(
+      providers.map(async (provider) => {
+        const meta = this.meta(`security:${provider.name}`, provider.name, 'security', 'token.security', token);
+        try {
+          const report = await provider.getTokenSecurity(token);
+          if (!report) return { run: this.unavailable(meta, 'Penyedia belum mengenal token ini'), report: null };
+          const notes = new RunNotes();
+          for (const field of report.missingFields) notes.fail(field, 'Penyedia tidak memberi data ini');
+          return { run: this.finish(meta, notes), report };
+        } catch (error) {
+          return { run: this.unavailable(meta, reasonOf(error)), report: null };
+        }
+      }),
+    );
+    const findings = results.flatMap((result) => (result.report ? [{ run: result.run, report: result.report }] : []));
+    const reasons = results.map((result) => result.run.errorReason).filter((reason): reason is string => reason !== null);
+    return {
+      runs: results.map((result) => result.run),
+      findings,
+      unavailableReason: findings.length === 0 && reasons.length > 0 ? `Analisis keamanan gagal: ${reasons.join('; ')}` : null,
+    };
   }
 
   private notErc20Reason(info: IndexedTokenInfo | null, onchain: OnchainState): string | null {
@@ -594,7 +635,7 @@ export class EvmChainAdapter implements ChainAdapter {
    * lolos tapi sumber data lain belum; `planned` bila RPC gagal.
    */
   async smokeTest(): Promise<SmokeTestReport> {
-    const { rpc, explorer, indexer, market } = this.providers;
+    const { rpc, explorer, indexer, market, security } = this.providers;
     const sample = this.definition.smokeTestToken;
     const checks: SmokeCheck[] = [];
     const step = async (code: string, provider: string, level: SmokeCheck['level'], run: () => Promise<string>) => {
@@ -692,6 +733,14 @@ export class EvmChainAdapter implements ChainAdapter {
       });
     } else {
       skipped('market.pairs', NOT_CONFIGURED, 'data', 'Belum ada sumber data pasar untuk chain ini');
+    }
+
+    for (const provider of security) {
+      await step(`security.${provider.name}`, provider.name, 'optional', async () => {
+        const report = await provider.getTokenSecurity(sample.address);
+        if (!report) throw new SmokeFailure('Penyedia tidak mengenali token contoh');
+        return `Analisis keamanan token contoh tersedia (${report.sourceName})`;
+      });
     }
 
     const passed = (level: SmokeCheck['level']) => checks.filter((check) => check.level === level).every((check) => check.ok);

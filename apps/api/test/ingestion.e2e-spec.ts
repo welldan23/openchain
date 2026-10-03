@@ -143,6 +143,23 @@ function route(request: RecordedRequest): Response {
   const url = new URL(request.url);
   if (request.url === 'https://rpc.mainnet.chain.robinhood.com') return rpc(request.body as never);
   if (url.host === 'robinhoodchain.blockscout.com') return blockscout(url.pathname);
+  if (url.host === 'api.gopluslabs.io') {
+    return jsonResponse({
+      code: 1,
+      message: 'OK',
+      result: {
+        [TOKEN_LOWER]: {
+          is_honeypot: '0',
+          buy_tax: '0',
+          sell_tax: '0.04',
+          is_mintable: '0',
+          is_blacklisted: '0',
+          transfer_pausable: '0',
+          lp_holders: [{ address: '0x000000000000000000000000000000000000dead', percent: '1', is_locked: 0 }],
+        },
+      },
+    });
+  }
   if (url.host === 'api.dexscreener.com') {
     return jsonResponse([
       {
@@ -205,7 +222,7 @@ describe('Ingest token lalu baca lewat API', () => {
       failure: null,
       snapshot: { blockNumber: BLOCK, dataStatus: 'complete' },
       holdersStored: 3,
-      checks: { fail: 0, warn: 1, unknown: 6, pass: 2 },
+      checks: { fail: 0, warn: 2, unknown: 0, pass: 7 },
     });
   });
 
@@ -234,6 +251,7 @@ describe('Ingest token lalu baca lewat API', () => {
       ['blockscout', 'explorer'],
       ['blockscout', 'indexed_data'],
       ['dexscreener', 'market_data'],
+      ['goplus', 'security'],
     ]);
   });
 
@@ -253,10 +271,14 @@ describe('Ingest token lalu baca lewat API', () => {
   it('cek kontrak menyertakan bukti yang bisa dibuka di explorer', async () => {
     const { body } = await request(app.getHttpServer()).get(url('contract-checks')).expect(200);
     expect(body.summary).toEqual([
-      { status: 'warn', count: 1 },
-      { status: 'unknown', count: 6 },
-      { status: 'pass', count: 2 },
+      { status: 'warn', count: 2 },
+      { status: 'pass', count: 7 },
     ]);
+    expect(body.checks.find((check: { code: string }) => check.code === 'tax')).toMatchObject({
+      status: 'warn',
+      value: 'Beli 0% · Jual 4%',
+      classification: 'external_label',
+    });
     const ownership = body.checks.find((check: { code: string }) => check.code === 'ownership');
     expect(ownership).toMatchObject({ status: 'warn', classification: 'verified_fact' });
     expect(ownership.evidence).toEqual([
@@ -276,8 +298,14 @@ describe('Ingest token lalu baca lewat API', () => {
     const { body } = await request(app.getHttpServer()).get(url('evidence')).expect(200);
     expect(body.findings).toEqual([]);
     expect(body.evidence.map((item: { relatedChecks: string[] }) => item.relatedChecks).sort()).toEqual([
+      ['blacklist'],
+      ['honeypot'],
+      ['liquidity-lock'],
+      ['mint'],
       ['ownership'],
+      ['pause'],
       ['proxy'],
+      ['tax'],
       ['verified'],
     ]);
   });

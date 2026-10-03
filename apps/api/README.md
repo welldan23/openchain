@@ -61,7 +61,9 @@ Satu kali ingest berjalan seperti ini:
    menyesatkan.
 5. Tx pembuatan dari explorer diverifikasi lewat receipt RPC sebelum dipakai
    sebagai data deployer.
-6. Semuanya disimpan lewat `SnapshotRecorder`: run provider, address, profil
+6. Analisis keamanan diambil dari GoPlus Security dan simulasi jual honeypot.is,
+   paralel dengan langkah 1.
+7. Semuanya disimpan lewat `SnapshotRecorder`: run provider, address, profil
    token, label eksternal, bukti, cek kontrak, dan snapshot.
 
 Aturan yang dijaga:
@@ -74,11 +76,26 @@ Aturan yang dijaga:
   bukan kontrak, atau token bukan ERC-20.
 - Ingest ulang aman: address, label, dan bukti tidak digandakan, identifier asli
   tidak berubah, dan nilai yang kali ini gagal diambil tidak menimpa nilai lama.
-- Cek kontrak yang sudah berjalan: source code terverifikasi (label eksternal
-  dari explorer), owner (`owner()`), dan proxy (slot EIP-1967 dan clone
-  EIP-1167). Pajak, blacklist, mint, pause, kunci likuiditas, dan simulasi jual
-  berstatus `unknown` sampai fitur analisis risiko (fase 3). Skor risiko juga
-  masih `unknown`.
+- Cek kontrak dari data on-chain: owner (`owner()`) dan proxy (slot EIP-1967
+  dan clone EIP-1167), sebagai `verified_fact`.
+- Cek kontrak dari pihak ketiga, sebagai `external_label` lengkap dengan
+  sumbernya: source code terverifikasi (explorer), pajak, blacklist, mint,
+  pause, kunci likuiditas, dan simulasi jual (GoPlus, honeypot.is). Untuk pajak
+  dan honeypot, simulasi honeypot.is didahulukan.
+- Aturan penilaian cek keamanan:
+
+  | Cek | Lolos | Perlu perhatian | Berisiko |
+  | --- | --- | --- | --- |
+  | Pajak | 0% dan tidak bisa diubah | di atas 0%, atau bisa diubah owner | 10% atau lebih |
+  | Blacklist, mint, pause | fungsinya tidak ada | fungsinya ada di kode | — |
+  | Kunci likuiditas | 95% LP atau lebih terkunci/dibakar | satu wallet memegang 20% LP atau lebih tanpa kunci | satu wallet memegang 50% LP atau lebih tanpa kunci |
+  | Simulasi jual | bisa dijual | — | honeypot |
+
+  LP yang tersebar atau dipegang kontrak tanpa kunci terdeteksi tetap
+  `unknown`, karena risikonya belum bisa dipastikan. Fungsi blacklist, mint,
+  dan pause dinilai dari keberadaannya di kode; siapa yang masih bisa
+  memanggilnya belum dianalisis.
+- Skor risiko masih `unknown` sampai fitur Skor Risiko (fase 3).
 - Bukti state pada blok snapshot tertaut ke halaman blok di explorer, karena
   bukti itu tidak punya hash transaksi.
 
@@ -121,6 +138,7 @@ Semuanya opsional dan tidak pernah dicetak. Daftar lengkapnya ada di
 | `BLOCKSCOUT_API_KEY` | Pakai Blockscout PRO API (API key gratis di dev.blockscout.com) untuk chain yang di-host Blockscout. Dikirim lewat header, bukan URL |
 | `BLOCKSCOUT_URL_<CHAIN>` | Ganti instance Blockscout sebuah chain |
 | `PROVIDER_TIMEOUT_MS` | Batas waktu tiap request provider (default 15000) |
+| `SECURITY_PROVIDERS` | Penyedia analisis keamanan, dipisah koma: `goplus`, `honeypotis`. Default keduanya; `none` mematikan |
 
 Request yang gagal karena batas rate (HTTP 429), error server (5xx), timeout,
 atau gangguan koneksi dicoba ulang sampai 3 kali dengan jeda yang makin panjang.
@@ -203,7 +221,36 @@ publik berikut, sesuai syarat audit di PRD.
 | RPC publik (JSON-RPC) | State on-chain pada blok snapshot | Layanan gratis dengan batas rate; bisa diganti lewat `RPC_URL_<CHAIN>` | Standar JSON-RPC Ethereum | Hanya method baca di daftar izin; URL tidak pernah dicetak | 8 chain EVM; BNB Chain belum lengkap |
 | Blockscout REST API v2 | Verifikasi kontrak, pembuat, jumlah dan daftar holder, label | Perangkat lunak GPL-3.0; kita hanya memanggil API. PRO API gratis 5 request/detik, 100 ribu kredit/hari | Explorer open-source, explorer resmi Robinhood Chain | API key lewat header, bukan URL | Robinhood (butuh API key dari server), Ethereum, Base, Arbitrum, OP, Polygon |
 | Dexscreener API | Harga, perubahan 24 jam, market cap, FDV, likuiditas, volume, jumlah transaksi | Boleh dipakai komersial; dilarang untuk produk yang bersaing langsung dengan Dexscreener atau menjual ulang API-nya. Batas 300 request/menit | API publik populer | Tanpa API key | 8 chain EVM, id chain sudah dicek |
+| GoPlus Security API | Pajak, blacklist, mint, pause, honeypot, pemegang LP | Gratis tanpa API key. **Wajib mencantumkan "Powered by GoPlus"** di aplikasi. Data GoPlus tidak boleh langsung dipakai untuk kegiatan komersial yang menghasilkan uang tanpa izin tertulis GoPlus. Batas rate tidak boleh diakali | Dipakai luas oleh wallet dan explorer | Tanpa API key | Robinhood, Ethereum, Base, BNB Chain, Arbitrum, OP, Polygon |
+| honeypot.is API | Simulasi beli dan jual, pajak sungguhan | Gratis, saat ini tanpa API key. Dilarang menjual ulang API atau membukanya ke pihak ketiga, dan dilarang untuk produk yang bersaing langsung | Dipakai luas komunitas trader | Tanpa API key | Ethereum, BNB Chain, Base |
 | Multicall3 (`0xcA11…CA11`) | Membaca saldo banyak holder dalam satu `eth_call` | Kontrak publik berlisensi MIT | Dipakai luas di ekosistem EVM | Hanya lewat `eth_call`; SHA-256 bytecode dicek dulu sebelum dipakai | 8 chain EVM, bytecode identik |
+
+### Sumber gratis yang dimanfaatkan
+
+Semua sumber di bawah gratis dan sudah diuji ke jaringan sungguhan.
+
+| Sumber | Dipakai untuk | Catatan |
+| --- | --- | --- |
+| RPC resmi tiap chain, publicnode, dRPC, 0xrpc | State on-chain, receipt, log | Digabung lewat fallback; 0xrpc menyimpan semua receipt Ethereum |
+| Blockscout | Verifikasi kontrak, holder, label | Robinhood butuh API key gratis dari server |
+| Dexscreener | Harga, likuiditas, volume | API resmi saja |
+| GoPlus Security | Pajak, fungsi berbahaya, honeypot, LP | Wajib "Powered by GoPlus"; komersial perlu izin |
+| honeypot.is | Simulasi jual | Ethereum, BNB Chain, Base |
+| Multicall3 | Saldo holder dalam satu panggilan | Kode diverifikasi SHA-256 |
+
+Belum dipakai, tapi gratis dan sudah dicek:
+
+- **Dexscreener `/orders/v1/{chain}/{token}`:** riwayat profil berbayar dan
+  boost token. Berguna sebagai sinyal promosi berbayar. Butuh tempat simpan
+  baru di snapshot.
+- **Dexscreener `info` di data pair:** gambar, banner, dan link sosial resmi
+  token untuk tampilan halaman token.
+- **GoPlus:** owner tersembunyi, bisa ambil alih ownership, selfdestruct, dan
+  address pembuat token. Bisa dipakai untuk cek tambahan di fitur Risiko.
+
+Endpoint internal situs Dexscreener (`io.dexscreener.com`) **tidak** dipakai.
+Endpoint itu tidak termasuk API resmi, dilindungi Cloudflare, dan formatnya bisa
+berubah kapan saja.
 
 Label dari Blockscout bersifat eksternal (`external_label`) dan probabilistik,
 bukan bukti kepemilikan. Yang dipetakan hanya tag kategori yang jelas, mis.
