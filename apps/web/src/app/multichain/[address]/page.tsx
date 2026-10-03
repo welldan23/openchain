@@ -6,6 +6,7 @@ import { BridgesPanel } from "@/components/multichain/bridges-panel";
 import { ChainActivityGrid } from "@/components/multichain/chain-activity-grid";
 import { ChainComparisonTable } from "@/components/multichain/chain-comparison-table";
 import { CrossChainActivityPanel } from "@/components/multichain/cross-chain-activity-panel";
+import { InfrastructurePanel } from "@/components/multichain/infrastructure-panel";
 import { MultichainChainPicker } from "@/components/multichain/chain-picker";
 import { MultichainHeader } from "@/components/multichain/multichain-header";
 import { MultichainStats } from "@/components/multichain/multichain-stats";
@@ -15,7 +16,14 @@ import { getMultichainProfile } from "@/lib/api/multichain";
 import { firstParam } from "@/lib/flow-filter";
 import { formatNumber, shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
-import { comparisonRows, filterProfileChains, isActive, parseChainSelection, summarizeMultichain } from "@/lib/multichain";
+import {
+  comparisonRows,
+  detectInfrastructure,
+  filterProfileChains,
+  isActive,
+  parseChainSelection,
+  summarizeMultichain,
+} from "@/lib/multichain";
 
 /** Dipakai bersama oleh generateMetadata & Page; `cache` mencegah fetch ganda. */
 const loadProfile = cache(async (address: string) => getMultichainProfile(address));
@@ -72,7 +80,8 @@ export default async function MultichainPage({ params, searchParams }: PageProps
           <BridgesPanel bridges={profile.bridges} />
           <CrossChainActivityPanel owner={{ address: profile.address, label: profile.label }} activities={profile.activities} />
         </div>
-        <aside className="min-w-0" aria-label="Keterangan">
+        <aside className="min-w-0 space-y-5" aria-label="Infrastruktur dan keterangan">
+          <InfrastructurePanel items={detectInfrastructure(profile.activities)} />
           <ClassificationLegend />
         </aside>
       </div>

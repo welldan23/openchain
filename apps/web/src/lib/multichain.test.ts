@@ -5,6 +5,7 @@ import {
   bridgeFeePct,
   columnLeaders,
   comparisonRows,
+  detectInfrastructure,
   filterProfileChains,
   groupActivitiesByDay,
   isEvmAddress,
@@ -132,5 +133,30 @@ describe("tabel perbandingan antar chain", () => {
     const leaders = columnLeaders(comparisonRows(busy));
     expect(leaders).toMatchObject({ txCount: "ethereum", balanceUsd: "ethereum", netUsd: "ethereum" });
     expect(columnLeaders(comparisonRows(quiet))).toEqual({});
+  });
+});
+
+describe("jembatan dan router terdeteksi", () => {
+  it("menggabungkan satu bridge di dua chain dan router per nama", () => {
+    const found = detectInfrastructure(busy.activities);
+    expect(found.map((item) => [item.type, item.label.name, item.interactions])).toEqual([
+      ["router", "Router DEX", 3],
+      ["bridge", "Bridge resmi Arbitrum", 2],
+      ["bridge", "Bridge lintas chain", 1],
+      ["bridge", "Bridge ke Ethereum", 1],
+    ]);
+    const arbitrumBridge = found.find((item) => item.label.name === "Bridge resmi Arbitrum")!;
+    expect(arbitrumBridge.chains).toEqual(["ethereum", "arbitrum"]);
+    expect(arbitrumBridge.addresses).toHaveLength(2);
+    expect(found[0].totalUsd).toBe(6 * 2_480 + 35 * 2_500 + 4 * 2_460);
+  });
+
+  it("pendana: dua kaki bridge (US$3.765 dan US$3.761) lalu router DEX (US$2.994)", () => {
+    expect(detectInfrastructure(funder.activities).map((item) => item.label.name)).toEqual([
+      "Bridge ke Base",
+      "Bridge dari Ethereum",
+      "Router DEX",
+    ]);
+    expect(detectInfrastructure([])).toEqual([]);
   });
 });

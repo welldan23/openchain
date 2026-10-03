@@ -3,7 +3,7 @@
  * beberapa chain dan perpindahan dananya lewat bridge.
  */
 import { wibDateValue } from "./flow-filter";
-import type { ChainActivity, ChainId, CrossChainActivity, MultichainProfile } from "./types";
+import type { ChainActivity, ChainId, CrossChainActivity, EntityLabel, MultichainProfile } from "./types";
 
 export interface MultichainSummary {
   activeChains: ChainId[];
@@ -190,4 +190,52 @@ export function columnLeaders(rows: ComparisonRow[]): Partial<Record<ComparisonK
     if (best && (best[key] as number) > 0) leaders[key] = best.chain;
   }
   return leaders;
+}
+
+/** Jenis infrastruktur yang dikumpulkan panel jembatan & router. */
+export type InfrastructureType = "bridge" | "router";
+
+export interface DetectedInfrastructure {
+  /** Kunci pengelompokan: jenis + nama label. */
+  key: string;
+  type: InfrastructureType;
+  label: EntityLabel;
+  chains: ChainId[];
+  /** Address infrastruktur per chain; satu bridge bisa punya address berbeda di tiap chain. */
+  addresses: Array<{ chain: ChainId; address: string }>;
+  interactions: number;
+  totalUsd: number;
+  lastAt: string;
+}
+
+/**
+ * Bridge dan router yang pernah menjadi lawan transaksi, dikelompokkan per
+ * nama label lintas chain. Terbesar (nilai USD) dulu.
+ */
+export function detectInfrastructure(activities: CrossChainActivity[]): DetectedInfrastructure[] {
+  const groups = new Map<string, DetectedInfrastructure>();
+  for (const activity of activities) {
+    const label = activity.counterpartyLabel;
+    if (!label || (label.type !== "bridge" && label.type !== "router")) continue;
+    const key = `${label.type}:${label.name ?? label.type}`;
+    const group = groups.get(key) ?? {
+      key,
+      type: label.type,
+      label,
+      chains: [],
+      addresses: [],
+      interactions: 0,
+      totalUsd: 0,
+      lastAt: activity.timestamp,
+    };
+    group.interactions += 1;
+    group.totalUsd = round2(group.totalUsd + (activity.amountUsd ?? 0));
+    if (!group.chains.includes(activity.chain)) group.chains.push(activity.chain);
+    if (!group.addresses.some((item) => item.chain === activity.chain && item.address === activity.counterparty)) {
+      group.addresses.push({ chain: activity.chain, address: activity.counterparty });
+    }
+    if (Date.parse(activity.timestamp) > Date.parse(group.lastAt)) group.lastAt = activity.timestamp;
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.totalUsd - a.totalUsd || a.key.localeCompare(b.key));
 }
