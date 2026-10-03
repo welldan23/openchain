@@ -4,7 +4,7 @@ import { ClassificationBadge } from "@/components/classification-badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl } from "@/lib/chains";
-import { formatNumberCompact, formatPct } from "@/lib/format";
+import { formatPct, formatTokenAmount } from "@/lib/format";
 import type { ChainId, HolderConcentration, TokenHolder } from "@/lib/types";
 
 interface HoldersPanelProps {
@@ -70,7 +70,7 @@ export function HoldersPanel({ chain, symbol, concentration, holders }: HoldersP
                   </div>
                 </td>
                 <td className="hidden px-2 py-2.5 text-right tabular-nums sm:table-cell">
-                  {formatNumberCompact(holder.balance)} {symbol}
+                  {formatTokenAmount(holder.balance, symbol)}
                 </td>
                 <td className="py-2.5 pl-2 pr-4 sm:pr-5">
                   <div className="flex items-center justify-end gap-2">

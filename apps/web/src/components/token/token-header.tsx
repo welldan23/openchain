@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { HashLink } from "@/components/ui/hash-link";
 import { explorerAddressUrl, explorerTokenUrl, explorerTxUrl, getChain } from "@/lib/chains";
-import { formatAge, formatDate, formatDateTime, formatNumber } from "@/lib/format";
+import { formatAge, formatDate, formatTokenAmount } from "@/lib/format";
+import { describeSnapshot } from "@/lib/snapshot";
 import type { DataSnapshot, RiskLevel, TokenProfile } from "@/lib/types";
 
 interface TokenHeaderProps {
@@ -15,7 +16,7 @@ interface TokenHeaderProps {
 
 export function TokenHeader({ token, riskLevel, snapshot }: TokenHeaderProps) {
   const chain = getChain(token.chain);
-  const blockLabel = chain.addressFormat === "solana" ? "Slot" : "Blok";
+  const snap = describeSnapshot(snapshot, token.chain);
 
   return (
     <section
@@ -104,21 +105,25 @@ export function TokenHeader({ token, riskLevel, snapshot }: TokenHeaderProps) {
         <div className="min-w-0">
           <dt className="text-muted">Total supply</dt>
           <dd className="mt-1 text-foreground/90">
-            {formatNumber(token.totalSupply)} {token.symbol}
+            {formatTokenAmount(token.totalSupply, token.symbol, { compact: false })}
           </dd>
         </div>
       </dl>
 
       <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-raised px-3 py-2 text-[11px] text-muted">
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex flex-wrap items-center gap-x-1.5">
           <Clock className="size-3.5" aria-hidden />
-          Snapshot data: {formatDateTime(snapshot.fetchedAt)}
+          Snapshot data:{" "}
+          <time dateTime={snapshot.fetchedAt} className="text-foreground/80">
+            {snap.fetchedAt}
+          </time>
+          <span>({snap.fetchedAgo})</span>
         </span>
         <span className="inline-flex items-center gap-1.5">
           <Database className="size-3.5" aria-hidden />
-          {blockLabel} {formatNumber(snapshot.blockNumber)}
+          {snap.position}
         </span>
-        <span>Sumber: {snapshot.sources.join(", ")}</span>
+        <span>Sumber: {snap.sources}</span>
       </p>
     </section>
   );

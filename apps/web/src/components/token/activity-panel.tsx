@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/chains";
-import { formatDateTime, formatNumberCompact, formatUsdCompact, shortenHash } from "@/lib/format";
+import { formatDateTime, formatTokenAmount, formatUsdCompact, shortenHash } from "@/lib/format";
 import { ACTIVITY_META } from "@/lib/labels";
 import type { ChainId, TokenActivity } from "@/lib/types";
 
@@ -61,7 +61,7 @@ export function ActivityPanel({ chain, symbol, activity }: ActivityPanelProps) {
 
               <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:gap-1">
                 <span className="text-xs font-medium tabular-nums">
-                  {formatNumberCompact(item.amount)} {symbol}
+                  {formatTokenAmount(item.amount, symbol)}
                   {item.amountUsd !== undefined ? (
                     <span className="font-normal text-muted"> · {formatUsdCompact(item.amountUsd)}</span>
                   ) : null}
