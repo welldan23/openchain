@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeFilterChips,
   applySearchFilters,
   EMPTY_SEARCH_FILTERS,
+  filterRelaxations,
   isSearchFiltered,
   parseSearchFilters,
   searchFacets,
@@ -71,5 +73,36 @@ describe("filter hasil pencarian", () => {
       { key: "none", count: 0 },
     ]);
     expect(facets.sources).toEqual({ all: 2, external: 1, heuristic: 1 });
+  });
+});
+
+describe("chip filter aktif", () => {
+  const filters = { kind: "address", chains: ["solana", "base"], labels: ["exchange"], source: "external" } as const satisfies Parameters<
+    typeof activeFilterChips
+  >[0];
+
+  it("membuat satu chip per pilihan; membuang chip hanya melepas pilihan itu", () => {
+    const chips = activeFilterChips({ ...filters, chains: [...filters.chains], labels: [...filters.labels] });
+    expect(chips.map((chip) => `${chip.group}: ${chip.value}`)).toEqual([
+      "Jenis: Address",
+      "Jaringan: Solana",
+      "Jaringan: Base",
+      "Label: Exchange",
+      "Sumber: Label eksternal",
+    ]);
+    expect(chips[1].without.chains).toEqual(["base"]);
+    expect(chips[0].without).toMatchObject({ kind: "all", chains: ["solana", "base"] });
+    expect(activeFilterChips(EMPTY_SEARCH_FILTERS)).toEqual([]);
+  });
+
+  it("menyarankan chip yang bila dibuang memunculkan hasil", () => {
+    // Tidak ada address di Solana. Buang jenis → token Solana muncul; buang jaringan → dua address muncul.
+    const strict = { kind: "address", chains: ["solana"], labels: [], source: "all" } as Parameters<typeof activeFilterChips>[0];
+    const relax = filterRelaxations(RESULTS, strict);
+    expect(applySearchFilters(RESULTS, strict)).toEqual([]);
+    expect(relax.map((item) => [item.chip.id, item.count])).toEqual([
+      ["jaringan:solana", 2],
+      ["jenis:address", 1],
+    ]);
   });
 });

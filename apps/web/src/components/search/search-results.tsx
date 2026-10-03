@@ -1,4 +1,4 @@
-import { BadgeCheck, ChevronRight, SearchX, ShieldQuestion, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { BadgeCheck, ChevronRight, SearchX, ShieldQuestion, SlidersHorizontal, TriangleAlert, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { Badge } from "@/components/ui/badge";
@@ -6,8 +6,8 @@ import { EmptyState } from "@/components/ui/states";
 import type { SearchResponse } from "@/lib/api/search";
 import { MIN_TEXT_QUERY } from "@/lib/api/search";
 import { FLOW_DIRECTION_META } from "@/lib/labels";
-import { describeResultMeta, normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
-import { EMPTY_SEARCH_FILTERS, searchFilterHref, type SearchFilters } from "@/lib/search-filter";
+import { describeResultMeta, diagnoseQuery, normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
+import { EMPTY_SEARCH_FILTERS, filterRelaxations, searchFilterHref, type SearchFilters } from "@/lib/search-filter";
 import type { SearchResult, SearchResultMeta } from "@/lib/types";
 import { RESULT_GROUPS } from "./kind-meta";
 
@@ -86,6 +86,10 @@ function NoResults({ response }: { response: SearchResponse }) {
       />
     );
   }
+  const diagnosis = diagnoseQuery(response.query);
+  if (diagnosis) {
+    return <EmptyState icon={TriangleAlert} title="Bentuk isian tidak dikenali" description={diagnosis} />;
+  }
   const exact = response.kind !== "text";
   return (
     <EmptyState
@@ -94,8 +98,8 @@ function NoResults({ response }: { response: SearchResponse }) {
       description={
         exact ? (
           <>
-            {QUERY_KIND_LABEL[response.kind]} ini belum ada di data kami. Pastikan tidak ada karakter yang
-            terpotong saat menyalin. Belum ada data bukan berarti aman.
+            {QUERY_KIND_LABEL[response.kind]} ini belum ada di data kami. Belum ada data bukan berarti aman atau
+            tidak berisiko.
           </>
         ) : (
           <>Coba nama token, simbol, atau nama label lain, atau tempel address/hash transaksi lengkap.</>
@@ -120,19 +124,38 @@ export function SearchResults({
 }) {
   if (response.results.length === 0) return <NoResults response={response} />;
   if (results.length === 0) {
+    const relaxations = filterRelaxations(response.results, filters);
     return (
       <EmptyState
         icon={SlidersHorizontal}
         title="Tidak ada hasil dengan filter ini"
-        description="Longgarkan filter jenis, jaringan, atau label untuk melihat hasil lain."
+        description={`Ada ${response.results.length} hasil untuk pencarian ini, tapi tidak ada yang lolos semua filter sekaligus.`}
         action={
-          <Link
-            href={searchFilterHref(response.query, EMPTY_SEARCH_FILTERS)}
-            scroll={false}
-            className="inline-flex items-center rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
-          >
-            Hapus semua filter
-          </Link>
+          <div className="flex flex-col items-center gap-3">
+            {relaxations.length > 0 ? (
+              <ul className="flex flex-wrap justify-center gap-2" aria-label="Saran melonggarkan filter">
+                {relaxations.map(({ chip, count }) => (
+                  <li key={chip.id}>
+                    <Link
+                      href={searchFilterHref(response.query, chip.without)}
+                      scroll={false}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs transition hover:border-accent/60 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      Buang {chip.group.toLowerCase()} <span className="font-medium">{chip.value}</span>
+                      <span className="text-muted">→ {count} hasil</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <Link
+              href={searchFilterHref(response.query, EMPTY_SEARCH_FILTERS)}
+              scroll={false}
+              className="text-xs text-muted underline-offset-2 transition hover:text-accent hover:underline"
+            >
+              Hapus semua filter
+            </Link>
+          </div>
         }
       />
     );

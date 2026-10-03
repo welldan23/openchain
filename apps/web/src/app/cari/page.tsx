@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { InvestigationHistory } from "@/components/search/investigation-history";
+import { ActiveFilterChips } from "@/components/search/active-filter-chips";
 import { GlobalSearch } from "@/components/search/global-search";
 import { SearchFilterPanel } from "@/components/search/search-filter-panel";
 import { SearchResults } from "@/components/search/search-results";
@@ -102,6 +103,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/cari">) {
                   totalCount={response.results.length}
                 />
               ) : null}
+              <ActiveFilterChips query={response.query} filters={filters} />
               <SearchResults response={response} results={filtered} filters={filters} now={now} />
             </section>
           ) : (

@@ -141,3 +141,68 @@ export function searchFacets(results: SearchResult[], filters: SearchFilters): S
   };
   return { kinds, chains, labels, sources };
 }
+
+/* --------------------------- Chip filter aktif ---------------------------- */
+
+const KIND_NAME: Record<Exclude<ResultKindFilter, "all">, string> = {
+  token: "Token",
+  address: "Address",
+  transaction: "Transaksi",
+};
+
+const SOURCE_NAME: Record<Exclude<LabelSourceFilter, "all">, string> = {
+  external: "Label eksternal",
+  heuristic: "Dugaan OpenChain",
+};
+
+export function labelKeyName(key: LabelFilterKey): string {
+  return key === "none" ? "Tanpa label" : ENTITY_LABEL_META[key].label;
+}
+
+export interface ActiveFilterChip {
+  id: string;
+  /** Nama kelompok filter, mis. "Jaringan". */
+  group: string;
+  value: string;
+  /** Filter setelah chip ini dibuang. */
+  without: SearchFilters;
+}
+
+/** Satu chip untuk tiap pilihan filter yang aktif, urut jenis, jaringan, label, sumber. */
+export function activeFilterChips(filters: SearchFilters): ActiveFilterChip[] {
+  const chips: ActiveFilterChip[] = [];
+  if (filters.kind !== "all") {
+    chips.push({ id: `jenis:${filters.kind}`, group: "Jenis", value: KIND_NAME[filters.kind], without: { ...filters, kind: "all" } });
+  }
+  for (const chain of filters.chains) {
+    chips.push({
+      id: `jaringan:${chain}`,
+      group: "Jaringan",
+      value: CHAINS[chain].name,
+      without: { ...filters, chains: filters.chains.filter((item) => item !== chain) },
+    });
+  }
+  for (const key of filters.labels) {
+    chips.push({
+      id: `label:${key}`,
+      group: "Label",
+      value: labelKeyName(key),
+      without: { ...filters, labels: filters.labels.filter((item) => item !== key) },
+    });
+  }
+  if (filters.source !== "all") {
+    chips.push({ id: `sumber:${filters.source}`, group: "Sumber", value: SOURCE_NAME[filters.source], without: { ...filters, source: "all" } });
+  }
+  return chips;
+}
+
+/**
+ * Untuk tampilan kosong karena filter: berapa hasil yang muncul bila satu
+ * chip dibuang. Hanya chip yang benar-benar memunculkan hasil, terbanyak dulu.
+ */
+export function filterRelaxations(results: SearchResult[], filters: SearchFilters): Array<{ chip: ActiveFilterChip; count: number }> {
+  return activeFilterChips(filters)
+    .map((chip) => ({ chip, count: applySearchFilters(results, chip.without).length }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+}

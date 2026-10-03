@@ -15,7 +15,7 @@ import {
 } from "@/lib/api/search";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatRelativeTime } from "@/lib/format";
-import { classifyQuery, highlightMatch, moveActiveIndex, normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
+import { classifyQuery, diagnoseQuery, highlightMatch, moveActiveIndex, normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
 import type { InvestigationEntry, SearchResult } from "@/lib/types";
 import { INVESTIGATION_KIND_META, RESULT_GROUPS } from "./kind-meta";
 
@@ -390,7 +390,7 @@ export function GlobalSearch({ variant, defaultValue = "", autoFocus = false }: 
                   <p aria-hidden className="px-2.5 py-2 text-xs text-muted">
                     {tooShort
                       ? `Ketik minimal ${MIN_TEXT_QUERY} huruf untuk mencari nama.`
-                      : `Belum ada yang cocok untuk ${QUERY_KIND_LABEL[queryKind].toLowerCase()} ini.`}
+                      : (diagnoseQuery(query) ?? `Belum ada yang cocok untuk ${QUERY_KIND_LABEL[queryKind].toLowerCase()} ini.`)}
                   </p>
                 ) : null}
                 <div className="mt-1 border-t border-line pt-1">

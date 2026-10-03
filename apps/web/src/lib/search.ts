@@ -140,3 +140,31 @@ const RESULT_KIND_FILTERS: ResultKindFilter[] = ["all", "token", "address", "tra
 export function parseResultKindFilter(value: string | undefined): ResultKindFilter {
   return RESULT_KIND_FILTERS.find((filter) => filter === value) ?? "all";
 }
+
+const HEX_BODY = /^0x[0-9a-fA-F]*$/;
+
+/**
+ * Penjelasan untuk isian yang tidak cocok dengan apa pun tapi bentuknya
+ * mirip address atau hash yang terpotong/kelebihan karakter. `null` bila
+ * tidak ada yang perlu dijelaskan.
+ */
+export function diagnoseQuery(raw: string): string | null {
+  const query = raw.trim();
+  if (classifyQuery(query) !== "text") return null;
+  if (/\s/.test(query) && /^0x[0-9a-fA-F]{6,}/.test(query)) {
+    return "Ada spasi di tengah isian. Address dan hash transaksi tidak memakai spasi.";
+  }
+  if (HEX_BODY.test(query) && query.length >= 10) {
+    const length = query.length;
+    if (length < 42) return `Isian ${length} karakter, padahal address EVM 42 karakter. Mungkin ada yang terpotong saat menyalin.`;
+    if (length < 66) return `Isian ${length} karakter: terlalu panjang untuk address EVM (42) dan terlalu pendek untuk hash transaksi (66).`;
+    return `Isian ${length} karakter, lebih panjang dari hash transaksi EVM (66 karakter).`;
+  }
+  if (/^0x/i.test(query) && query.length >= 10) {
+    return "Isian diawali 0x tapi memuat huruf di luar 0–9 dan a–f, jadi bukan address atau hash EVM yang sah.";
+  }
+  if (/^[1-9A-HJ-NP-Za-km-z]{25,}$/.test(query)) {
+    return `Isian ${query.length} karakter. Address Solana 32–44 karakter dan signature transaksi 64–90 karakter; mungkin ada yang terpotong.`;
+  }
+  return null;
+}

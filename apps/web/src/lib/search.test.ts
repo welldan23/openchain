@@ -3,6 +3,7 @@ import {
   classifyQuery,
   dedupeResults,
   describeResultMeta,
+  diagnoseQuery,
   highlightMatch,
   moveActiveIndex,
   normalizeText,
@@ -108,5 +109,23 @@ describe("metadata hasil pencarian", () => {
     expect(parseResultKindFilter("token")).toBe("token");
     expect(parseResultKindFilter("aneh")).toBe("all");
     expect(parseResultKindFilter(undefined)).toBe("all");
+  });
+});
+
+describe("diagnosa isian", () => {
+  it("menjelaskan address atau hash yang terpotong", () => {
+    expect(diagnoseQuery(`0x${"ab".repeat(15)}`)).toMatch(/32 karakter, padahal address EVM 42/);
+    expect(diagnoseQuery(`0x${"ab".repeat(25)}`)).toMatch(/terlalu panjang untuk address EVM/);
+    expect(diagnoseQuery(`0x${"ab".repeat(40)}`)).toMatch(/lebih panjang dari hash transaksi/);
+    expect(diagnoseQuery(`0x${"zz".repeat(20)}`)).toMatch(/bukan address atau hash EVM/);
+    expect(diagnoseQuery("0xabcdef12 34567890")).toMatch(/spasi/);
+    expect(diagnoseQuery("gfiT3SHJHGgq2bhMnP3HqRaV8")).toMatch(/Address Solana 32–44/);
+  });
+
+  it("diam untuk isian yang wajar", () => {
+    expect(diagnoseQuery("nebula")).toBeNull();
+    expect(diagnoseQuery("0x12")).toBeNull();
+    expect(diagnoseQuery(`0x${"ab".repeat(20)}`)).toBeNull();
+    expect(diagnoseQuery("")).toBeNull();
   });
 });
