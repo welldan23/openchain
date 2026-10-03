@@ -3,6 +3,7 @@ import type {
   ContractCheckStatus,
   EntityLabelType,
   FindingClassification,
+  FlowDirection,
   RiskLevel,
   RiskSeverity,
 } from "./types";
@@ -147,4 +148,9 @@ export const CHECK_STATUS_META: Record<ContractCheckStatus, Meta & { iconClass: 
     className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/40",
     iconClass: "text-emerald-400",
   },
+};
+
+export const FLOW_DIRECTION_META: Record<FlowDirection, Meta> = {
+  in: { label: "Masuk", className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30" },
+  out: { label: "Keluar", className: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
 };

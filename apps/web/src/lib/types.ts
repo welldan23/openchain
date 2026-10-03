@@ -190,3 +190,56 @@ export interface TokenSummary {
   symbol: string;
   riskLevel: RiskLevel;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Lacak Aliran Dana                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** Arah transfer relatif terhadap address yang dilacak. */
+export type FlowDirection = "in" | "out";
+
+export interface FlowAsset {
+  symbol: string;
+  /** Address kontrak token; `null` untuk native coin, mis. ETH. */
+  address: string | null;
+}
+
+/**
+ * Satu transfer masuk atau keluar dari address yang dilacak. Transfer adalah
+ * fakta on-chain; label lawan transaksi tetap mengikuti sumber labelnya.
+ */
+export interface FlowTransfer {
+  id: string;
+  direction: FlowDirection;
+  /** Address di sisi lain transfer: pengirim untuk `in`, penerima untuk `out`. */
+  counterparty: string;
+  counterpartyLabel?: EntityLabel;
+  asset: FlowAsset;
+  amount: number;
+  /** Nilai USD saat transaksi; kosong bila harga aset tidak diketahui. */
+  amountUsd?: number;
+  txHash: string;
+  timestamp: string;
+}
+
+/**
+ * Aliran dana satu address dalam rentang waktu tertentu.
+ * Asumsi kontrak API: `GET /flows/:chain/:address` → `AddressFlow`.
+ */
+export interface AddressFlow {
+  chain: ChainId;
+  address: string;
+  label?: EntityLabel;
+  /** Rentang waktu transfer yang dianalisis. */
+  window: { from: string; to: string };
+  transfers: FlowTransfer[];
+  snapshot: DataSnapshot;
+}
+
+/** Ringkasan address untuk daftar/tautan, mis. di beranda. */
+export interface AddressFlowSummary {
+  chain: ChainId;
+  address: string;
+  label?: EntityLabel;
+  transferCount: number;
+}
