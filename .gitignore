@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+
+# env files
+.env*
+!.env.example
+
+# NgodingPakeAI local scan output (config.json is safe to commit)
+.ngodingpakeai/index/
+.ngodingpakeai/pending.json
+.ngodingpakeai/summaries.json
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
