@@ -4,10 +4,12 @@ import { cache } from "react";
 import { CounterpartiesPanel } from "@/components/flow/counterparties-panel";
 import { FlowHeader } from "@/components/flow/flow-header";
 import { FlowStats } from "@/components/flow/flow-stats";
+import { TracesPanel } from "@/components/flow/traces-panel";
 import { TransfersPanel } from "@/components/flow/transfers-panel";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { getAddressFlow } from "@/lib/api/flows";
+import { listTracesForAddress } from "@/lib/api/traces";
 import { isChainId } from "@/lib/chains";
 import { shortenHash } from "@/lib/format";
 import { addressTitle, sortTransfersNewestFirst, summarizeFlow, topCounterparties } from "@/lib/fund-flow";
@@ -36,6 +38,7 @@ export default async function FlowPage({ params }: PageProps<"/flow/[chain]/[add
   if (!flow) notFound();
 
   const totals = summarizeFlow(flow.chain, flow.transfers);
+  const traces = await listTracesForAddress(flow.chain, flow.address);
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
@@ -52,7 +55,8 @@ export default async function FlowPage({ params }: PageProps<"/flow/[chain]/[add
         <div className="min-w-0 lg:col-span-2">
           <TransfersPanel chain={flow.chain} transfers={sortTransfersNewestFirst(flow.transfers)} />
         </div>
-        <aside className="min-w-0" aria-label="Keterangan">
+        <aside className="min-w-0 space-y-5" aria-label="Telusur dan keterangan">
+          <TracesPanel traces={traces} />
           <ClassificationLegend />
         </aside>
       </div>

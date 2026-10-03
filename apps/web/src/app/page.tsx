@@ -1,13 +1,18 @@
-import { ChevronRight, TriangleAlert, Waypoints } from "lucide-react";
+import { ChevronRight, Footprints, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { flowFailureDemoPath, flowPath, listSampleFlows } from "@/lib/api/flows";
 import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
+import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
 import { shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
 
 export default async function Home() {
-  const [samples, flows] = await Promise.all([listSampleTokens(), listSampleFlows()]);
+  const [samples, flows, traces] = await Promise.all([
+    listSampleTokens(),
+    listSampleFlows(),
+    listSampleTraces(),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
@@ -105,14 +110,56 @@ export default async function Home() {
         </ul>
       </section>
 
+      <section aria-labelledby="sample-trace-title" className="mt-10">
+        <h2 id="sample-trace-title" className="text-sm font-semibold">
+          Coba telusur antar wallet
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Ikuti jejak dana dari satu wallet ke wallet lain, langkah demi langkah.
+        </p>
+        <ul className="mt-4 space-y-3">
+          {traces.map((trace) => (
+            <li key={`${trace.chain}:${trace.from}:${trace.to}`}>
+              <Link
+                href={tracePath(trace.chain, trace.from, trace.to)}
+                className="group flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-accent/50"
+              >
+                <span
+                  aria-hidden
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent ring-1 ring-accent/30"
+                >
+                  <Footprints className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">
+                    {addressTitle(trace.fromLabel)} → {addressTitle(trace.toLabel)}
+                  </span>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <ChainBadge chain={trace.chain} />
+                    <span className="text-[11px] text-muted">
+                      {trace.hopCount > 0 ? `${trace.hopCount} langkah` : "Tidak ada jalur"}
+                    </span>
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent"
+                  aria-hidden
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section aria-labelledby="states-title" className="mt-10">
         <h2 id="states-title" className="text-sm font-semibold">
           Coba tampilan status
         </h2>
         <p className="mt-1 text-xs text-muted">
           Sunyi Protocol di atas memperlihatkan tampilan saat data token belum ada, dan wallet tanpa label
-          memperlihatkan tampilan saat belum ada transfer. Kedua halaman juga menampilkan kerangka loading
-          sebentar sebelum datanya muncul.
+          memperlihatkan tampilan saat belum ada transfer. Jalur tanpa langkah memperlihatkan tampilan saat
+          dua wallet tidak terhubung. Semua halaman juga menampilkan kerangka loading sebentar sebelum
+          datanya muncul.
         </p>
         <Link
           href={failureDemoPath()}
@@ -143,6 +190,24 @@ export default async function Home() {
             <span className="block font-medium">Simulasi aliran dana gagal dimuat</span>
             <span className="mt-0.5 block text-xs text-muted">
               Membuka address yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
+        <Link
+          href={traceFailureDemoPath()}
+          className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi jalur dana gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka jalur yang sengaja dibuat gagal untuk melihat tampilan error.
             </span>
           </span>
           <ChevronRight

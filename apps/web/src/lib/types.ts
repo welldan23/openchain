@@ -243,3 +243,45 @@ export interface AddressFlowSummary {
   label?: EntityLabel;
   transferCount: number;
 }
+
+/** Satu langkah perpindahan dana di jalur antar wallet. */
+export interface TraceHop {
+  from: string;
+  fromLabel?: EntityLabel;
+  to: string;
+  toLabel?: EntityLabel;
+  asset: FlowAsset;
+  amount: number;
+  amountUsd?: number;
+  txHash: string;
+  timestamp: string;
+}
+
+/**
+ * Jalur dana dari satu wallet ke wallet lain, langkah demi langkah.
+ * Tiap langkah adalah transfer on-chain; anggapan bahwa dananya "sama"
+ * dari langkah ke langkah adalah heuristic.
+ * Asumsi kontrak API: `GET /traces/:chain/:from/:to` → `WalletTrace`.
+ */
+export interface WalletTrace {
+  chain: ChainId;
+  from: string;
+  fromLabel?: EntityLabel;
+  to: string;
+  toLabel?: EntityLabel;
+  /** Batas langkah yang dicari; jalur lebih panjang tidak ditampilkan. */
+  maxHops: number;
+  /** Kosong bila tidak ada jalur dalam batas langkah. */
+  hops: TraceHop[];
+  snapshot: DataSnapshot;
+}
+
+/** Ringkasan jalur untuk daftar/tautan. */
+export interface WalletTraceSummary {
+  chain: ChainId;
+  from: string;
+  fromLabel?: EntityLabel;
+  to: string;
+  toLabel?: EntityLabel;
+  hopCount: number;
+}
