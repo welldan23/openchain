@@ -10,10 +10,12 @@ import { EmptyState } from "@/components/ui/states";
 import { explorerAddressUrl } from "@/lib/chains";
 import { cn } from "@/lib/cn";
 import { evidenceFromTransfers } from "@/lib/evidence";
+import { flowEmptyKind } from "@/lib/flow-filter";
 import { formatDateTime, formatTokenAmount, formatUsdCompact } from "@/lib/format";
 import { filterTransfers, type DirectionFilter } from "@/lib/fund-flow";
 import { FLOW_DIRECTION_META } from "@/lib/labels";
 import type { ChainId, EntityLabel, FlowTransfer } from "@/lib/types";
+import { FlowEmptyState } from "./flow-empty-state";
 
 /** Jumlah baris yang tampil sebelum tombol "Tampilkan lebih banyak". */
 const PAGE_SIZE = 8;
@@ -24,8 +26,8 @@ const TABS: Array<{ id: DirectionFilter; label: string; totalLabel: string }> = 
   { id: "out", label: "Keluar", totalLabel: "Total keluar" },
 ];
 
-const EMPTY_TEXT: Record<DirectionFilter, string> = {
-  all: "Transfer masuk dan keluar akan muncul di sini setelah terindeks dari blockchain.",
+/** Untuk tab Masuk/Keluar yang kosong walau ada transfer di arah lain. */
+const EMPTY_TEXT: Record<Exclude<DirectionFilter, "all">, string> = {
   in: "Address ini belum menerima dana pada rentang waktu yang dipilih.",
   out: "Address ini belum mengirim dana pada rentang waktu yang dipilih.",
 };
@@ -79,18 +81,23 @@ interface FundFlowListProps {
   owner: { address: string; label?: EntityLabel };
   /** Sudah diurutkan dari yang terbaru. */
   transfers: FlowTransfer[];
+  /** Jumlah transfer sebelum filter waktu. */
+  totalCount: number;
+  /** Tautan halaman yang sama tanpa filter waktu. */
+  resetHref: string;
 }
 
 /**
  * Daftar dana masuk & keluar dengan tab arah. Setiap tab menyebut jumlah
  * transfer dan total USD-nya; transfer tanpa harga disebut terpisah.
  */
-export function FundFlowList({ chain, owner, transfers }: FundFlowListProps) {
+export function FundFlowList({ chain, owner, transfers, totalCount, resetHref }: FundFlowListProps) {
   const [filter, setFilter] = useState<DirectionFilter>("all");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const active = TABS.find((tab) => tab.id === filter)!;
   const { items, totalUsd, unpricedCount } = filterTransfers(transfers, filter);
   const shown = items.slice(0, visible);
+  const emptyKind = flowEmptyKind(totalCount, transfers.length);
   // Bukti mencakup semua transfer, jadi tautan bukti tetap terbuka walau barisnya di tab lain.
   const evidence = useMemo(() => evidenceFromTransfers(chain, owner, transfers), [chain, owner, transfers]);
 
@@ -130,8 +137,10 @@ export function FundFlowList({ chain, owner, transfers }: FundFlowListProps) {
           </p>
         </div>
 
-        {items.length === 0 ? (
-          <EmptyState title={filter === "all" ? "Belum ada transfer" : `Belum ada dana ${active.label.toLowerCase()}`} description={EMPTY_TEXT[filter]} />
+        {emptyKind ? (
+          <FlowEmptyState kind={emptyKind} totalCount={totalCount} resetHref={resetHref} />
+        ) : items.length === 0 && filter !== "all" ? (
+          <EmptyState title={`Belum ada dana ${active.label.toLowerCase()}`} description={EMPTY_TEXT[filter]} />
         ) : (
           <>
             <ol className="divide-y divide-line">

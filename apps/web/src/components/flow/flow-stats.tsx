@@ -1,3 +1,4 @@
+import { ClassificationBadge } from "@/components/classification-badge";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatUsdCompact } from "@/lib/format";
 import type { FlowTotals } from "@/lib/fund-flow";
@@ -47,12 +48,15 @@ export function FlowStats({ totals }: { totals: FlowTotals }) {
           sub={pricedNote}
         />
       </dl>
-      {totals.unpricedCount > 0 ? (
-        <p className="text-[11px] text-muted">
-          {totals.unpricedCount} transfer memakai aset yang harganya tidak diketahui, jadi tidak ikut
-          dijumlahkan ke nilai USD. Jumlah tokennya tetap tercatat di daftar transfer.
-        </p>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+        <ClassificationBadge classification="calculation" />
+        <span>
+          Dijumlahkan dari transfer pada snapshot, memakai nilai USD saat transaksi.
+          {totals.unpricedCount > 0
+            ? ` ${totals.unpricedCount} transfer memakai aset yang harganya tidak diketahui, jadi tidak ikut dijumlahkan. Jumlah tokennya tetap tercatat di daftar transfer.`
+            : null}
+        </span>
+      </div>
     </section>
   );
 }

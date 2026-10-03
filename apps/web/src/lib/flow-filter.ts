@@ -125,3 +125,14 @@ export function flowFilterHref(chain: ChainId, address: string, params: FlowFilt
 export function wibDateValue(iso: string): string {
   return new Date(Date.parse(iso) + 7 * HOUR_MS).toISOString().slice(0, 10);
 }
+
+/**
+ * Alasan daftar kosong: address memang belum punya transfer (`no-data`), atau
+ * semua transfernya ada di luar rentang filter (`filtered`).
+ */
+export type FlowEmptyKind = "no-data" | "filtered";
+
+export function flowEmptyKind(totalCount: number, shownCount: number): FlowEmptyKind | null {
+  if (shownCount > 0) return null;
+  return totalCount === 0 ? "no-data" : "filtered";
+}

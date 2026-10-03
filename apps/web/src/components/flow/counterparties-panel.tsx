@@ -3,10 +3,11 @@ import type { LucideIcon } from "lucide-react";
 import { BarList } from "@/components/charts/bar-list";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { Panel } from "@/components/ui/panel";
-import { EmptyState } from "@/components/ui/states";
 import { SERIES_1 } from "@/lib/chart-colors";
+import type { FlowEmptyKind } from "@/lib/flow-filter";
 import { formatUsdCompact, shortenHash } from "@/lib/format";
 import { addressTitle, type CounterpartyFlow } from "@/lib/fund-flow";
+import { FlowEmptyState } from "./flow-empty-state";
 
 function counterpartyName(item: CounterpartyFlow): string {
   return item.label ? addressTitle(item.label) : shortenHash(item.address);
@@ -64,9 +65,11 @@ function CounterpartySide({ id, title, icon: Icon, items, emptyText }: SideProps
 interface CounterpartiesPanelProps {
   sources: CounterpartyFlow[];
   destinations: CounterpartyFlow[];
+  /** Diisi bila tidak ada transfer yang tampil. */
+  empty: { kind: FlowEmptyKind; totalCount: number; resetHref: string } | null;
 }
 
-export function CounterpartiesPanel({ sources, destinations }: CounterpartiesPanelProps) {
+export function CounterpartiesPanel({ sources, destinations, empty }: CounterpartiesPanelProps) {
   return (
     <Panel
       id="lawan-transaksi"
@@ -75,11 +78,8 @@ export function CounterpartiesPanel({ sources, destinations }: CounterpartiesPan
       icon={Users}
       action={<ClassificationBadge classification="calculation" />}
     >
-      {sources.length === 0 && destinations.length === 0 ? (
-        <EmptyState
-          title="Belum ada lawan transaksi"
-          description="Address ini belum mengirim atau menerima dana pada rentang waktu yang dipilih."
-        />
+      {empty ? (
+        <FlowEmptyState {...empty} />
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <CounterpartySide

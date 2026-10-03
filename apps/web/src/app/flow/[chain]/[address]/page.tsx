@@ -12,7 +12,7 @@ import { ClassificationLegend } from "@/components/token/classification-legend";
 import { getAddressFlow, listFlowChains } from "@/lib/api/flows";
 import { listTracesForAddress } from "@/lib/api/traces";
 import { isChainId } from "@/lib/chains";
-import { filterByTime, firstParam, resolveTimeFilter } from "@/lib/flow-filter";
+import { filterByTime, firstParam, flowEmptyKind, flowFilterHref, resolveTimeFilter } from "@/lib/flow-filter";
 import { shortenHash } from "@/lib/format";
 import { addressTitle, sortTransfersNewestFirst, summarizeFlow, topCounterparties } from "@/lib/fund-flow";
 
@@ -45,6 +45,8 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
   );
   const transfers = filterByTime(flow.transfers, filter);
   const totals = summarizeFlow(flow.chain, transfers);
+  const resetHref = flowFilterHref(flow.chain, flow.address, {});
+  const emptyKind = flowEmptyKind(flow.transfers.length, transfers.length);
   const [traces, chains] = await Promise.all([
     listTracesForAddress(flow.chain, flow.address),
     listFlowChains(flow.chain, flow.address),
@@ -67,6 +69,7 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
       <CounterpartiesPanel
         sources={topCounterparties(flow.chain, transfers, "in")}
         destinations={topCounterparties(flow.chain, transfers, "out")}
+        empty={emptyKind ? { kind: emptyKind, totalCount: flow.transfers.length, resetHref } : null}
       />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}
@@ -76,6 +79,8 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
             chain={flow.chain}
             owner={{ address: flow.address, label: flow.label }}
             transfers={sortTransfersNewestFirst(transfers)}
+            totalCount={flow.transfers.length}
+            resetHref={resetHref}
           />
         </div>
         <aside className="min-w-0 space-y-5" aria-label="Telusur dan keterangan">

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { describeRange, filterByTime, firstParam, flowFilterHref, resolveTimeFilter, wibDateValue } from "./flow-filter";
+import {
+  describeRange,
+  filterByTime,
+  firstParam,
+  flowEmptyKind,
+  flowFilterHref,
+  resolveTimeFilter,
+  wibDateValue,
+} from "./flow-filter";
 import { MOCK_FLOWS } from "./mock/flows";
 
 const funder = MOCK_FLOWS[0];
@@ -80,5 +88,13 @@ describe("tanggal input", () => {
   it("memakai tanggal WIB, bukan UTC", () => {
     expect(wibDateValue("2026-09-19T17:00:00.000Z")).toBe("2026-09-20");
     expect(wibDateValue("2026-10-03T04:30:00.000Z")).toBe("2026-10-03");
+  });
+});
+
+describe("alasan daftar kosong", () => {
+  it("membedakan address tanpa transfer dan hasil filter kosong", () => {
+    expect(flowEmptyKind(0, 0)).toBe("no-data");
+    expect(flowEmptyKind(13, 0)).toBe("filtered");
+    expect(flowEmptyKind(13, 5)).toBeNull();
   });
 });

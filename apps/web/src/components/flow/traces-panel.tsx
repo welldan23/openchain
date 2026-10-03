@@ -1,6 +1,8 @@
 import { ChevronRight, Footprints } from "lucide-react";
 import Link from "next/link";
+import { ClassificationBadge } from "@/components/classification-badge";
 import { Panel } from "@/components/ui/panel";
+import { EmptyState } from "@/components/ui/states";
 import { tracePath } from "@/lib/api/traces";
 import { addressTitle } from "@/lib/fund-flow";
 import type { WalletTraceSummary } from "@/lib/types";
@@ -13,9 +15,14 @@ export function TracesPanel({ traces }: { traces: WalletTraceSummary[] }) {
       title="Telusur antar wallet"
       description="Jalur dana yang melewati address ini, bisa dibuka langkah demi langkah."
       icon={Footprints}
+      action={<ClassificationBadge classification="heuristic" />}
     >
       {traces.length === 0 ? (
-        <p className="text-xs text-muted">Belum ada jalur tersimpan yang melewati address ini.</p>
+        <EmptyState
+          icon={Footprints}
+          title="Belum ada jalur"
+          description="Belum ada jalur dana yang melewati address ini di chain ini."
+        />
       ) : (
         <ul className="space-y-2">
           {traces.map((trace) => (
