@@ -1,19 +1,21 @@
-import { ChevronRight, Footprints, Network, TriangleAlert, Waypoints } from "lucide-react";
+import { ChevronRight, Footprints, Globe2, Network, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { flowFailureDemoPath, flowPath, listSampleFlows } from "@/lib/api/flows";
 import { listSampleMaps, mapFailureDemoPath, mapPath } from "@/lib/api/maps";
+import { listSampleMultichain, multichainFailureDemoPath, multichainPath } from "@/lib/api/multichain";
 import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
 import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
 import { shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
 
 export default async function Home() {
-  const [samples, flows, traces, maps] = await Promise.all([
+  const [samples, flows, traces, maps, multichain] = await Promise.all([
     listSampleTokens(),
     listSampleFlows(),
     listSampleTraces(),
     listSampleMaps(),
+    listSampleMultichain(),
   ]);
 
   return (
@@ -195,6 +197,47 @@ export default async function Home() {
         </ul>
       </section>
 
+      <section aria-labelledby="sample-multichain-title" className="mt-10">
+        <h2 id="sample-multichain-title" className="text-sm font-semibold">
+          Coba jelajah multichain
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Bandingkan aktivitas satu address EVM di beberapa chain dan lihat perpindahannya lewat bridge.
+        </p>
+        <ul className="mt-4 space-y-3">
+          {multichain.map((profile) => (
+            <li key={profile.address}>
+              <Link
+                href={multichainPath(profile.address)}
+                className="group flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-accent/50"
+              >
+                <span
+                  aria-hidden
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent ring-1 ring-accent/30"
+                >
+                  <Globe2 className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{addressTitle(profile.label)}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {profile.activeChains.length > 0 ? (
+                      profile.activeChains.map((chain) => <ChainBadge key={chain} chain={chain} />)
+                    ) : (
+                      <span className="text-[11px] text-muted">Belum aktif di chain mana pun</span>
+                    )}
+                    <span className="font-mono text-[11px] text-muted">{shortenHash(profile.address)}</span>
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent"
+                  aria-hidden
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section aria-labelledby="states-title" className="mt-10">
         <h2 id="states-title" className="text-sm font-semibold">
           Coba tampilan status
@@ -270,6 +313,24 @@ export default async function Home() {
             <span className="block font-medium">Simulasi peta hubungan gagal dimuat</span>
             <span className="mt-0.5 block text-xs text-muted">
               Membuka peta yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
+        <Link
+          href={multichainFailureDemoPath()}
+          className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi data lintas chain gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka address yang sengaja dibuat gagal untuk melihat tampilan error.
             </span>
           </span>
           <ChevronRight

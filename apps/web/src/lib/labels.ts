@@ -240,3 +240,21 @@ export const COORDINATION_TX_ACTION_META: Record<CoordinationTxAction, Meta> = {
   add_liquidity: { label: "Tambah likuiditas", className: "bg-teal-500/15 text-teal-300 ring-teal-400/30" },
   transfer: { label: "Transfer", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
 };
+
+export const BRIDGE_STATUS_META: Record<"matched" | "pending" | "unmatched", Meta & { description: string }> = {
+  matched: {
+    label: "Cocok",
+    description: "Penerimaan di chain tujuan ditemukan dengan jumlah dan waktu yang masuk akal.",
+    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30",
+  },
+  pending: {
+    label: "Menunggu",
+    description: "Kiriman masih baru; penerimaan di chain tujuan bisa belum terjadi.",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/30",
+  },
+  unmatched: {
+    label: "Belum ketemu",
+    description: "Penerimaan di chain tujuan belum ditemukan. Bisa ke address lain atau lewat jalur yang belum terbaca.",
+    className: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
+  },
+};

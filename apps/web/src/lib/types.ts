@@ -442,3 +442,66 @@ export interface WalletMapSummary {
   walletCount: number;
   clusterCount: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Jelajah Multichain                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** Aktivitas satu address di satu chain selama periode data. */
+export interface ChainActivity {
+  chain: ChainId;
+  txCount: number;
+  inUsd: number;
+  outUsd: number;
+  counterpartyCount: number;
+  /** Kosong bila belum pernah aktif di chain ini. */
+  firstSeen?: string;
+  lastSeen?: string;
+  /** Saldo native coin dalam USD pada snapshot. */
+  balanceUsd: number;
+  /** Nomor blok snapshot chain ini. */
+  snapshotBlock: number;
+}
+
+/** Status pencocokan kiriman bridge di chain asal dengan penerimaan di chain tujuan. */
+export type BridgeMatchStatus = "matched" | "pending" | "unmatched";
+
+/** Perpindahan dana antar chain lewat bridge. */
+export interface BridgeMove {
+  id: string;
+  fromChain: ChainId;
+  toChain: ChainId;
+  bridge: EntityLabel;
+  asset: FlowAsset;
+  amountSent: number;
+  /** Jumlah yang diterima di chain tujuan; kosong bila belum ditemukan. */
+  amountReceived?: number;
+  amountUsd?: number;
+  sentTxHash: string;
+  sentAt: string;
+  receivedTxHash?: string;
+  receivedAt?: string;
+  status: BridgeMatchStatus;
+}
+
+/**
+ * Aktivitas satu address EVM di semua chain EVM yang didukung.
+ * Asumsi kontrak API: `GET /multichain/:address` → `MultichainProfile`.
+ */
+export interface MultichainProfile {
+  address: string;
+  label?: EntityLabel;
+  window: { from: string; to: string };
+  /** Semua chain dengan format address yang sama, termasuk yang tidak aktif. */
+  chains: ChainActivity[];
+  bridges: BridgeMove[];
+  fetchedAt: string;
+  sources: string[];
+}
+
+/** Ringkasan profil untuk daftar/tautan. */
+export interface MultichainProfileSummary {
+  address: string;
+  label?: EntityLabel;
+  activeChains: ChainId[];
+}
