@@ -66,4 +66,18 @@ describe('FallbackRpcProvider', () => {
     const dua = endpoint('rpc-2', { getCode: '0x60' });
     await expect(new FallbackRpcProvider('bsc-rpc', [rusak, dua]).getCode('0x1', 1)).rejects.toBeInstanceOf(TypeError);
   });
+
+  it('mencoba endpoint lain bila receipt kosong, karena node bisa sudah memangkas riwayat', async () => {
+    const dipangkas = endpoint('rpc-1', { getTransactionReceipt: null });
+    const lengkap = endpoint('rpc-2', { getTransactionReceipt: { transactionHash: '0xab' } });
+    await expect(new FallbackRpcProvider('eth-rpc', [dipangkas, lengkap]).getTransactionReceipt('0xab')).resolves.toEqual({
+      transactionHash: '0xab',
+    });
+  });
+
+  it('mengembalikan null bila semua endpoint yang menjawab bilang kosong', async () => {
+    const kosong = endpoint('rpc-1', { getTransaction: null });
+    const mati = endpoint('rpc-2', { getTransaction: new ProviderError('rpc-2', 'Koneksi gagal') });
+    await expect(new FallbackRpcProvider('eth-rpc', [kosong, mati]).getTransaction('0xab')).resolves.toBeNull();
+  });
 });

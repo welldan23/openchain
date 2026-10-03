@@ -7,6 +7,11 @@
  *
  * Revert kontrak tidak memicu perpindahan: itu jawaban sah dari chain, dan
  * endpoint lain akan memberi jawaban yang sama.
+ *
+ * Jawaban kosong untuk blok, transaksi, dan receipt juga dicoba ke endpoint
+ * berikutnya. Node yang riwayatnya dipangkas atau sedikit tertinggal menjawab
+ * `null` walau datanya ada di chain. Hasil `null` baru dipakai bila semua
+ * endpoint menjawab kosong.
  */
 import {
   ProviderError,
@@ -62,15 +67,15 @@ export class FallbackRpcProvider implements RpcProvider {
   }
 
   getBlock(block: BlockTag): Promise<EvmBlock | null> {
-    return this.first((endpoint) => endpoint.getBlock(block));
+    return this.first((endpoint) => endpoint.getBlock(block), true);
   }
 
   getTransaction(hash: string): Promise<EvmTransaction | null> {
-    return this.first((endpoint) => endpoint.getTransaction(hash));
+    return this.first((endpoint) => endpoint.getTransaction(hash), true);
   }
 
   getTransactionReceipt(hash: string): Promise<EvmReceipt | null> {
-    return this.first((endpoint) => endpoint.getTransactionReceipt(hash));
+    return this.first((endpoint) => endpoint.getTransactionReceipt(hash), true);
   }
 
   getLogs(filter: EvmLogFilter): Promise<EvmLog[]> {
@@ -93,17 +98,25 @@ export class FallbackRpcProvider implements RpcProvider {
     return this.first((endpoint) => endpoint.traceTransaction(hash));
   }
 
-  /** Jawaban pertama yang berhasil; endpoint yang gagal dilewati. */
-  private async first<T>(run: (endpoint: RpcProvider) => Promise<T>): Promise<T> {
+  /**
+   * Jawaban pertama yang berhasil; endpoint yang gagal dilewati. Dengan
+   * `skipEmpty`, jawaban `null` juga dilewati selama masih ada endpoint lain.
+   */
+  private async first<T>(run: (endpoint: RpcProvider) => Promise<T>, skipEmpty = false): Promise<T> {
     const failures: PromiseSettledResult<T>[] = [];
+    let empty = false;
     for (const endpoint of this.endpoints) {
       try {
-        return await run(endpoint);
+        const result = await run(endpoint);
+        if (!(skipEmpty && result === null)) return result;
+        empty = true;
       } catch (error) {
         if (error instanceof RpcRevertError || !(error instanceof ProviderError)) throw error;
         failures.push({ status: 'rejected', reason: error });
       }
     }
+    // Minimal satu endpoint menjawab sah bahwa datanya kosong.
+    if (empty) return null as T;
     if (this.endpoints.length === 1) throw (failures[0] as PromiseRejectedResult).reason;
     throw new ProviderError(this.name, `Semua RPC gagal: ${this.describeFailures(failures)}`);
   }

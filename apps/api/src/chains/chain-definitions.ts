@@ -69,7 +69,9 @@ export const EVM_CHAIN_DEFINITIONS: readonly EvmChainDefinition[] = [
     name: 'Ethereum',
     ...EVM_MODELS,
     evmChainId: 1,
-    rpc: { defaultUrls: ['https://ethereum-rpc.publicnode.com', 'https://eth.drpc.org'] },
+    // 0xrpc menyimpan semua blok dan receipt, jadi tx lama (mis. pembuatan
+    // token) tetap bisa diverifikasi walau publicnode sudah memangkasnya.
+    rpc: { defaultUrls: ['https://ethereum-rpc.publicnode.com', 'https://0xrpc.io/eth', 'https://eth.drpc.org'] },
     blockscout: { instanceUrl: 'https://eth.blockscout.com', proApi: true },
     dexscreenerSlug: 'ethereum',
     smokeTestToken: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH' },

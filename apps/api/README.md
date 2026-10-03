@@ -126,7 +126,9 @@ Request yang gagal karena batas rate (HTTP 429), error server (5xx), timeout,
 atau gangguan koneksi dicoba ulang sampai 3 kali dengan jeda yang makin panjang.
 
 Setiap chain bisa memakai beberapa endpoint RPC. Bila endpoint pertama gagal
-atau menolak sebuah method, panggilan pindah ke endpoint berikutnya. Revert
+atau menolak sebuah method, panggilan pindah ke endpoint berikutnya. Jawaban
+kosong untuk blok, transaksi, dan receipt juga dicoba ke endpoint berikutnya,
+karena node yang riwayatnya dipangkas menjawab kosong walau datanya ada. Revert
 kontrak tidak memicu perpindahan karena itu jawaban sah dari chain. Chain ID
 ditanyakan ke semua endpoint dan wajib sama, supaya URL yang salah chain
 langsung ketahuan. Default saat ini:
@@ -134,7 +136,7 @@ langsung ketahuan. Default saat ini:
 | Chain | RPC utama | Cadangan |
 | --- | --- | --- |
 | Robinhood Chain | rpc.mainnet.chain.robinhood.com (resmi) | publicnode |
-| Ethereum | publicnode | dRPC |
+| Ethereum | publicnode | 0xrpc (menyimpan semua receipt), dRPC |
 | Base | mainnet.base.org (resmi) | publicnode |
 | BNB Chain | bsc-dataseed.bnbchain.org (resmi) | publicnode |
 | Arbitrum One | arb1.arbitrum.io (resmi) | publicnode |
@@ -187,8 +189,9 @@ server yang dipakai. Beberapa catatan:
   explorer menyusul.
 - **HyperEVM:** explorer Blockscout-nya sedang dialihkan, jadi explorer dan
   indexer menyusul.
-- **Node non-archive:** sering tidak menyimpan indeks transaksi lama. Data
-  deployer token yang sudah lama bisa kosong, dan alasannya tercatat.
+- **Node non-archive:** sering tidak menyimpan indeks transaksi lama. Di
+  Ethereum ini ditutup oleh 0xrpc; di chain lain data deployer token yang sudah
+  lama bisa kosong, dan alasannya tercatat.
 
 ## Audit sumber data
 
