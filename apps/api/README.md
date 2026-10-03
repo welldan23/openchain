@@ -164,8 +164,10 @@ server yang dipakai. Beberapa catatan:
   `partial`.
 - **BNB Chain:** belum ada RPC publik gratis yang melayani semua method minimum.
   RPC resmi menolak `eth_getLogs`, dan publicnode menolak receipt tanpa token.
-  Isi `RPC_URL_BSC`. Blockscout juga tidak meng-host BNB Chain, jadi explorer
-  menyusul.
+  Isi `RPC_URL_BSC`. Dari daftar RPC publik chainlist, `https://xrpc.cl/bsc`
+  lolos smoke test RPC (3 Oktober 2026), tapi penyedianya pihak ketiga yang
+  belum dikenal, jadi tidak dijadikan default. Blockscout juga tidak meng-host
+  BNB Chain, jadi explorer menyusul.
 - **HyperEVM:** explorer Blockscout-nya sedang dialihkan, jadi explorer dan
   indexer menyusul.
 - **Node non-archive:** sering tidak menyimpan indeks transaksi lama. Data
