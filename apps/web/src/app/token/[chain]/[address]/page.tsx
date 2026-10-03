@@ -50,6 +50,7 @@ export default async function TokenPage({ params }: PageProps<"/token/[chain]/[a
           <HoldersPanel
             chain={token.chain}
             symbol={token.symbol}
+            totalSupply={token.totalSupply}
             concentration={holders.concentration}
             holders={holders.top}
           />
