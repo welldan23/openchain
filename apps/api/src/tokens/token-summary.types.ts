@@ -43,13 +43,17 @@ export interface ProviderSource {
   missingFields: string[];
 }
 
-export interface SnapshotInfo {
+/** Blok, waktu, dan status snapshot; dipakai semua endpoint token. */
+export interface SnapshotHeader {
   blockNumber: number;
   fetchedAt: string;
   /** Status saat data diambil. */
   collectedStatus: DataStatus;
   /** Status sekarang; `stale` bila snapshot sudah terlalu lama. */
   dataStatus: DataStatus;
+}
+
+export interface SnapshotInfo extends SnapshotHeader {
   sources: ProviderSource[];
 }
 

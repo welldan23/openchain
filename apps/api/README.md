@@ -56,6 +56,20 @@ provider.
 - Respons error: `404` untuk chain, token, atau snapshot yang tidak ada, dan
   `400` untuk format address atau nomor blok yang salah.
 
+### `GET /api/tokens/:chain/:address/contract-checks`
+
+Hasil cek kontrak: izin dan fungsi yang bisa merugikan holder, misalnya pajak
+yang bisa diubah owner atau mint authority yang masih aktif.
+
+- Urutan pemeriksaan: berisiko (`fail`), perlu perhatian (`warn`), belum dicek
+  (`unknown`), lalu lolos (`pass`). `summary` berisi jumlah per status.
+- Tiap pemeriksaan membawa klasifikasi dan daftar bukti: hash, blok, waktu,
+  address terkait, method, penjelasan, dan `explorerUrl` bila chain punya
+  explorer.
+- Pemeriksaan yang belum dijalankan berstatus `unknown` tanpa klasifikasi.
+- Parameter `?block=`, status data, dan respons error sama dengan endpoint
+  ringkasan.
+
 ## Skema data token
 
 Skema ada di `src/database/schema`, migrasinya di `drizzle/`.

@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { normalizeAddress } from '../../src/database/identifiers.js';
+import { buildEvidenceKey, normalizeAddress } from '../../src/database/identifiers.js';
 import * as schema from '../../src/database/schema/index.js';
 
 export type TestDatabase = PgliteDatabase<typeof schema>;
@@ -120,4 +120,57 @@ export async function seedToken(db: TestDatabase, options: SeedTokenOptions) {
     .values(runs.map((run) => ({ snapshotId: latestSnapshot.id, providerRunId: run.id })));
 
   return { token, address, snapshots: [olderSnapshot, latestSnapshot] };
+}
+
+/** Hash transaksi EVM uji yang deterministik. */
+export function testTxHash(seed: string): string {
+  return `0x${Buffer.from(seed.padEnd(32, '.')).toString('hex').slice(0, 64)}`;
+}
+
+/** Isi hasil cek kontrak uji beserta buktinya pada sebuah snapshot. */
+export async function seedContractChecks(db: TestDatabase, chainId: string, snapshotId: number) {
+  const fetchedAt = new Date('2026-10-03T04:30:00Z');
+  const [taxEvidence, deployEvidence] = await db
+    .insert(schema.evidence)
+    .values([
+      {
+        evidenceKey: buildEvidenceKey({ chainId, classification: 'verified_fact', txHash: testTxHash(`tax-${snapshotId}`), subject: 'tax' }),
+        chainId,
+        classification: 'verified_fact',
+        explanation: 'Owner menaikkan pajak jual dari 2% menjadi 5%.',
+        txHash: testTxHash(`tax-${snapshotId}`),
+        blockNumber: 23400000,
+        blockTimestamp: new Date('2026-09-28T10:05:00Z'),
+        method: 'setSellTax(uint256)',
+        fetchedAt,
+      },
+      {
+        evidenceKey: buildEvidenceKey({ chainId, classification: 'verified_fact', txHash: testTxHash(`deploy-${snapshotId}`), subject: 'owner' }),
+        chainId,
+        classification: 'verified_fact',
+        explanation: 'Kontrak dibuat dan owner diset ke deployer.',
+        txHash: testTxHash(`deploy-${snapshotId}`),
+        blockNumber: 23100000,
+        blockTimestamp: new Date('2026-09-12T08:14:00Z'),
+        fetchedAt,
+      },
+    ])
+    .returning();
+
+  const checks = await db
+    .insert(schema.contractChecks)
+    .values([
+      { snapshotId, code: 'verified', label: 'Source code', status: 'pass', value: 'Terverifikasi di explorer', classification: 'external_label' },
+      { snapshotId, code: 'ownership', label: 'Kepemilikan kontrak', status: 'warn', value: 'Owner masih aktif', description: 'Owner aktif masih bisa memanggil fungsi khusus owner.', classification: 'verified_fact' },
+      { snapshotId, code: 'honeypot', label: 'Simulasi jual', status: 'unknown', value: 'Belum disimulasikan' },
+      { snapshotId, code: 'tax', label: 'Pajak transaksi', status: 'fail', value: 'Beli 2% · Jual 5%, bisa diubah owner', classification: 'verified_fact' },
+      { snapshotId, code: 'mint', label: 'Fungsi mint', status: 'pass', value: 'Tidak ada mint setelah deploy', classification: 'verified_fact' },
+    ])
+    .returning();
+  const byCode = new Map(checks.map((check) => [check.code, check]));
+  await db.insert(schema.contractCheckEvidence).values([
+    { checkId: byCode.get('tax')!.id, evidenceId: taxEvidence.id },
+    { checkId: byCode.get('ownership')!.id, evidenceId: deployEvidence.id },
+  ]);
+  return { checks, taxEvidence, deployEvidence };
 }

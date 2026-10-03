@@ -1,12 +1,7 @@
-import type { chains, providerRuns, tokens, tokenSnapshots } from '../database/schema/index.js';
 import type { DataStatus } from '../database/schema/enums.js';
 import { formatUnits, numericToNumber } from '../common/units.js';
-import type { ProviderSource, SnapshotInfo, TokenSummaryResponse } from './token-summary.types.js';
-
-type ChainRow = typeof chains.$inferSelect;
-type TokenRow = typeof tokens.$inferSelect;
-type SnapshotRow = typeof tokenSnapshots.$inferSelect;
-type ProviderRunRow = typeof providerRuns.$inferSelect;
+import type { ChainRow, ProviderRunRow, SnapshotRow, TokenRow } from './rows.js';
+import type { ProviderSource, SnapshotHeader, SnapshotInfo, TokenSummaryResponse } from './token-summary.types.js';
 
 export interface TokenSummaryRows {
   chain: ChainRow;
@@ -44,19 +39,27 @@ function toSource(run: ProviderRunRow): ProviderSource {
   };
 }
 
+/** Kepala snapshot (blok, waktu, status) yang dipakai semua endpoint token. */
+export function toSnapshotHeader(
+  snapshot: SnapshotRow,
+  now: Date,
+  staleAfterMinutes: number,
+): SnapshotHeader {
+  return {
+    blockNumber: snapshot.blockNumber,
+    fetchedAt: snapshot.fetchedAt.toISOString(),
+    collectedStatus: snapshot.dataStatus,
+    dataStatus: effectiveStatus(snapshot.dataStatus, snapshot.fetchedAt, now, staleAfterMinutes),
+  };
+}
+
 function toSnapshot(
   snapshot: SnapshotRow,
   sources: ProviderRunRow[],
   now: Date,
   staleAfterMinutes: number,
 ): SnapshotInfo {
-  return {
-    blockNumber: snapshot.blockNumber,
-    fetchedAt: snapshot.fetchedAt.toISOString(),
-    collectedStatus: snapshot.dataStatus,
-    dataStatus: effectiveStatus(snapshot.dataStatus, snapshot.fetchedAt, now, staleAfterMinutes),
-    sources: sources.map(toSource),
-  };
+  return { ...toSnapshotHeader(snapshot, now, staleAfterMinutes), sources: sources.map(toSource) };
 }
 
 export function toTokenSummary(
