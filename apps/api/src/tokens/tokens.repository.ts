@@ -8,6 +8,8 @@ import {
   contractCheckEvidence,
   contractChecks,
   evidence,
+  holders,
+  labels,
   providerRuns,
   tokens,
   tokenSnapshotSources,
@@ -71,6 +73,40 @@ export class TokensRepository {
       .from(contractChecks)
       .where(eq(contractChecks.snapshotId, snapshotId))
       .orderBy(asc(contractChecks.id));
+  }
+
+  /** Holder teratas pada snapshot, urut peringkat. */
+  async findHolders(snapshotId: number, limit: number) {
+    return this.db
+      .select({
+        rank: holders.rank,
+        addressId: holders.addressId,
+        address: addresses.address,
+        balanceRaw: holders.balanceRaw,
+        sharePct: holders.sharePct,
+      })
+      .from(holders)
+      .innerJoin(addresses, eq(holders.addressId, addresses.id))
+      .where(eq(holders.snapshotId, snapshotId))
+      .orderBy(asc(holders.rank))
+      .limit(limit);
+  }
+
+  /** Label entitas untuk sekumpulan address, dikelompokkan per address. */
+  async findLabels(addressIds: number[]) {
+    const grouped = new Map<number, (typeof labels.$inferSelect)[]>();
+    if (addressIds.length === 0) return grouped;
+    const rows = await this.db
+      .select()
+      .from(labels)
+      .where(inArray(labels.addressId, addressIds))
+      .orderBy(asc(labels.id));
+    for (const row of rows) {
+      const list = grouped.get(row.addressId) ?? [];
+      list.push(row);
+      grouped.set(row.addressId, list);
+    }
+    return grouped;
   }
 
   /** Bukti tiap pemeriksaan kontrak, dikelompokkan per id pemeriksaan. */

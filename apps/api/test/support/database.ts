@@ -174,3 +174,60 @@ export async function seedContractChecks(db: TestDatabase, chainId: string, snap
   ]);
   return { checks, taxEvidence, deployEvidence };
 }
+
+/**
+ * Isi holder uji pada sebuah snapshot: peringkat 1 pool likuiditas (label
+ * eksternal), peringkat 2 bot (label heuristic), sisanya tanpa label.
+ */
+export async function seedHolders(
+  db: TestDatabase,
+  chainId: string,
+  snapshotId: number,
+  count = 12,
+) {
+  const rows = [];
+  for (let rank = 1; rank <= count; rank++) {
+    const raw = `0x${rank.toString(16).padStart(2, '0').repeat(20)}`;
+    const address = await insertEvmAddress(db, chainId, raw);
+    rows.push({ rank, address });
+  }
+  await db.insert(schema.holders).values(
+    rows.map(({ rank, address }) => ({
+      snapshotId,
+      addressId: address.id,
+      rank,
+      // Saldo menurun per peringkat; supply total 1 miliar token (18 desimal).
+      balanceRaw: `${(200 - rank * 10) * 1_000_000}000000000000000000`,
+      sharePct: ((200 - rank * 10) / 10).toFixed(6),
+    })),
+  );
+  const pool = rows[0].address;
+  const bot = rows[1].address;
+  await db.insert(schema.labels).values([
+    {
+      addressId: pool.id,
+      labelType: 'liquidity_pool',
+      name: 'Uniswap V2: NBLA/WETH',
+      source: 'external',
+      sourceName: 'Blockscout',
+      classification: 'external_label',
+    },
+    {
+      addressId: bot.id,
+      labelType: 'bot',
+      name: 'Kemungkinan bundler',
+      source: 'heuristic',
+      sourceName: 'OpenChain heuristic',
+      classification: 'heuristic',
+      confidence: '0.640',
+    },
+    {
+      addressId: bot.id,
+      labelType: 'whale',
+      source: 'user',
+      sourceName: 'Catatan investigator',
+      classification: 'assumption',
+    },
+  ]);
+  return rows;
+}

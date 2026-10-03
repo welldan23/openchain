@@ -70,6 +70,20 @@ yang bisa diubah owner atau mint authority yang masih aktif.
 - Parameter `?block=`, status data, dan respons error sama dengan endpoint
   ringkasan.
 
+### `GET /api/tokens/:chain/:address/holders`
+
+Sebaran pemegang: konsentrasi supply dan holder teratas pada snapshot.
+
+- `concentration` berisi porsi 10 dan 50 holder teratas, bertag
+  `derived_metric` karena dihitung dari saldo pada snapshot.
+- Tiap holder membawa saldo mentah, saldo desimal, porsi supply, dan semua
+  label entitasnya beserta sumber dan confidence. Urutan label: eksternal,
+  heuristic, lalu catatan user.
+- `?limit=` mengatur jumlah holder, 1 sampai 100, default 10.
+- Label mencerminkan pengetahuan terbaru, bukan kondisi saat snapshot diambil.
+- Parameter `?block=`, status data, dan respons error sama dengan endpoint
+  ringkasan.
+
 ## Skema data token
 
 Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
