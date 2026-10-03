@@ -559,7 +559,47 @@ export interface SearchResult {
   href: string;
   /** Kenapa hasil ini cocok, mis. "Nama token" atau "Address persis". */
   matchedBy: string;
+  /** Ringkasan entitas untuk daftar hasil; kosong bila belum dimuat. */
+  meta?: SearchResultMeta;
 }
+
+/**
+ * Ringkasan entitas di baris hasil pencarian. Field opsional yang kosong
+ * berarti datanya belum ada, bukan bernilai nol.
+ */
+export type SearchResultMeta =
+  | {
+      kind: "token";
+      riskLevel: RiskLevel;
+      findingCount: number;
+      verified: boolean;
+      deployedAt: string;
+      priceUsd?: number;
+      liquidityUsd?: number;
+      holderCount?: number;
+    }
+  | {
+      kind: "address";
+      /** Halaman tujuan: aliran dana satu chain atau jelajah multichain. */
+      view: "flow" | "multichain";
+      txCount: number;
+      inUsd?: number;
+      outUsd?: number;
+      /** Chain tempat address ini aktif. */
+      activeChains: ChainId[];
+      lastSeen?: string;
+    }
+  | {
+      kind: "transaction";
+      /** Arah relatif terhadap address di halaman tujuan. */
+      direction: FlowDirection;
+      amount: number;
+      assetSymbol: string;
+      amountUsd?: number;
+      timestamp: string;
+      counterparty: string;
+      counterpartyLabel?: EntityLabel;
+    };
 
 /** Jenis halaman investigasi yang tercatat di riwayat. */
 export type InvestigationKind = "token" | "flow" | "trace" | "map" | "multichain";

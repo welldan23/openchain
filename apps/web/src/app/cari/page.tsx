@@ -8,7 +8,7 @@ import { SearchResults } from "@/components/search/search-results";
 import { listInvestigationHistory, listSearchExamples, searchInvestigations, searchPath } from "@/lib/api/search";
 import { firstParam } from "@/lib/flow-filter";
 import { formatNumber, shortenHash } from "@/lib/format";
-import { classifyQuery, QUERY_KIND_LABEL } from "@/lib/search";
+import { classifyQuery, parseResultKindFilter, QUERY_KIND_LABEL } from "@/lib/search";
 
 export async function generateMetadata({ searchParams }: PageProps<"/cari">): Promise<Metadata> {
   const query = (firstParam((await searchParams).q) ?? "").trim();
@@ -52,7 +52,10 @@ function SearchHints() {
 }
 
 export default async function SearchPage({ searchParams }: PageProps<"/cari">) {
-  const query = (firstParam((await searchParams).q) ?? "").trim();
+  const params = await searchParams;
+  const query = (firstParam(params.q) ?? "").trim();
+  const filter = parseResultKindFilter(firstParam(params.jenis));
+  const now = new Date();
   const [response, history] = await Promise.all([
     query ? searchInvestigations(query) : Promise.resolve(null),
     listInvestigationHistory(),
@@ -81,13 +84,13 @@ export default async function SearchPage({ searchParams }: PageProps<"/cari">) {
                   Dikenali sebagai <span className="font-medium text-foreground/90">{QUERY_KIND_LABEL[response.kind]}</span>
                 </p>
               </div>
-              <SearchResults response={response} />
+              <SearchResults response={response} filter={filter} now={now} />
             </section>
           ) : (
             <SearchHints />
           )}
         </div>
-        <InvestigationHistory entries={history} now={new Date()} className="min-w-0 lg:col-span-2" />
+        <InvestigationHistory entries={history} now={now} className="min-w-0 lg:col-span-2" />
       </div>
     </main>
   );

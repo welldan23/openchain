@@ -71,11 +71,29 @@ describe("API pencarian (mock)", () => {
     await assertion;
   });
 
+  it("setiap hasil membawa metadata sesuai jenisnya, tanpa mengarang data pasar", async () => {
+    const tokens = await settle(searchInvestigations("protocol"));
+    const sunyi = tokens.results.find((result) => result.title === "Sunyi Protocol");
+    expect(sunyi?.meta).toMatchObject({ kind: "token", riskLevel: "unknown", priceUsd: undefined, holderCount: undefined });
+    const nebula = (await settle(searchInvestigations("nbla"))).results[0];
+    expect(nebula.meta).toMatchObject({ kind: "token", holderCount: MOCK_TOKENS[0].market.holderCount });
+
+    const address = await settle(searchInvestigations(MOCK_FLOWS[0].address));
+    expect(address.results.every((result) => result.meta?.kind === "address")).toBe(true);
+    const multichain = address.results.find((result) => result.meta?.kind === "address" && result.meta.view === "multichain");
+    expect(multichain?.meta).toMatchObject({ activeChains: expect.arrayContaining(["ethereum"]) });
+
+    const transfer = MOCK_FLOWS[0].transfers[0];
+    const tx = (await settle(searchInvestigations(transfer.txHash))).results[0];
+    expect(tx.meta).toMatchObject({ kind: "transaction", direction: transfer.direction, amount: transfer.amount });
+  });
+
   it("riwayat terbaru dulu dan semua tautannya menuju halaman yang ada", async () => {
     const history = await listInvestigationHistory();
     expect(history.map((item) => item.id)).toEqual(["hist-1", "hist-2", "hist-3", "hist-4", "hist-5", "hist-6"]);
     expect(history.every((item) => /^\/(token|flow|trace|map|multichain)\//.test(item.href))).toBe(true);
     expect(searchPath(" nbla ")).toBe("/cari?q=nbla");
     expect(searchPath("")).toBe("/cari");
+    expect(searchPath("nebula finance", "token")).toBe("/cari?q=nebula+finance&jenis=token");
   });
 });

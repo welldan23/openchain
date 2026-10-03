@@ -7,7 +7,7 @@
  * `InvestigationEntry[]`) tanpa mengubah komponen yang memakainya.
  */
 import { MOCK_FAILING_QUERY, MOCK_HISTORY, MOCK_SEARCH_EXAMPLES, MOCK_SEARCH_INDEX } from "../mock/search";
-import { classifyQuery, dedupeResults, normalizeText } from "../search";
+import { classifyQuery, dedupeResults, normalizeText, type ResultKindFilter } from "../search";
 import type { InvestigationEntry, SearchQueryKind, SearchResult } from "../types";
 
 const MOCK_LATENCY_MS = 400;
@@ -90,8 +90,13 @@ export function listSearchExamples(): Array<{ label: string; query: string }> {
   return MOCK_SEARCH_EXAMPLES;
 }
 
-export function searchPath(query: string): string {
-  return query.trim() ? `/cari?q=${encodeURIComponent(query.trim())}` : "/cari";
+/** Tautan halaman cari; `kind` mempersempit ke satu jenis hasil. */
+export function searchPath(query: string, kind: ResultKindFilter = "all"): string {
+  const params = new URLSearchParams();
+  if (query.trim()) params.set("q", query.trim());
+  if (kind !== "all") params.set("jenis", kind);
+  const search = params.toString();
+  return search ? `/cari?${search}` : "/cari";
 }
 
 export function searchFailureDemoPath(): string {

@@ -2,7 +2,9 @@
  * Logika pencarian cepat: mengenali jenis isian (address, hash transaksi,
  * atau teks) dan mencocokkannya dengan data yang ada.
  */
-import type { SearchQueryKind, SearchResult } from "./types";
+import { formatDateTime, formatNumber, formatRelativeTime, formatTokenAmount, formatUsdCompact, formatUsdPrice, shortenHash } from "./format";
+import { addressTitle } from "./fund-flow";
+import type { SearchQueryKind, SearchResult, SearchResultKind, SearchResultMeta } from "./types";
 
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const EVM_TX = /^0x[0-9a-fA-F]{64}$/;
@@ -75,4 +77,73 @@ export function moveActiveIndex(current: number, delta: 1 | -1, count: number): 
   if (count <= 0) return -1;
   if (current < 0) return delta === 1 ? 0 : count - 1;
   return (current + delta + count) % count;
+}
+
+export interface ResultMetaItem {
+  id: string;
+  label: string;
+  value: string;
+  /** Teks lengkap untuk tooltip, mis. tanggal persis atau address penuh. */
+  title?: string;
+}
+
+const NO_DATA = "Belum ada data";
+
+/**
+ * Angka ringkas untuk baris hasil pencarian. Nilai yang belum ada ditulis
+ * "Belum ada data", tidak diisi nol. Badge (risiko, arah, chain) digambar
+ * terpisah oleh komponen.
+ */
+export function describeResultMeta(meta: SearchResultMeta, now: Date = new Date()): ResultMetaItem[] {
+  if (meta.kind === "token") {
+    const noMarket = meta.priceUsd === undefined && meta.liquidityUsd === undefined && meta.holderCount === undefined;
+    return [
+      ...(noMarket
+        ? [{ id: "market", label: "Data pasar", value: NO_DATA }]
+        : [
+            { id: "price", label: "Harga", value: meta.priceUsd === undefined ? NO_DATA : formatUsdPrice(meta.priceUsd) },
+            { id: "liquidity", label: "Likuiditas", value: meta.liquidityUsd === undefined ? NO_DATA : formatUsdCompact(meta.liquidityUsd) },
+            { id: "holders", label: "Holder", value: meta.holderCount === undefined ? NO_DATA : formatNumber(meta.holderCount) },
+          ]),
+      { id: "findings", label: "Temuan risiko", value: formatNumber(meta.findingCount) },
+      { id: "deployed", label: "Dibuat", value: formatRelativeTime(meta.deployedAt, now), title: formatDateTime(meta.deployedAt) },
+    ];
+  }
+  if (meta.kind === "address") {
+    return [
+      { id: "tx", label: meta.view === "flow" ? "Transfer" : "Transaksi", value: formatNumber(meta.txCount) },
+      { id: "in", label: "Masuk", value: meta.inUsd === undefined ? NO_DATA : formatUsdCompact(meta.inUsd) },
+      { id: "out", label: "Keluar", value: meta.outUsd === undefined ? NO_DATA : formatUsdCompact(meta.outUsd) },
+      meta.lastSeen
+        ? { id: "last", label: "Aktif terakhir", value: formatRelativeTime(meta.lastSeen, now), title: formatDateTime(meta.lastSeen) }
+        : { id: "last", label: "Aktif terakhir", value: NO_DATA },
+    ];
+  }
+  return [
+    { id: "amount", label: "Jumlah", value: formatTokenAmount(meta.amount, meta.assetSymbol) },
+    { id: "value", label: "Nilai", value: meta.amountUsd === undefined ? "Harga tidak diketahui" : `±${formatUsdCompact(meta.amountUsd)}` },
+    { id: "time", label: "Waktu", value: formatRelativeTime(meta.timestamp, now), title: formatDateTime(meta.timestamp) },
+    {
+      id: "counterparty",
+      label: meta.direction === "in" ? "Dari" : "Ke",
+      value: meta.counterpartyLabel ? addressTitle(meta.counterpartyLabel) : shortenHash(meta.counterparty),
+      title: meta.counterparty,
+    },
+  ];
+}
+
+export type ResultKindFilter = "all" | SearchResultKind;
+
+const RESULT_KIND_FILTERS: ResultKindFilter[] = ["all", "token", "address", "transaction"];
+
+/** Baca filter jenis hasil dari URL (`?jenis=`); nilai asing dianggap semua. */
+export function parseResultKindFilter(value: string | undefined): ResultKindFilter {
+  return RESULT_KIND_FILTERS.find((filter) => filter === value) ?? "all";
+}
+
+/** Jumlah hasil per jenis, untuk angka di tab filter. */
+export function countResultsByKind(results: SearchResult[]): Record<ResultKindFilter, number> {
+  const counts: Record<ResultKindFilter, number> = { all: results.length, token: 0, address: 0, transaction: 0 };
+  for (const result of results) counts[result.kind] += 1;
+  return counts;
 }

@@ -10,8 +10,9 @@ import { tokenPath } from "../api/tokens";
 import { tracePath } from "../api/traces";
 import { evidenceAnchor } from "../evidence";
 import { shortenHash } from "../format";
-import { addressTitle } from "../fund-flow";
-import type { ChainId, EntityLabel, InvestigationEntry, SearchResult } from "../types";
+import { addressTitle, summarizeFlow } from "../fund-flow";
+import { summarizeMultichain } from "../multichain";
+import type { ChainId, EntityLabel, InvestigationEntry, SearchResult, SearchResultMeta, TokenInvestigation } from "../types";
 import { MOCK_FLOWS } from "./flows";
 import { mockEvmAddress } from "./ids";
 import { MOCK_MAPS } from "./maps";
@@ -35,11 +36,32 @@ function addressEntry(
   label: EntityLabel | undefined,
   href: string,
   subtitle: string,
+  meta: SearchResultMeta,
 ): SearchIndexEntry {
   return {
-    result: { id, kind: "address", title: addressTitle(label), subtitle, chain, label, href, matchedBy: "" },
+    result: { id, kind: "address", title: addressTitle(label), subtitle, chain, label, href, matchedBy: "", meta },
     exact: [address],
     text: label?.name ? [label.name] : [],
+  };
+}
+
+/** Waktu paling akhir dari daftar ISO; kosong bila daftarnya kosong. */
+function latest(timestamps: Array<string | undefined>): string | undefined {
+  return timestamps.filter((value): value is string => Boolean(value)).sort().at(-1);
+}
+
+/** Token tiruan tanpa data pasar ditandai dengan semua angka pasar nol. */
+function tokenMeta(item: TokenInvestigation): SearchResultMeta {
+  const hasMarket = item.market.holderCount > 0 || item.market.liquidityUsd > 0;
+  return {
+    kind: "token",
+    riskLevel: item.risk.level,
+    findingCount: item.risk.findings.length,
+    verified: item.token.verified,
+    deployedAt: item.token.deployedAt,
+    priceUsd: hasMarket ? item.market.priceUsd : undefined,
+    liquidityUsd: hasMarket ? item.market.liquidityUsd : undefined,
+    holderCount: hasMarket ? item.market.holderCount : undefined,
   };
 }
 
@@ -52,32 +74,55 @@ const tokenEntries: SearchIndexEntry[] = MOCK_TOKENS.map((item) => ({
     chain: item.token.chain,
     href: tokenPath(item.token.chain, item.token.address),
     matchedBy: "",
+    meta: tokenMeta(item),
   },
   exact: [item.token.address],
   text: [item.token.name, item.token.symbol],
 }));
 
-const flowEntries: SearchIndexEntry[] = MOCK_FLOWS.map((flow) =>
-  addressEntry(
+const flowEntries: SearchIndexEntry[] = MOCK_FLOWS.map((flow) => {
+  const totals = summarizeFlow(flow.chain, flow.transfers);
+  // Bila tak satu pun transfer punya harga, totalnya belum bisa dihitung.
+  const priced = flow.transfers.length === 0 || totals.unpricedCount < flow.transfers.length;
+  return addressEntry(
     `flow:${flow.chain}:${flow.address}`,
     flow.address,
     flow.chain,
     flow.label,
     flowPath(flow.chain, flow.address),
     `Aliran dana · ${shortenHash(flow.address)}`,
-  ),
-);
+    {
+      kind: "address",
+      view: "flow",
+      txCount: flow.transfers.length,
+      inUsd: priced ? totals.inUsd : undefined,
+      outUsd: priced ? totals.outUsd : undefined,
+      activeChains: flow.transfers.length > 0 ? [flow.chain] : [],
+      lastSeen: latest(flow.transfers.map((transfer) => transfer.timestamp)),
+    },
+  );
+});
 
-const multichainEntries: SearchIndexEntry[] = MOCK_MULTICHAIN.map((profile) =>
-  addressEntry(
+const multichainEntries: SearchIndexEntry[] = MOCK_MULTICHAIN.map((profile) => {
+  const summary = summarizeMultichain(profile);
+  return addressEntry(
     `multichain:${profile.address}`,
     profile.address,
     undefined,
     profile.label,
     multichainPath(profile.address),
     `Jelajah multichain · ${shortenHash(profile.address)}`,
-  ),
-);
+    {
+      kind: "address",
+      view: "multichain",
+      txCount: summary.totalTx,
+      inUsd: summary.inUsd,
+      outUsd: summary.outUsd,
+      activeChains: summary.activeChains,
+      lastSeen: latest(profile.chains.map((chain) => chain.lastSeen)),
+    },
+  );
+});
 
 const txEntries: SearchIndexEntry[] = MOCK_FLOWS.flatMap((flow) =>
   flow.transfers.map((transfer) => ({
@@ -89,6 +134,16 @@ const txEntries: SearchIndexEntry[] = MOCK_FLOWS.flatMap((flow) =>
       chain: flow.chain,
       href: `${flowPath(flow.chain, flow.address)}#${evidenceAnchor(transfer.txHash)}`,
       matchedBy: "",
+      meta: {
+        kind: "transaction" as const,
+        direction: transfer.direction,
+        amount: transfer.amount,
+        assetSymbol: transfer.asset.symbol,
+        amountUsd: transfer.amountUsd,
+        timestamp: transfer.timestamp,
+        counterparty: transfer.counterparty,
+        counterpartyLabel: transfer.counterpartyLabel,
+      },
     },
     exact: [transfer.txHash],
     text: [],
