@@ -304,3 +304,55 @@ export function parseLayerParam(value: string | undefined): number | null {
   const parsed = Number(value);
   return LAYER_OPTIONS.includes(parsed) ? parsed : null;
 }
+
+type Point = [number, number];
+
+/** Convex hull (monotone chain); titik dikembalikan berlawanan arah jarum jam. */
+function convexHull(points: Point[]): Point[] {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length <= 2) return sorted;
+  const cross = (o: Point, a: Point, b: Point) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: Point[] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  const upper: Point[] = [];
+  for (const point of [...sorted].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+/** Jarak area kelompok dari tepi gelembung anggotanya. */
+const HULL_PADDING = 10;
+const HULL_SAMPLES = 16;
+
+/**
+ * Area kelompok yang membungkus semua gelembung anggota, dengan jarak
+ * `HULL_PADDING`. Dipakai sebagai penanda klaster di peta.
+ */
+export function clusterHull(members: Array<{ x: number; y: number; r: number }>): Point[] {
+  const points: Point[] = [];
+  for (const member of members) {
+    const radius = member.r + HULL_PADDING;
+    for (let i = 0; i < HULL_SAMPLES; i++) {
+      const angle = (i / HULL_SAMPLES) * Math.PI * 2;
+      points.push([member.x + Math.cos(angle) * radius, member.y + Math.sin(angle) * radius]);
+    }
+  }
+  return convexHull(points);
+}
+
+/** Path SVG tertutup dari titik hull. */
+export function hullPath(points: Point[]): string {
+  if (points.length === 0) return "";
+  return `M${points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L")}Z`;
+}
+
+/** Posisi label kelompok: di atas titik tertinggi area, tetap di dalam kanvas. */
+export function hullLabelPosition(points: Point[]): { x: number; y: number } {
+  const top = points.reduce((best, point) => (point[1] < best[1] ? point : best), points[0]);
+  return { x: Math.min(Math.max(top[0], 60), MAP_WIDTH - 60), y: Math.max(top[1] - 6, 12) };
+}

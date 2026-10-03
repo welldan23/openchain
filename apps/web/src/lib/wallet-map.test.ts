@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { MOCK_MAPS } from "./mock/maps";
 import {
   bubbleRadius,
+  clusterHull,
   CLUSTER_COLORS,
   clusterStyles,
   edgesOf,
+  hullLabelPosition,
+  hullPath,
   layersFrom,
   layoutWalletMap,
   MAP_HEIGHT,
@@ -127,5 +130,40 @@ describe("penelusuran lapis dari wallet pusat", () => {
     expect(parseLayerParam("2")).toBe(2);
     expect(parseLayerParam("9")).toBeNull();
     expect(parseLayerParam(undefined)).toBeNull();
+  });
+});
+
+describe("area kelompok", () => {
+  const members = [
+    { x: 100, y: 100, r: 10 },
+    { x: 200, y: 120, r: 20 },
+    { x: 150, y: 200, r: 15 },
+  ];
+
+  it("membungkus semua gelembung anggota beserta jaraknya", () => {
+    const hull = clusterHull(members);
+    const xs = hull.map((point) => point[0]);
+    const ys = hull.map((point) => point[1]);
+    expect(Math.min(...xs)).toBeCloseTo(80);
+    expect(Math.max(...xs)).toBeCloseTo(230);
+    expect(Math.min(...ys)).toBeCloseTo(80, 0);
+    expect(Math.max(...ys)).toBeCloseTo(225);
+  });
+
+  it("bentuknya cembung: semua titik sampel ada di dalam atau di tepinya", () => {
+    const hull = clusterHull(members);
+    const inside = (px: number, py: number) =>
+      hull.every((a, i) => {
+        const b = hull[(i + 1) % hull.length];
+        return (b[0] - a[0]) * (py - a[1]) - (b[1] - a[1]) * (px - a[0]) >= -1e-6;
+      });
+    for (const member of members) expect(inside(member.x, member.y)).toBe(true);
+  });
+
+  it("satu anggota menjadi lingkaran, path dan label siap pakai", () => {
+    const hull = clusterHull([{ x: 50, y: 30, r: 5 }]);
+    expect(hull).toHaveLength(16);
+    expect(hullPath(hull)).toMatch(/^M[\d.,L-]+Z$/);
+    expect(hullLabelPosition(hull)).toEqual({ x: 60, y: 12 });
   });
 });

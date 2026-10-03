@@ -6,6 +6,8 @@ import {
   ArrowUpRight,
   FileSearch,
   Crosshair,
+  Eye,
+  EyeOff,
   Highlighter,
   Maximize2,
   MousePointerClick,
@@ -29,7 +31,7 @@ import { addressKey, addressTitle } from "@/lib/fund-flow";
 import type { ChainId, MapEdge, MapNode } from "@/lib/types";
 import { CHART_SURFACE } from "@/lib/chart-colors";
 import { fitBounds, INITIAL_VIEWPORT, MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf, type Viewport } from "@/lib/map-viewport";
-import { LAYER_OPTIONS, layersFrom } from "@/lib/wallet-map";
+import { clusterHull, hullLabelPosition, hullPath, LAYER_OPTIONS, layersFrom, NEUTRAL_NODE_COLOR } from "@/lib/wallet-map";
 import { usePanZoom } from "./use-pan-zoom";
 
 export interface ExplorerNode {
@@ -50,7 +52,12 @@ interface WalletMapExplorerProps {
   initialCenter?: string;
   /** Kedalaman lapis dari URL (`?lapis=`); `null` = semua lapis. */
   initialDepth: number | null;
+  /** Klaster sesuai urutan warna; `color` kosong untuk klaster yang digabung ke "lainnya". */
+  clusters: Array<{ id: string; name: string; color: string | null }>;
 }
+
+/** Perkiraan lebar satu huruf label 11px, untuk menaruh titik warna di depan label kelompok. */
+const LABEL_CHAR_WIDTH = 6.2;
 
 /** Kedalaman awal saat wallet pusat pertama kali dipilih. */
 const DEFAULT_DEPTH = 2;
@@ -113,7 +120,15 @@ function edgeEnds(from: ExplorerNode, to: ExplorerNode) {
   };
 }
 
-export function WalletMapExplorer({ chain, symbol, nodes, edges, initialCenter, initialDepth }: WalletMapExplorerProps) {
+export function WalletMapExplorer({
+  chain,
+  symbol,
+  nodes,
+  edges,
+  initialCenter,
+  initialDepth,
+  clusters,
+}: WalletMapExplorerProps) {
   const markerId = useId().replace(/:/g, "");
   const hintId = useId();
   const centerSelectId = useId();
@@ -155,6 +170,9 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges, initialCenter, 
    * lalu gelembung yang dipilih. Garis aktif dan gelembung di ujungnya terang,
    * sisanya diredupkan.
    */
+  const [showGroups, setShowGroups] = useState(true);
+  const [focusCluster, setFocusCluster] = useState<string | null>(null);
+
   const highlight = useMemo(() => {
     const nodeKey = hovered ?? (selectedEdge ? null : selected);
     if (nodeKey) {
@@ -177,8 +195,31 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges, initialCenter, 
         nodes: new Set([addressKey(chain, selectedEdge.from), addressKey(chain, selectedEdge.to)]),
       };
     }
+    if (focusCluster) {
+      const members = new Set(
+        nodes.filter((item) => item.node.clusterId === focusCluster).map((item) => addressKey(chain, item.node.address)),
+      );
+      const active = new Set(
+        edges
+          .filter((edge) => members.has(addressKey(chain, edge.from)) && members.has(addressKey(chain, edge.to)))
+          .map((edge) => edge.id),
+      );
+      return { edges: active, nodes: members };
+    }
     return null;
-  }, [chain, edges, hovered, selected, selectedEdge]);
+  }, [chain, edges, nodes, hovered, selected, selectedEdge, focusCluster]);
+
+  /** Area dan label tiap kelompok, hanya dari anggota yang sedang tampil. */
+  const groups = useMemo(
+    () =>
+      clusters.flatMap((cluster) => {
+        const members = visibleNodes.filter((item) => item.node.clusterId === cluster.id);
+        if (members.length === 0) return [];
+        const hull = clusterHull(members);
+        return [{ ...cluster, count: members.length, path: hullPath(hull), label: hullLabelPosition(hull) }];
+      }),
+    [clusters, visibleNodes],
+  );
 
   useEffect(() => {
     if (!selected && !selectedEdgeId) return;
@@ -292,6 +333,50 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges, initialCenter, 
             </p>
           </div>
 
+          {clusters.length > 0 ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Kelompok wallet">
+              <span className="text-[11px] text-muted">Kelompok:</span>
+              {clusters.map((cluster) => {
+                const active = focusCluster === cluster.id;
+                const count = nodes.filter((item) => item.node.clusterId === cluster.id).length;
+                return (
+                  <button
+                    key={cluster.id}
+                    type="button"
+                    aria-pressed={active}
+                    title={active ? "Klik lagi untuk berhenti menyorot" : "Sorot anggota kelompok ini"}
+                    onClick={() => {
+                      setFocusCluster(active ? null : cluster.id);
+                      setSelected(null);
+                      setSelectedEdgeId(null);
+                    }}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                      active ? "bg-surface text-foreground ring-foreground/50" : "bg-surface-raised text-foreground/80 ring-line hover:text-foreground",
+                    )}
+                  >
+                    <span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: cluster.color ?? NEUTRAL_NODE_COLOR }} />
+                    {cluster.name}
+                    <span className="tabular-nums text-muted">{count}</span>
+                  </button>
+                );
+              })}
+              <span className="inline-flex items-center gap-1.5 px-1 text-xs text-muted">
+                <span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: NEUTRAL_NODE_COLOR }} />
+                Tanpa klaster
+              </span>
+              <button
+                type="button"
+                aria-pressed={showGroups}
+                onClick={() => setShowGroups((value) => !value)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-muted transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {showGroups ? <Eye className="size-3.5" aria-hidden /> : <EyeOff className="size-3.5" aria-hidden />}
+                Area kelompok
+              </button>
+            </div>
+          ) : null}
+
           <div
             className="-mx-2 sm:mx-0"
             onKeyDown={(event) => {
@@ -319,6 +404,44 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges, initialCenter, 
                     <path d="M0 0 L10 5 L0 10 z" fill={EDGE_ACTIVE_COLOR} />
                   </marker>
                 </defs>
+                {showGroups ? (
+                  <g aria-hidden className="pointer-events-none">
+                    {groups.map((group) => {
+                      const color = group.color ?? NEUTRAL_NODE_COLOR;
+                      const dimmed = focusCluster !== null && focusCluster !== group.id;
+                      const textWidth = group.name.length * LABEL_CHAR_WIDTH;
+                      return (
+                        <g key={group.id} opacity={dimmed ? 0.3 : 1}>
+                          <path
+                            d={group.path}
+                            fill={color}
+                            fillOpacity={focusCluster === group.id ? 0.14 : 0.07}
+                            stroke={color}
+                            strokeOpacity={0.6}
+                            strokeWidth={1}
+                            strokeDasharray="4 3"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                          <circle cx={group.label.x - textWidth / 2 - 7} cy={group.label.y - 4} r={3.5} fill={color} />
+                          <text
+                            x={group.label.x}
+                            y={group.label.y}
+                            textAnchor="middle"
+                            stroke={CHART_SURFACE}
+                            strokeWidth={3}
+                            strokeOpacity={0.8}
+                            vectorEffect="non-scaling-stroke"
+                            style={{ paintOrder: "stroke" }}
+                            className="fill-foreground/85 text-[11px] font-medium"
+                          >
+                            {group.name}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                ) : null}
                 <g aria-hidden>
                   {edges.map((edge) => {
                     const from = byKey.get(addressKey(chain, edge.from));
