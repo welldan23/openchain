@@ -116,3 +116,7 @@ export const tradingEventType = pgEnum('trading_event_type', [
 export type ChainFamily = (typeof chainFamily.enumValues)[number];
 export type DataStatus = (typeof dataStatus.enumValues)[number];
 export type InfoClassification = (typeof infoClassification.enumValues)[number];
+export type ProviderKind = (typeof providerKind.enumValues)[number];
+export type EntityLabelType = (typeof entityLabelType.enumValues)[number];
+export type CheckStatus = (typeof checkStatus.enumValues)[number];
+export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];

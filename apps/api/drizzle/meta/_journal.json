@@ -15,6 +15,20 @@
       "when": 1791009499994,
       "tag": "0001_seed_chains",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791013031851,
+      "tag": "0002_snapshot_total_supply",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791013039990,
+      "tag": "0003_robinhood_explorer",
+      "breakpoints": true
     }
   ]
 }

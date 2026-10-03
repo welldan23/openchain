@@ -1,0 +1,2 @@
+ALTER TABLE "token_snapshots" ADD COLUMN "total_supply_raw" numeric(78, 0);--> statement-breakpoint
+ALTER TABLE "token_snapshots" ADD CONSTRAINT "token_snapshots_total_supply_non_negative" CHECK ("token_snapshots"."total_supply_raw" is null or "token_snapshots"."total_supply_raw" >= 0);

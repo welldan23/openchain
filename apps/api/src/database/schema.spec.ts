@@ -12,6 +12,15 @@ const SEED_CHAINS_SQL = readFileSync(
   fileURLToPath(new URL('../../drizzle/0001_seed_chains.sql', import.meta.url)),
   'utf8',
 );
+const ROBINHOOD_EXPLORER_SQL = readFileSync(
+  fileURLToPath(new URL('../../drizzle/0003_robinhood_explorer.sql', import.meta.url)),
+  'utf8',
+);
+const MIGRATION_COUNT = (
+  JSON.parse(readFileSync(fileURLToPath(new URL('../../drizzle/meta/_journal.json', import.meta.url)), 'utf8')) as {
+    entries: unknown[];
+  }
+).entries.length;
 
 const EXPECTED_TABLES = [
   'addresses',
@@ -119,7 +128,7 @@ describe('migrasi', () => {
     const applied = await db.execute<{ total: number }>(
       sql`select count(*)::int as total from drizzle.__drizzle_migrations`,
     );
-    expect(applied.rows[0].total).toBe(2);
+    expect(applied.rows[0].total).toBe(MIGRATION_COUNT);
     const [{ total }] = await db.select({ total: count() }).from(schema.chains);
     expect(total).toBe(12);
   });
@@ -141,6 +150,20 @@ describe('migrasi', () => {
       .update(schema.chains)
       .set({ supportStatus: 'planned' })
       .where(eq(schema.chains.id, 'robinhood'));
+  });
+
+  it('mengisi explorer resmi Robinhood Chain tanpa menimpa URL yang diatur manual', async () => {
+    const explorerOf = async () =>
+      (await db.select().from(schema.chains).where(eq(schema.chains.id, 'robinhood')))[0].explorerUrl;
+    expect(await explorerOf()).toBe('https://robinhoodchain.blockscout.com');
+
+    await db.update(schema.chains).set({ explorerUrl: 'https://explorer.contoh.test' }).where(eq(schema.chains.id, 'robinhood'));
+    await client.exec(ROBINHOOD_EXPLORER_SQL);
+    expect(await explorerOf()).toBe('https://explorer.contoh.test');
+
+    await db.update(schema.chains).set({ explorerUrl: null }).where(eq(schema.chains.id, 'robinhood'));
+    await client.exec(ROBINHOOD_EXPLORER_SQL);
+    expect(await explorerOf()).toBe('https://robinhoodchain.blockscout.com');
   });
 });
 
@@ -355,6 +378,20 @@ describe('aturan PRD ditegakkan oleh database', () => {
         top50Pct: '60',
       }),
       'token_snapshots_top10_within_top50',
+    );
+  });
+
+  it('supply pada snapshot tidak boleh negatif', async () => {
+    const { token } = await insertTokenWithSnapshot('0x' + '19'.repeat(20), 5);
+    await expectConstraintViolation(
+      db.insert(schema.tokenSnapshots).values({
+        tokenId: token.id,
+        blockNumber: 6,
+        fetchedAt: FETCHED_AT,
+        dataStatus: 'complete',
+        totalSupplyRaw: '-1',
+      }),
+      'token_snapshots_total_supply_non_negative',
     );
   });
 

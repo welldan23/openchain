@@ -23,7 +23,10 @@ export interface TokenProfile {
   name: string | null;
   symbol: string | null;
   decimals: number | null;
-  /** Total supply mentah (satuan terkecil). */
+  /**
+   * Total supply mentah (satuan terkecil) pada blok snapshot. Snapshot lama
+   * yang tidak menyimpan supply memakai supply terakhir yang diketahui.
+   */
   totalSupplyRaw: string | null;
   /** Total supply dalam satuan token, mis. "1000000000". */
   totalSupply: string | null;

@@ -13,8 +13,13 @@ atau pengiriman transaksi.
 
 - **Frontend fase 1:** halaman Token sudah bisa dibuka dengan **data tiruan**.
   Semua token, address, dan hash transaksi di dalamnya fiktif.
-- **Backend fase 1:** skema database dan migrasi data token sudah ada. Endpoint
-  dan adapter chain menyusul.
+- **Backend fase 1:** skema database, empat endpoint baca data token, dan
+  adapter EVM untuk 8 chain (prioritas Robinhood Chain) sudah ada. Data token
+  sungguhan diambil lewat `npm run ingest` dari RPC, Blockscout, dan
+  Dexscreener, lalu disimpan sebagai snapshot per blok. Frontend belum membaca
+  API ini.
+- Status dukungan chain hanya naik lewat smoke test (`npm run smoke:chain`).
+  Hasilnya ada di `apps/api/README.md`.
 
 ## Struktur
 
@@ -28,6 +33,11 @@ apps/
     src/lib/mock/                 Data tiruan
   api/            NestJS + PostgreSQL (Drizzle ORM)
     src/database/schema/          Skema database
+    src/tokens/                   Endpoint baca data token
+    src/providers/                Provider: RPC, Blockscout, Dexscreener (read-only)
+    src/chains/                   Definisi chain dan adapter EVM
+    src/ingestion/                Penyimpanan hasil ingest
+    src/cli/                      CLI ingest dan smoke test
     drizzle/                      File migrasi
 docker-compose.yml                PostgreSQL lokal untuk pengembangan
 ```
@@ -55,6 +65,19 @@ docker compose up -d postgres
 cp apps/api/.env.example apps/api/.env
 npm run db:migrate
 npm run dev:api
+```
+
+Ambil data token sungguhan, lalu buka hasilnya lewat API:
+
+```bash
+npm run ingest -- ethereum 0x6982508145454Ce325dDbE47a25d4ec3d2311933
+curl http://localhost:4000/api/tokens/ethereum/0x6982508145454Ce325dDbE47a25d4ec3d2311933/summary
+```
+
+Cek dulu chain mana yang siap dipakai di lingkungan kamu:
+
+```bash
+npm run smoke:chain -- all
 ```
 
 Perintah lain, dijalankan untuk semua aplikasi:

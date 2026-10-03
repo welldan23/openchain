@@ -24,7 +24,10 @@ export interface EvidenceView {
   heuristicName: string | null;
   confidence: number | null;
   fetchedAt: string;
-  /** Tautan transaksi di explorer; kosong bila chain belum punya explorer. */
+  /**
+   * Tautan bukti di explorer: halaman transaksi, atau halaman blok untuk bukti
+   * berupa state pada sebuah blok. Kosong bila chain belum punya explorer.
+   */
   explorerUrl: string | null;
 }
 
@@ -36,10 +39,20 @@ export interface EvidenceRecord {
   contractAddress: string | null;
 }
 
-/** URL transaksi di explorer chain. Format `/tx/<hash>` dipakai explorer EVM dan Solscan. */
-export function explorerTxUrl(chain: ChainRow, txHash: string | null): string | null {
-  if (!chain.explorerUrl || !txHash) return null;
-  return `${chain.explorerUrl.replace(/\/+$/, '')}/tx/${txHash}`;
+/**
+ * URL bukti di explorer chain: transaksi bila ada hash, atau blok bila bukti
+ * hanya menunjuk nomor blok (mis. hasil `eth_call` pada blok snapshot).
+ * Format `/tx/<hash>` dan `/block/<nomor>` dipakai explorer EVM dan Solscan.
+ */
+export function explorerEvidenceUrl(
+  chain: ChainRow,
+  evidence: { txHash: string | null; blockNumber: number | null },
+): string | null {
+  if (!chain.explorerUrl) return null;
+  const base = chain.explorerUrl.replace(/\/+$/, '');
+  if (evidence.txHash) return `${base}/tx/${evidence.txHash}`;
+  if (evidence.blockNumber !== null) return `${base}/block/${evidence.blockNumber}`;
+  return null;
 }
 
 export function toEvidenceView(record: EvidenceRecord, chain: ChainRow): EvidenceView {
@@ -60,6 +73,6 @@ export function toEvidenceView(record: EvidenceRecord, chain: ChainRow): Evidenc
     heuristicName: evidence.heuristicName,
     confidence: numericToNumber(evidence.confidence),
     fetchedAt: evidence.fetchedAt.toISOString(),
-    explorerUrl: explorerTxUrl(chain, evidence.txHash),
+    explorerUrl: explorerEvidenceUrl(chain, evidence),
   };
 }

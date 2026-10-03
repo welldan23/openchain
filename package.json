@@ -15,7 +15,9 @@
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm run test --workspaces",
     "db:generate": "npm run db:generate --workspace api",
-    "db:migrate": "npm run db:migrate --workspace api"
+    "db:migrate": "npm run db:migrate --workspace api",
+    "ingest": "npm run ingest --workspace api --",
+    "smoke:chain": "npm run smoke:chain --workspace api --"
   },
   "engines": {
     "node": ">=22.12.0"

@@ -69,6 +69,8 @@ export function toTokenSummary(
 ): TokenSummaryResponse {
   const { chain, token, snapshot } = rows;
   const snapshotInfo = snapshot ? toSnapshot(snapshot, rows.sources, now, staleAfterMinutes) : null;
+  // Supply pada blok snapshot; snapshot lama tanpa data supply memakai supply terakhir token.
+  const totalSupplyRaw = snapshot?.totalSupplyRaw ?? token.totalSupplyRaw;
 
   return {
     chain: {
@@ -85,11 +87,9 @@ export function toTokenSummary(
       name: token.name,
       symbol: token.symbol,
       decimals: token.decimals,
-      totalSupplyRaw: token.totalSupplyRaw,
+      totalSupplyRaw,
       totalSupply:
-        token.totalSupplyRaw !== null && token.decimals !== null
-          ? formatUnits(token.totalSupplyRaw, token.decimals)
-          : null,
+        totalSupplyRaw !== null && token.decimals !== null ? formatUnits(totalSupplyRaw, token.decimals) : null,
       deployer: rows.deployer,
       deployedAt: token.deployedAt?.toISOString() ?? null,
       deployTxHash: token.deployTxHash,

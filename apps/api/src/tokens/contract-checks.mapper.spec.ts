@@ -1,6 +1,6 @@
 import { countChecks, sortChecks, toContractChecksResponse } from './contract-checks.mapper.js';
 import type { ContractCheckRow } from './rows.js';
-import { explorerTxUrl } from './evidence.view.js';
+import { explorerEvidenceUrl } from './evidence.view.js';
 
 const NOW = new Date('2026-10-03T05:00:00Z');
 
@@ -46,14 +46,20 @@ describe('sortChecks dan countChecks', () => {
   });
 });
 
-describe('explorerTxUrl', () => {
+describe('explorerEvidenceUrl', () => {
   it('membentuk URL transaksi dan membuang garis miring berlebih', () => {
-    expect(explorerTxUrl(chain, '0xabc')).toBe('https://etherscan.io/tx/0xabc');
+    expect(explorerEvidenceUrl(chain, { txHash: '0xabc', blockNumber: 5 })).toBe('https://etherscan.io/tx/0xabc');
   });
 
-  it('kosong bila chain belum punya explorer atau bukti tanpa hash', () => {
-    expect(explorerTxUrl({ ...chain, explorerUrl: null }, '0xabc')).toBeNull();
-    expect(explorerTxUrl(chain, null)).toBeNull();
+  it('menunjuk halaman blok untuk bukti state tanpa hash transaksi', () => {
+    expect(explorerEvidenceUrl(chain, { txHash: null, blockNumber: 23512880 })).toBe(
+      'https://etherscan.io/block/23512880',
+    );
+  });
+
+  it('kosong bila chain belum punya explorer atau bukti tanpa hash dan blok', () => {
+    expect(explorerEvidenceUrl({ ...chain, explorerUrl: null }, { txHash: '0xabc', blockNumber: 5 })).toBeNull();
+    expect(explorerEvidenceUrl(chain, { txHash: null, blockNumber: null })).toBeNull();
   });
 });
 

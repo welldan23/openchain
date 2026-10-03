@@ -9,16 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
+import { loadDotEnv } from '../common/env.js';
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../drizzle', import.meta.url));
-
-function loadDotEnv(): void {
-  try {
-    process.loadEnvFile('.env');
-  } catch {
-    // .env opsional; variabel bisa datang dari environment langsung.
-  }
-}
 
 async function main(): Promise<void> {
   loadDotEnv();

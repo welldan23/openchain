@@ -29,9 +29,174 @@ environment variable dan tidak pernah dicetak ke log.
 | `npm run start:dev` | Menjalankan API di port 4000 |
 | `npm run db:generate` | Membuat file migrasi baru dari perubahan skema |
 | `npm run db:migrate` | Menerapkan migrasi ke database di `DATABASE_URL` |
+| `npm run ingest -- <chain> <address>` | Ambil data satu token dari chain lalu simpan sebagai snapshot |
+| `npm run smoke:chain -- <chain\|all>` | Smoke test adapter chain; `--record` menyimpan status dukungannya |
 | `npm test` | Tes unit, termasuk tes skema di PostgreSQL WebAssembly (PGlite) |
 | `npm run test:e2e` | Tes endpoint lewat HTTP dengan database PGlite |
 | `npm run typecheck` / `npm run lint` | Cek tipe dan lint |
+
+Tes tidak memakai jaringan: RPC, Blockscout, dan Dexscreener diganti versi
+palsu. Uji ke jaringan sungguhan dilakukan lewat `ingest` dan `smoke:chain`.
+
+## Mengambil data on-chain
+
+### Ingest token
+
+```bash
+npm run ingest -- robinhood 0x008Df4b3E857D06c4603Aeb11F267ccD32ce2005
+npm run ingest -- ethereum 0x6982508145454Ce325dDbE47a25d4ec3d2311933 --json
+```
+
+Satu kali ingest berjalan seperti ini:
+
+1. Explorer, indexer holder, dan data pasar diambil paralel.
+2. Blok dipatok 3 blok di belakang blok terbaru. Node RPC di balik load
+   balancer yang sedikit tertinggal tetap punya blok itu, dan reorg dangkal
+   tidak mengubah snapshot.
+3. State on-chain dibaca lewat RPC pada blok itu: nama, simbol, decimals, total
+   supply, `owner()`, slot proxy EIP-1967, dan bytecode.
+4. Saldo 50 holder teratas dari indexer dibaca ulang lewat `balanceOf` pada blok
+   yang sama, digabung dalam satu panggilan Multicall3. Bila satu saldo saja
+   gagal, daftar holder tidak disimpan supaya peringkat dan konsentrasi tidak
+   menyesatkan.
+5. Tx pembuatan dari explorer diverifikasi lewat receipt RPC sebelum dipakai
+   sebagai data deployer.
+6. Semuanya disimpan lewat `SnapshotRecorder`: run provider, address, profil
+   token, label eksternal, bukti, cek kontrak, dan snapshot.
+
+Aturan yang dijaga:
+
+- Setiap pengambilan provider dicatat di `provider_runs`, termasuk yang gagal,
+  beserta alasan, waktu, rentang blok, dan field yang hilang. Data yang gagal
+  diambil dibiarkan kosong, tidak ditebak.
+- Snapshot tetap dibuat walau explorer atau data pasar gagal; statusnya
+  `partial`. Snapshot tidak dibuat bila RPC gagal, chain ID RPC salah, address
+  bukan kontrak, atau token bukan ERC-20.
+- Ingest ulang aman: address, label, dan bukti tidak digandakan, identifier asli
+  tidak berubah, dan nilai yang kali ini gagal diambil tidak menimpa nilai lama.
+- Cek kontrak yang sudah berjalan: source code terverifikasi (label eksternal
+  dari explorer), owner (`owner()`), dan proxy (slot EIP-1967 dan clone
+  EIP-1167). Pajak, blacklist, mint, pause, kunci likuiditas, dan simulasi jual
+  berstatus `unknown` sampai fitur analisis risiko (fase 3). Skor risiko juga
+  masih `unknown`.
+- Bukti state pada blok snapshot tertaut ke halaman blok di explorer, karena
+  bukti itu tidak punya hash transaksi.
+
+Belum ada endpoint HTTP untuk memicu ingest, karena endpoint publik tanpa
+autentikasi bisa disalahgunakan untuk membanjiri provider. Ingest dijalankan
+lewat CLI atau job internal.
+
+### Smoke test chain
+
+```bash
+npm run smoke:chain -- robinhood
+npm run smoke:chain -- all --record
+```
+
+Smoke test memakai token contoh tiap chain dan memeriksa:
+
+- **RPC:** chain ID, umur blok terbaru, transaksi dan receipt, `eth_getLogs`, dan
+  `eth_call`. `debug_traceTransaction` dicek sebagai informasi saja.
+- **Explorer dan indexer:** info kontrak dan daftar holder.
+- **Data pasar:** pool DEX untuk token contoh, sekaligus memastikan id chain
+  Dexscreener benar.
+
+| Status | Arti |
+| --- | --- |
+| `validated` | Semua provider lolos; chain boleh disebut didukung |
+| `experimental` | RPC lolos, tapi explorer, indexer, atau data pasar belum; data token akan parsial |
+| `planned` | RPC belum lolos; chain belum bisa dipakai |
+
+`--record` menyimpan status ke `chains.support_status`. Status tidak pernah
+dinaikkan lewat migrasi, hanya lewat smoke test di lingkungan yang dipakai.
+
+### Environment variable provider
+
+Semuanya opsional dan tidak pernah dicetak. Daftar lengkapnya ada di
+`.env.example`.
+
+| Variabel | Fungsi |
+| --- | --- |
+| `RPC_URL_<CHAIN>` | Ganti RPC publik sebuah chain, mis. `RPC_URL_BSC`, dengan RPC berbayar ber-API key |
+| `BLOCKSCOUT_API_KEY` | Pakai Blockscout PRO API (API key gratis di dev.blockscout.com) untuk chain yang di-host Blockscout. Dikirim lewat header, bukan URL |
+| `BLOCKSCOUT_URL_<CHAIN>` | Ganti instance Blockscout sebuah chain |
+| `PROVIDER_TIMEOUT_MS` | Batas waktu tiap request provider (default 15000) |
+
+Request yang gagal karena batas rate (HTTP 429), error server (5xx), timeout,
+atau gangguan koneksi dicoba ulang sampai 3 kali dengan jeda yang makin panjang.
+
+Di jaringan yang wajib lewat proxy HTTP, jalankan Node dengan
+`NODE_USE_ENV_PROXY=1` supaya `fetch` memakai `HTTPS_PROXY`.
+
+## Adapter chain
+
+Semua sumber data diakses lewat abstraksi provider di `src/providers`:
+RPCProvider, ExplorerProvider, IndexedDataProvider, MarketDataProvider,
+EntityLabelProvider, dan SecurityProvider. EntityLabelProvider dan
+SecurityProvider baru berupa interface. Label eksternal saat ini ikut dari data
+holder Blockscout, dan analisis keamanan menyusul di fase 3.
+
+Adapter EVM (`src/chains/evm`) dipakai semua chain EVM. Perbedaan per chain ada
+di `src/chains/chain-definitions.ts`: RPC, explorer, indexer, id Dexscreener,
+token standard (ERC-20), model blok, model event (log), format address, dan
+token contoh untuk smoke test.
+
+Hasil smoke test dari lingkungan pengembangan pada 3 Oktober 2026:
+
+| Chain | RPC | Explorer dan indexer | Data pasar | Status |
+| --- | --- | --- | --- | --- |
+| Robinhood Chain (4663) | lolos | ditolak proteksi bot Cloudflare (HTTP 403) | lolos | `experimental` |
+| Ethereum (1) | lolos | lolos | lolos | `validated` |
+| Base (8453) | lolos | lolos | lolos | `validated` |
+| BNB Chain (56) | gagal | belum ada | lolos | `planned` |
+| Arbitrum One (42161) | lolos | lolos | lolos | `validated` |
+| OP Mainnet (10) | lolos | lolos | lolos | `validated` |
+| Polygon PoS (137) | lolos | lolos | lolos | `validated` |
+| HyperEVM (999) | lolos | belum ada | lolos | `experimental` |
+
+Status bisa berbeda di lingkungan lain, jadi jalankan ulang smoke test di
+server yang dipakai. Beberapa catatan:
+
+- **Robinhood Chain:** explorer resminya Blockscout
+  (`robinhoodchain.blockscout.com`), tapi instance publiknya menolak request
+  dari server dengan proteksi bot. Isi `BLOCKSCOUT_API_KEY` supaya data holder
+  dan verifikasi kontrak lewat PRO API. Tanpa itu, snapshot Robinhood berstatus
+  `partial`.
+- **BNB Chain:** belum ada RPC publik gratis yang melayani semua method minimum.
+  RPC resmi menolak `eth_getLogs`, dan publicnode menolak receipt tanpa token.
+  Isi `RPC_URL_BSC`. Blockscout juga tidak meng-host BNB Chain, jadi explorer
+  menyusul.
+- **HyperEVM:** explorer Blockscout-nya sedang dialihkan, jadi explorer dan
+  indexer menyusul.
+- **Node non-archive:** sering tidak menyimpan indeks transaksi lama. Data
+  deployer token yang sudah lama bisa kosong, dan alasannya tercatat.
+
+## Audit sumber data
+
+Tidak ada kode dari repository referensi yang disalin. Yang dipakai hanya API
+publik berikut, sesuai syarat audit di PRD.
+
+| Sumber | Dipakai untuk | Lisensi dan syarat | Kematangan | Keamanan | Chain |
+| --- | --- | --- | --- | --- | --- |
+| RPC publik (JSON-RPC) | State on-chain pada blok snapshot | Layanan gratis dengan batas rate; bisa diganti lewat `RPC_URL_<CHAIN>` | Standar JSON-RPC Ethereum | Hanya method baca di daftar izin; URL tidak pernah dicetak | 8 chain EVM; BNB Chain belum lengkap |
+| Blockscout REST API v2 | Verifikasi kontrak, pembuat, jumlah dan daftar holder, label | Perangkat lunak GPL-3.0; kita hanya memanggil API. PRO API gratis 5 request/detik, 100 ribu kredit/hari | Explorer open-source, explorer resmi Robinhood Chain | API key lewat header, bukan URL | Robinhood (butuh API key dari server), Ethereum, Base, Arbitrum, OP, Polygon |
+| Dexscreener API | Harga, perubahan 24 jam, market cap, FDV, likuiditas, volume, jumlah transaksi | Boleh dipakai komersial; dilarang untuk produk yang bersaing langsung dengan Dexscreener atau menjual ulang API-nya. Batas 300 request/menit | API publik populer | Tanpa API key | 8 chain EVM, id chain sudah dicek |
+| Multicall3 (`0xcA11…CA11`) | Membaca saldo banyak holder dalam satu `eth_call` | Kontrak publik berlisensi MIT | Dipakai luas di ekosistem EVM | Hanya lewat `eth_call`; SHA-256 bytecode dicek dulu sebelum dipakai | 8 chain EVM, bytecode identik |
+
+Label dari Blockscout bersifat eksternal (`external_label`) dan probabilistik,
+bukan bukti kepemilikan. Yang dipetakan hanya tag kategori yang jelas, mis.
+exchange, liquidity pool, bridge, dan burn. Tag lain dibiarkan.
+
+## Keamanan read-only
+
+- RPC hanya boleh memanggil method baca: `eth_chainId`, `eth_blockNumber`,
+  `eth_getBlockByNumber`, `eth_getTransactionByHash`,
+  `eth_getTransactionReceipt`, `eth_getLogs`, `eth_call`, `eth_getCode`,
+  `eth_getStorageAt`, dan `debug_traceTransaction`. Method lain seperti
+  `eth_sendRawTransaction` atau `eth_sign` ditolak sebelum ada request jaringan.
+- Tidak ada private key, signing, wallet connect, atau library wallet.
+- Pesan error yang disimpan tidak memuat URL, header, atau API key. Deretan
+  karakter panjang yang mirip API key disensor.
 
 ## Endpoint
 
@@ -62,7 +227,9 @@ provider.
   `SNAPSHOT_STALE_AFTER_MINUTES` (default 60), dan `unavailable` bila token
   belum punya snapshot. Data yang belum tersedia bernilai `null`, tidak ditebak.
 - Supply mentah dikirim sebagai string (`totalSupplyRaw`) supaya presisi uint256
-  terjaga, beserta versi desimalnya (`totalSupply`).
+  terjaga, beserta versi desimalnya (`totalSupply`). Supply diambil dari
+  snapshot yang dipilih, jadi snapshot lama tetap menampilkan supply pada
+  bloknya.
 - Respons error: `404` untuk chain, token, atau snapshot yang tidak ada, dan
   `400` untuk format address, nomor blok, atau waktu yang salah.
 
@@ -75,7 +242,8 @@ yang bisa diubah owner atau mint authority yang masih aktif.
   (`unknown`), lalu lolos (`pass`). `summary` berisi jumlah per status.
 - Tiap pemeriksaan membawa klasifikasi dan daftar bukti: hash, blok, waktu,
   address terkait, method, penjelasan, dan `explorerUrl` bila chain punya
-  explorer.
+  explorer. `explorerUrl` menunjuk halaman transaksi, atau halaman blok untuk
+  bukti berupa state pada sebuah blok.
 - Pemeriksaan yang belum dijalankan berstatus `unknown` tanpa klasifikasi.
 - Pemilih snapshot, status data, dan respons error sama dengan endpoint
   ringkasan.
@@ -151,7 +319,8 @@ Aturan PRD yang dijaga langsung oleh database:
   `heuristic` wajib punya nama heuristic dan confidence, dan label eksternal
   wajib menyebut provider-nya.
 - Snapshot disimpan per token per blok supaya investigasi bisa direproduksi,
-  dan bukti punya `evidence_key` deterministik supaya penyimpanan idempotent.
+  termasuk total supply pada blok itu. Bukti punya `evidence_key` deterministik
+  supaya penyimpanan idempotent.
 - Semua chain dimulai dengan status `planned`. Chain baru boleh disebut
   didukung (`validated`) setelah adapter dan smoke test-nya lulus.
 

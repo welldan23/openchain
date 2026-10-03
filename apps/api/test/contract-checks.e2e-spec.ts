@@ -87,8 +87,7 @@ describe('GET /api/tokens/:chain/:address/contract-checks', () => {
         blockNumber: 23400000,
         blockTimestamp: '2026-09-28T10:05:00.000Z',
         method: 'setSellTax(uint256)',
-        // Robinhood Chain belum punya URL explorer di data chain.
-        explorerUrl: null,
+        explorerUrl: `https://robinhoodchain.blockscout.com/tx/${testTxHash(`tax-${latestSnapshotId}`)}`,
       }),
     ]);
     const honeypot = body.checks.find((check: { code: string }) => check.code === 'honeypot');

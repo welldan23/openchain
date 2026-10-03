@@ -83,6 +83,11 @@ export const tokenSnapshots = pgTable(
     blockNumber: blockNumber('block_number').notNull(),
     fetchedAt: timestampTz('fetched_at').notNull(),
     dataStatus: dataStatus('data_status').notNull(),
+    /**
+     * Total supply pada blok snapshot. Disimpan per snapshot karena supply bisa
+     * berubah (mint/burn), supaya snapshot lama tetap menampilkan supply-nya.
+     */
+    totalSupplyRaw: rawAmount('total_supply_raw'),
     priceUsd: numeric('price_usd', { precision: 38, scale: 18 }),
     priceChange24hPct: numeric('price_change_24h_pct', {
       precision: 12,
@@ -110,6 +115,10 @@ export const tokenSnapshots = pgTable(
     check(
       'token_snapshots_top10_within_top50',
       sql`${t.top10Pct} is null or ${t.top50Pct} is null or ${t.top10Pct} <= ${t.top50Pct}`,
+    ),
+    check(
+      'token_snapshots_total_supply_non_negative',
+      sql`${t.totalSupplyRaw} is null or ${t.totalSupplyRaw} >= 0`,
     ),
     check(
       'token_snapshots_risk_score_range',

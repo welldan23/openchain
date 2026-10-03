@@ -28,6 +28,8 @@ export interface RecordSnapshotInput {
   fetchedAt: Date;
   /** Provider yang membentuk snapshot; status data diturunkan dari sini. */
   providerRunIds: number[];
+  /** Total supply mentah pada blok snapshot. */
+  totalSupplyRaw?: string | null;
   market?: {
     priceUsd?: Numeric;
     priceChange24hPct?: Numeric;
@@ -185,6 +187,7 @@ export class SnapshotRecorder {
       const values = {
         fetchedAt: input.fetchedAt,
         dataStatus,
+        totalSupplyRaw: input.totalSupplyRaw ?? null,
         priceUsd: toNumeric(input.market?.priceUsd),
         priceChange24hPct: toNumeric(input.market?.priceChange24hPct),
         marketCapUsd: toNumeric(input.market?.marketCapUsd),

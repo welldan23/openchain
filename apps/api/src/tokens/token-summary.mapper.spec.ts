@@ -76,6 +76,8 @@ describe('toTokenSummary', () => {
           blockNumber: 23512880,
           fetchedAt: new Date('2026-10-03T05:30:00Z'),
           dataStatus: 'partial',
+          // Supply pada blok snapshot berbeda dari supply terakhir token (ada burn).
+          totalSupplyRaw: '900000000000000000000000000',
           priceUsd: '0.004213000000000000',
           priceChange24hPct: '12.4000',
           marketCapUsd: '4213000.00',
@@ -111,6 +113,8 @@ describe('toTokenSummary', () => {
       60,
     );
     expect(summary.dataStatus).toBe('partial');
+    expect(summary.token.totalSupplyRaw).toBe('900000000000000000000000000');
+    expect(summary.token.totalSupply).toBe('900000000');
     expect(summary.market).toEqual({
       priceUsd: 0.004213,
       priceChange24hPct: 12.4,
