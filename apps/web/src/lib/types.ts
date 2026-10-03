@@ -285,3 +285,22 @@ export interface WalletTraceSummary {
   toLabel?: EntityLabel;
   hopCount: number;
 }
+
+/** Satu perpindahan aset di dalam sebuah transaksi. */
+export interface TxMovement {
+  from: string;
+  fromLabel?: EntityLabel;
+  to: string;
+  toLabel?: EntityLabel;
+  asset: FlowAsset;
+  amount: number;
+  amountUsd?: number;
+}
+
+/** Bukti satu transaksi: hash, waktu, dan perpindahan aset di dalamnya. */
+export interface TxEvidence {
+  chain: ChainId;
+  txHash: string;
+  timestamp: string;
+  movements: TxMovement[];
+}

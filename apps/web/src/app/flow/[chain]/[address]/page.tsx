@@ -72,7 +72,11 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
-          <TransfersPanel chain={flow.chain} transfers={sortTransfersNewestFirst(transfers)} />
+          <TransfersPanel
+            chain={flow.chain}
+            owner={{ address: flow.address, label: flow.label }}
+            transfers={sortTransfersNewestFirst(transfers)}
+          />
         </div>
         <aside className="min-w-0 space-y-5" aria-label="Telusur dan keterangan">
           <TracesPanel traces={traces} />

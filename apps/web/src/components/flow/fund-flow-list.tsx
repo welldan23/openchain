@@ -1,17 +1,19 @@
 "use client";
 
 import { ArrowDownLeft, ArrowUpRight, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { EntityLabelBadge } from "@/components/badges";
+import { EvidenceProvider, EvidenceTrigger } from "@/components/evidence/evidence-dialog";
 import { Badge } from "@/components/ui/badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { EmptyState } from "@/components/ui/states";
-import { explorerAddressUrl, explorerTxUrl } from "@/lib/chains";
+import { explorerAddressUrl } from "@/lib/chains";
 import { cn } from "@/lib/cn";
+import { evidenceFromTransfers } from "@/lib/evidence";
 import { formatDateTime, formatTokenAmount, formatUsdCompact } from "@/lib/format";
 import { filterTransfers, type DirectionFilter } from "@/lib/fund-flow";
 import { FLOW_DIRECTION_META } from "@/lib/labels";
-import type { ChainId, FlowTransfer } from "@/lib/types";
+import type { ChainId, EntityLabel, FlowTransfer } from "@/lib/types";
 
 /** Jumlah baris yang tampil sebelum tombol "Tampilkan lebih banyak". */
 const PAGE_SIZE = 8;
@@ -65,13 +67,7 @@ function TransferRow({ chain, transfer }: { chain: ChainId; transfer: FlowTransf
             · {transfer.amountUsd !== undefined ? formatUsdCompact(transfer.amountUsd) : "harga tidak diketahui"}
           </span>
         </span>
-        <HashLink
-          value={transfer.txHash}
-          href={explorerTxUrl(chain, transfer.txHash)}
-          head={8}
-          tail={4}
-          copyLabel="Salin hash transaksi"
-        />
+        <EvidenceTrigger txHash={transfer.txHash} />
       </div>
     </li>
   );
@@ -79,6 +75,8 @@ function TransferRow({ chain, transfer }: { chain: ChainId; transfer: FlowTransf
 
 interface FundFlowListProps {
   chain: ChainId;
+  /** Address yang dilacak, untuk menyusun pengirim dan penerima di modal bukti. */
+  owner: { address: string; label?: EntityLabel };
   /** Sudah diurutkan dari yang terbaru. */
   transfers: FlowTransfer[];
 }
@@ -87,69 +85,73 @@ interface FundFlowListProps {
  * Daftar dana masuk & keluar dengan tab arah. Setiap tab menyebut jumlah
  * transfer dan total USD-nya; transfer tanpa harga disebut terpisah.
  */
-export function FundFlowList({ chain, transfers }: FundFlowListProps) {
+export function FundFlowList({ chain, owner, transfers }: FundFlowListProps) {
   const [filter, setFilter] = useState<DirectionFilter>("all");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const active = TABS.find((tab) => tab.id === filter)!;
   const { items, totalUsd, unpricedCount } = filterTransfers(transfers, filter);
   const shown = items.slice(0, visible);
+  // Bukti mencakup semua transfer, jadi tautan bukti tetap terbuka walau barisnya di tab lain.
+  const evidence = useMemo(() => evidenceFromTransfers(chain, owner, transfers), [chain, owner, transfers]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Pilih arah dana" className="inline-flex rounded-lg border border-line bg-surface-raised p-0.5">
-          {TABS.map((tab) => {
-            const count = filterTransfers(transfers, tab.id).items.length;
-            const selected = tab.id === filter;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => {
-                  setFilter(tab.id);
-                  setVisible(PAGE_SIZE);
-                }}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-                  selected ? "bg-surface text-foreground shadow-sm ring-1 ring-line" : "text-muted hover:text-foreground",
-                )}
-              >
-                {tab.label} <span className="tabular-nums text-muted">{count}</span>
-              </button>
-            );
-          })}
+    <EvidenceProvider evidence={evidence}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div role="group" aria-label="Pilih arah dana" className="inline-flex rounded-lg border border-line bg-surface-raised p-0.5">
+            {TABS.map((tab) => {
+              const count = filterTransfers(transfers, tab.id).items.length;
+              const selected = tab.id === filter;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setFilter(tab.id);
+                    setVisible(PAGE_SIZE);
+                  }}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+                    selected ? "bg-surface text-foreground shadow-sm ring-1 ring-line" : "text-muted hover:text-foreground",
+                  )}
+                >
+                  {tab.label} <span className="tabular-nums text-muted">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted" aria-live="polite">
+            {active.totalLabel}:{" "}
+            <span className="font-medium tabular-nums text-foreground">
+              {filter === "all" ? signedUsd(totalUsd) : formatUsdCompact(totalUsd)}
+            </span>
+            {unpricedCount > 0 ? <span> · {unpricedCount} tanpa harga</span> : null}
+          </p>
         </div>
-        <p className="text-xs text-muted" aria-live="polite">
-          {active.totalLabel}:{" "}
-          <span className="font-medium tabular-nums text-foreground">
-            {filter === "all" ? signedUsd(totalUsd) : formatUsdCompact(totalUsd)}
-          </span>
-          {unpricedCount > 0 ? <span> · {unpricedCount} tanpa harga</span> : null}
-        </p>
-      </div>
 
-      {items.length === 0 ? (
-        <EmptyState title={filter === "all" ? "Belum ada transfer" : `Belum ada dana ${active.label.toLowerCase()}`} description={EMPTY_TEXT[filter]} />
-      ) : (
-        <>
-          <ol className="divide-y divide-line">
-            {shown.map((transfer) => (
-              <TransferRow key={transfer.id} chain={chain} transfer={transfer} />
-            ))}
-          </ol>
-          {items.length > shown.length ? (
-            <button
-              type="button"
-              onClick={() => setVisible((count) => count + PAGE_SIZE)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <ChevronDown className="size-3.5" aria-hidden />
-              Tampilkan lebih banyak ({items.length - shown.length} lagi)
-            </button>
-          ) : null}
-        </>
-      )}
-    </div>
+        {items.length === 0 ? (
+          <EmptyState title={filter === "all" ? "Belum ada transfer" : `Belum ada dana ${active.label.toLowerCase()}`} description={EMPTY_TEXT[filter]} />
+        ) : (
+          <>
+            <ol className="divide-y divide-line">
+              {shown.map((transfer) => (
+                <TransferRow key={transfer.id} chain={chain} transfer={transfer} />
+              ))}
+            </ol>
+            {items.length > shown.length ? (
+              <button
+                type="button"
+                onClick={() => setVisible((count) => count + PAGE_SIZE)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <ChevronDown className="size-3.5" aria-hidden />
+                Tampilkan lebih banyak ({items.length - shown.length} lagi)
+              </button>
+            ) : null}
+          </>
+        )}
+      </div>
+    </EvidenceProvider>
   );
 }
