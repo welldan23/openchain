@@ -5,7 +5,7 @@
  * Setiap sorotan membawa tag klasifikasi supaya user tahu asal datanya.
  * Angka turunan (rasio, persentase) dihitung dari data snapshot yang sama.
  */
-import { getChain } from "./chains";
+import { describeContractChecks } from "./contract-check";
 import {
   formatAge,
   formatDate,
@@ -48,8 +48,7 @@ function describeSeverityCounts(findings: RiskFinding[]): string {
 }
 
 export function buildTokenHighlights(data: TokenInvestigation): TokenHighlight[] {
-  const { token, market, risk, holders, snapshot } = data;
-  const chain = getChain(token.chain);
+  const { token, market, risk, contract, holders, snapshot } = data;
   const highlights: TokenHighlight[] = [];
 
   highlights.push({
@@ -103,16 +102,13 @@ export function buildTokenHighlights(data: TokenInvestigation): TokenHighlight[]
         },
   );
 
-  // Verifikasi source code hanya relevan untuk kontrak EVM.
-  if (chain.addressFormat === "evm") {
-    highlights.push({
-      id: "verification",
-      text: token.verified
-        ? `Source code kontrak terverifikasi di ${chain.explorer.name}.`
-        : `Source code kontrak belum terverifikasi di ${chain.explorer.name}, jadi isi kontrak belum bisa dibaca.`,
-      classification: "external_label",
-    });
-  }
+  highlights.push({
+    id: "contract",
+    text:
+      contract.items.length > 0
+        ? `Cek kontrak ${contract.standard}: ${describeContractChecks(contract.items)}.`
+        : "Cek kontrak belum tersedia untuk token ini.",
+  });
 
   return highlights;
 }
@@ -127,6 +123,7 @@ export interface SectionLink {
 export function buildSectionLinks(data: TokenInvestigation): SectionLink[] {
   return [
     { href: "#risiko", label: "Risiko", count: data.risk.findings.length },
+    { href: "#kontrak", label: "Kontrak", count: data.contract.items.length },
     { href: "#pemegang", label: "Pemegang", count: data.holders.top.length },
     { href: "#aktivitas", label: "Aktivitas", count: data.activity.length },
     { href: "#bukti", label: "Bukti", count: data.evidence.length },

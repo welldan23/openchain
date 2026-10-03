@@ -1,5 +1,6 @@
 import type {
   ActivityType,
+  ContractCheckStatus,
   EntityLabelType,
   FindingClassification,
   RiskLevel,
@@ -123,4 +124,27 @@ export const ACTIVITY_META: Record<ActivityType, Meta> = {
   sell: { label: "Jual", className: "bg-orange-500/15 text-orange-300 ring-orange-400/30" },
   transfer: { label: "Transfer", className: "bg-sky-500/15 text-sky-300 ring-sky-400/30" },
   burn: { label: "Burn", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
+};
+
+export const CHECK_STATUS_META: Record<ContractCheckStatus, Meta & { iconClass: string }> = {
+  fail: {
+    label: "Berisiko",
+    className: "bg-rose-500/15 text-rose-300 ring-rose-400/40",
+    iconClass: "text-rose-400",
+  },
+  warn: {
+    label: "Perlu perhatian",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/40",
+    iconClass: "text-amber-400",
+  },
+  unknown: {
+    label: "Belum dicek",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+    iconClass: "text-slate-400",
+  },
+  pass: {
+    label: "Lolos",
+    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/40",
+    iconClass: "text-emerald-400",
+  },
 };

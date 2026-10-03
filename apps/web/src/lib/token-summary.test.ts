@@ -9,7 +9,7 @@ const bySymbol = (symbol: string): TokenInvestigation =>
 const plain = (value: string) => value.replace(/[  ]/g, " ");
 
 describe("ringkasan token", () => {
-  it("menyusun sorotan lengkap untuk token EVM", () => {
+  it("menyusun sorotan lengkap untuk token dengan data", () => {
     const highlights = buildTokenHighlights(bySymbol("NBLA"));
     expect(highlights.map((item) => item.id)).toEqual([
       "age",
@@ -17,7 +17,7 @@ describe("ringkasan token", () => {
       "turnover",
       "concentration",
       "findings",
-      "verification",
+      "contract",
     ]);
     const text = Object.fromEntries(highlights.map((item) => [item.id, plain(item.text)]));
     expect(text.age).toBe("Token berumur 20 hari, dideploy 12 Sep 2026.");
@@ -27,7 +27,9 @@ describe("ringkasan token", () => {
       "10 holder teratas menguasai 61,8% supply, termasuk pool likuiditas 18,4%.",
     );
     expect(text.findings).toBe("5 temuan risiko: 2 tinggi, 2 sedang, 1 rendah.");
-    expect(text.verification).toBe("Source code kontrak terverifikasi di Etherscan.");
+    expect(text.contract).toBe(
+      "Cek kontrak ERC-20: 1 berisiko, 3 perlu perhatian, 1 belum dicek, 4 lolos.",
+    );
   });
 
   it("memberi tag klasifikasi sesuai asal data", () => {
@@ -40,28 +42,31 @@ describe("ringkasan token", () => {
       turnover: "calculation",
       concentration: "calculation",
       findings: undefined,
-      verification: "external_label",
+      contract: undefined,
     });
   });
 
-  it("tidak menampilkan status verifikasi source code untuk Solana", () => {
-    const ids = buildTokenHighlights(bySymbol("KODO")).map((item) => item.id);
-    expect(ids).not.toContain("verification");
-    const findings = buildTokenHighlights(bySymbol("KODO")).find((item) => item.id === "findings");
-    expect(findings?.text).toBe("5 temuan risiko: 1 kritis, 2 tinggi, 1 sedang, 1 rendah.");
+  it("merangkum temuan dan cek kontrak token Solana", () => {
+    const text = Object.fromEntries(
+      buildTokenHighlights(bySymbol("KODO")).map((item) => [item.id, item.text]),
+    );
+    expect(text.findings).toBe("5 temuan risiko: 1 kritis, 2 tinggi, 1 sedang, 1 rendah.");
+    expect(text.contract).toBe(
+      "Cek kontrak SPL Token: 2 berisiko, 1 perlu perhatian, 1 belum dicek, 2 lolos.",
+    );
   });
 
   it("melewati rasio yang tidak bisa dihitung saat data kosong", () => {
     const highlights = buildTokenHighlights(bySymbol("SUNY"));
-    expect(highlights.map((item) => item.id)).toEqual(["age", "findings", "verification"]);
+    expect(highlights.map((item) => item.id)).toEqual(["age", "findings", "contract"]);
     expect(highlights.find((item) => item.id === "age")?.text).toBe(
       "Token berumur 12 menit, dideploy 03 Okt 2026.",
     );
     expect(highlights.find((item) => item.id === "findings")?.text).toBe(
       "Belum ada temuan risiko pada snapshot ini.",
     );
-    expect(highlights.find((item) => item.id === "verification")?.text).toContain(
-      "belum terverifikasi di BaseScan",
+    expect(highlights.find((item) => item.id === "contract")?.text).toBe(
+      "Cek kontrak belum tersedia untuk token ini.",
     );
   });
 
@@ -78,6 +83,7 @@ describe("ringkasan token", () => {
   it("membuat tautan lompat beserta jumlah isi tiap bagian", () => {
     expect(buildSectionLinks(bySymbol("NBLA"))).toEqual([
       { href: "#risiko", label: "Risiko", count: 5 },
+      { href: "#kontrak", label: "Kontrak", count: 9 },
       { href: "#pemegang", label: "Pemegang", count: 10 },
       { href: "#aktivitas", label: "Aktivitas", count: 8 },
       { href: "#bukti", label: "Bukti", count: 6 },

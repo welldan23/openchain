@@ -93,6 +93,29 @@ export interface RiskSummary {
   findings: RiskFinding[];
 }
 
+/** Hasil satu pemeriksaan kontrak. */
+export type ContractCheckStatus = "fail" | "warn" | "unknown" | "pass";
+
+export interface ContractCheckItem {
+  id: string;
+  /** Nama pemeriksaan, mis. "Mint authority". */
+  label: string;
+  status: ContractCheckStatus;
+  /** Hasil singkat, mis. "Aktif, pembuat bisa mencetak supply baru". */
+  value: string;
+  /** Kenapa pemeriksaan ini penting. */
+  description?: string;
+  /** Kosong bila pemeriksaan belum dijalankan (status `unknown`). */
+  classification?: FindingClassification;
+  evidenceTxHashes: string[];
+}
+
+export interface ContractCheck {
+  /** Standar token, mis. "ERC-20" atau "SPL Token". */
+  standard: string;
+  items: ContractCheckItem[];
+}
+
 export interface TokenHolder {
   rank: number;
   address: string;
@@ -149,6 +172,7 @@ export interface TokenInvestigation {
   token: TokenProfile;
   market: TokenMarket;
   risk: RiskSummary;
+  contract: ContractCheck;
   holders: {
     concentration: HolderConcentration;
     top: TokenHolder[];
