@@ -129,3 +129,21 @@ export function sortTransfersNewestFirst(transfers: FlowTransfer[]): FlowTransfe
     .sort((a, b) => Date.parse(b.transfer.timestamp) - Date.parse(a.transfer.timestamp) || a.index - b.index)
     .map(({ transfer }) => transfer);
 }
+
+export type DirectionFilter = FlowDirection | "all";
+
+/** Transfer untuk satu tab daftar, beserta jumlah USD dari yang ada harganya. */
+export function filterTransfers(
+  transfers: FlowTransfer[],
+  filter: DirectionFilter,
+): { items: FlowTransfer[]; totalUsd: number; unpricedCount: number } {
+  const items = filter === "all" ? transfers : transfers.filter((item) => item.direction === filter);
+  let totalUsd = 0;
+  let unpricedCount = 0;
+  for (const item of items) {
+    if (!hasPrice(item)) unpricedCount += 1;
+    // Di tab "Semua", dana keluar mengurangi total supaya hasilnya sama dengan selisih.
+    else totalUsd += filter === "all" && item.direction === "out" ? -item.amountUsd : item.amountUsd;
+  }
+  return { items, totalUsd: roundUsd(totalUsd), unpricedCount };
+}

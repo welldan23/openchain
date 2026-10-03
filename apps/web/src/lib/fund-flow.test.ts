@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addressKey, addressTitle, sortTransfersNewestFirst, summarizeFlow, topCounterparties } from "./fund-flow";
+import { addressKey, addressTitle, filterTransfers, sortTransfersNewestFirst, summarizeFlow, topCounterparties } from "./fund-flow";
 import { MOCK_FLOWS } from "./mock/flows";
 import type { AddressFlow, FlowTransfer } from "./types";
 
@@ -120,5 +120,25 @@ describe("nama tampilan address", () => {
     expect(addressTitle({ type: "exchange", name: "Hot wallet", source: "external", sourceName: "x" })).toBe("Hot wallet");
     expect(addressTitle({ type: "deployer", source: "heuristic", sourceName: "x" })).toBe("Deployer");
     expect(addressTitle(undefined)).toBe("Address tanpa label");
+  });
+});
+
+describe("filter daftar dana masuk & keluar", () => {
+  it("memisahkan dana masuk dan keluar beserta jumlah USD-nya", () => {
+    const masuk = filterTransfers(funder.transfers, "in");
+    const keluar = filterTransfers(funder.transfers, "out");
+    expect([masuk.items.length, masuk.totalUsd, masuk.unpricedCount]).toEqual([6, 69_634.6, 1]);
+    expect([keluar.items.length, keluar.totalUsd, keluar.unpricedCount]).toEqual([7, 44_060, 0]);
+    expect(keluar.items.every((item) => item.direction === "out")).toBe(true);
+  });
+
+  it("tab semua memakai selisih yang sama dengan ringkasan", () => {
+    const semua = filterTransfers(funder.transfers, "all");
+    expect(semua.items).toHaveLength(13);
+    expect(semua.totalUsd).toBe(summarizeFlow(funder.chain, funder.transfers).netUsd);
+  });
+
+  it("kosong untuk address tanpa transfer", () => {
+    expect(filterTransfers([], "in")).toEqual({ items: [], totalUsd: 0, unpricedCount: 0 });
   });
 });
