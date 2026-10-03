@@ -140,10 +140,3 @@ const RESULT_KIND_FILTERS: ResultKindFilter[] = ["all", "token", "address", "tra
 export function parseResultKindFilter(value: string | undefined): ResultKindFilter {
   return RESULT_KIND_FILTERS.find((filter) => filter === value) ?? "all";
 }
-
-/** Jumlah hasil per jenis, untuk angka di tab filter. */
-export function countResultsByKind(results: SearchResult[]): Record<ResultKindFilter, number> {
-  const counts: Record<ResultKindFilter, number> = { all: results.length, token: 0, address: 0, transaction: 0 };
-  for (const result of results) counts[result.kind] += 1;
-  return counts;
-}

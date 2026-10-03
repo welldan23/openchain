@@ -4,11 +4,13 @@ import Link from "next/link";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { InvestigationHistory } from "@/components/search/investigation-history";
 import { GlobalSearch } from "@/components/search/global-search";
+import { SearchFilterPanel } from "@/components/search/search-filter-panel";
 import { SearchResults } from "@/components/search/search-results";
 import { listInvestigationHistory, listSearchExamples, searchInvestigations, searchPath } from "@/lib/api/search";
 import { firstParam } from "@/lib/flow-filter";
 import { formatNumber, shortenHash } from "@/lib/format";
-import { classifyQuery, parseResultKindFilter, QUERY_KIND_LABEL } from "@/lib/search";
+import { classifyQuery, QUERY_KIND_LABEL } from "@/lib/search";
+import { applySearchFilters, parseSearchFilters, searchFacets } from "@/lib/search-filter";
 
 export async function generateMetadata({ searchParams }: PageProps<"/cari">): Promise<Metadata> {
   const query = (firstParam((await searchParams).q) ?? "").trim();
@@ -54,12 +56,19 @@ function SearchHints() {
 export default async function SearchPage({ searchParams }: PageProps<"/cari">) {
   const params = await searchParams;
   const query = (firstParam(params.q) ?? "").trim();
-  const filter = parseResultKindFilter(firstParam(params.jenis));
+  const filters = parseSearchFilters({
+    jenis: firstParam(params.jenis),
+    jaringan: firstParam(params.jaringan),
+    label: firstParam(params.label),
+    sumber: firstParam(params.sumber),
+  });
   const now = new Date();
   const [response, history] = await Promise.all([
     query ? searchInvestigations(query) : Promise.resolve(null),
     listInvestigationHistory(),
   ]);
+
+  const filtered = response ? applySearchFilters(response.results, filters) : [];
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
@@ -84,7 +93,16 @@ export default async function SearchPage({ searchParams }: PageProps<"/cari">) {
                   Dikenali sebagai <span className="font-medium text-foreground/90">{QUERY_KIND_LABEL[response.kind]}</span>
                 </p>
               </div>
-              <SearchResults response={response} filter={filter} now={now} />
+              {response.results.length > 0 ? (
+                <SearchFilterPanel
+                  query={response.query}
+                  filters={filters}
+                  facets={searchFacets(response.results, filters)}
+                  shownCount={filtered.length}
+                  totalCount={response.results.length}
+                />
+              ) : null}
+              <SearchResults response={response} results={filtered} filters={filters} now={now} />
             </section>
           ) : (
             <SearchHints />

@@ -94,6 +94,6 @@ describe("API pencarian (mock)", () => {
     expect(history.every((item) => /^\/(token|flow|trace|map|multichain)\//.test(item.href))).toBe(true);
     expect(searchPath(" nbla ")).toBe("/cari?q=nbla");
     expect(searchPath("")).toBe("/cari");
-    expect(searchPath("nebula finance", "token")).toBe("/cari?q=nebula+finance&jenis=token");
+    expect(searchPath("nebula finance")).toBe("/cari?q=nebula+finance");
   });
 });

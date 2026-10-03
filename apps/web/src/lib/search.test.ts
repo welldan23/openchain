@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyQuery,
-  countResultsByKind,
   dedupeResults,
   describeResultMeta,
   highlightMatch,
@@ -105,16 +104,9 @@ describe("metadata hasil pencarian", () => {
     expect(tx.find((item) => item.id === "counterparty")).toMatchObject({ label: "Ke", value: "0xabab…abab" });
   });
 
-  it("membaca filter jenis dan menghitung hasil per jenis", () => {
+  it("membaca filter jenis dari URL", () => {
     expect(parseResultKindFilter("token")).toBe("token");
     expect(parseResultKindFilter("aneh")).toBe("all");
     expect(parseResultKindFilter(undefined)).toBe("all");
-    const result = (kind: SearchResult["kind"]): SearchResult => ({ id: kind, kind, title: "", subtitle: "", href: "", matchedBy: "" });
-    expect(countResultsByKind([result("token"), result("address"), result("address")])).toEqual({
-      all: 3,
-      token: 1,
-      address: 2,
-      transaction: 0,
-    });
   });
 });

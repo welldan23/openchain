@@ -1,13 +1,13 @@
-import { BadgeCheck, ChevronRight, SearchX, ShieldQuestion, type LucideIcon } from "lucide-react";
+import { BadgeCheck, ChevronRight, SearchX, ShieldQuestion, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/states";
 import type { SearchResponse } from "@/lib/api/search";
-import { MIN_TEXT_QUERY, searchPath } from "@/lib/api/search";
-import { cn } from "@/lib/cn";
+import { MIN_TEXT_QUERY } from "@/lib/api/search";
 import { FLOW_DIRECTION_META } from "@/lib/labels";
-import { countResultsByKind, describeResultMeta, normalizeText, QUERY_KIND_LABEL, type ResultKindFilter } from "@/lib/search";
+import { describeResultMeta, normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
+import { EMPTY_SEARCH_FILTERS, searchFilterHref, type SearchFilters } from "@/lib/search-filter";
 import type { SearchResult, SearchResultMeta } from "@/lib/types";
 import { RESULT_GROUPS } from "./kind-meta";
 
@@ -105,76 +105,44 @@ function NoResults({ response }: { response: SearchResponse }) {
   );
 }
 
-const FILTER_LABEL: Record<ResultKindFilter, string> = {
-  all: "Semua",
-  token: "Token",
-  address: "Address",
-  transaction: "Transaksi",
-};
-
-/** Tab jenis hasil; jenis tanpa hasil tetap tampil tapi tidak bisa diklik. */
-function KindFilterTabs({ response, filter }: { response: SearchResponse; filter: ResultKindFilter }) {
-  const counts = countResultsByKind(response.results);
-  return (
-    <nav aria-label="Saring jenis hasil" className="-mx-1 overflow-x-auto px-1">
-      <ul className="flex gap-1.5">
-        {(Object.keys(FILTER_LABEL) as ResultKindFilter[]).map((kind) => {
-          const current = kind === filter;
-          const content = (
-            <>
-              {FILTER_LABEL[kind]}
-              <span className="tabular-nums text-muted">{counts[kind]}</span>
-            </>
-          );
-          const base = "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset";
-          return (
-            <li key={kind}>
-              {counts[kind] === 0 && !current ? (
-                <span className={cn(base, "cursor-not-allowed text-muted/60 ring-line/60")}>{content}</span>
-              ) : (
-                <Link
-                  href={searchPath(response.query, kind)}
-                  aria-current={current ? "page" : undefined}
-                  scroll={false}
-                  className={cn(
-                    base,
-                    "transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-                    current ? "bg-surface-raised text-foreground ring-accent/50" : "text-foreground/80 ring-line hover:text-foreground",
-                  )}
-                >
-                  {content}
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
-}
-
 /** Hasil pencarian beserta ringkasan entitasnya, dikelompokkan per jenis: token, address, transaksi. */
 export function SearchResults({
   response,
-  filter,
+  results,
+  filters,
   now,
 }: {
   response: SearchResponse;
-  filter: ResultKindFilter;
+  /** Hasil setelah filter. */
+  results: SearchResult[];
+  filters: SearchFilters;
   now: Date;
 }) {
   if (response.results.length === 0) return <NoResults response={response} />;
-  const groups = RESULT_GROUPS.filter((group) => filter === "all" || group.kind === filter);
+  if (results.length === 0) {
+    return (
+      <EmptyState
+        icon={SlidersHorizontal}
+        title="Tidak ada hasil dengan filter ini"
+        description="Longgarkan filter jenis, jaringan, atau label untuk melihat hasil lain."
+        action={
+          <Link
+            href={searchFilterHref(response.query, EMPTY_SEARCH_FILTERS)}
+            scroll={false}
+            className="inline-flex items-center rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
+          >
+            Hapus semua filter
+          </Link>
+        }
+      />
+    );
+  }
+  const groups = RESULT_GROUPS.filter((group) => filters.kind === "all" || group.kind === filters.kind);
   return (
     <div className="space-y-5">
-      <KindFilterTabs response={response} filter={filter} />
       {groups.map((group) => {
-        const items = response.results.filter((result) => result.kind === group.kind);
-        if (items.length === 0) {
-          return filter === "all" ? null : (
-            <EmptyState key={group.kind} icon={SearchX} title={`Tidak ada hasil ${group.title.toLowerCase()}`} description="Coba jenis lain di atas." />
-          );
-        }
+        const items = results.filter((result) => result.kind === group.kind);
+        if (items.length === 0) return null;
         const headingId = `hasil-${group.kind}`;
         return (
           <section key={group.kind} aria-labelledby={headingId}>
