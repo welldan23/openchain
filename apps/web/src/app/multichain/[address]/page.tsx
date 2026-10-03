@@ -4,6 +4,7 @@ import { cache } from "react";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { BridgesPanel } from "@/components/multichain/bridges-panel";
 import { ChainActivityGrid } from "@/components/multichain/chain-activity-grid";
+import { ChainComparisonTable } from "@/components/multichain/chain-comparison-table";
 import { CrossChainActivityPanel } from "@/components/multichain/cross-chain-activity-panel";
 import { MultichainChainPicker } from "@/components/multichain/chain-picker";
 import { MultichainHeader } from "@/components/multichain/multichain-header";
@@ -14,7 +15,7 @@ import { getMultichainProfile } from "@/lib/api/multichain";
 import { firstParam } from "@/lib/flow-filter";
 import { formatNumber, shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
-import { filterProfileChains, isActive, parseChainSelection, summarizeMultichain } from "@/lib/multichain";
+import { comparisonRows, filterProfileChains, isActive, parseChainSelection, summarizeMultichain } from "@/lib/multichain";
 
 /** Dipakai bersama oleh generateMetadata & Page; `cache` mencegah fetch ganda. */
 const loadProfile = cache(async (address: string) => getMultichainProfile(address));
@@ -66,6 +67,7 @@ export default async function MultichainPage({ params, searchParams }: PageProps
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
         <div className="min-w-0 space-y-5 lg:col-span-2">
+          {profile.chains.length > 1 ? <ChainComparisonTable rows={comparisonRows(profile)} /> : null}
           <ChainActivityGrid address={profile.address} chains={profile.chains} flowChains={flowChains} />
           <BridgesPanel bridges={profile.bridges} />
           <CrossChainActivityPanel owner={{ address: profile.address, label: profile.label }} activities={profile.activities} />

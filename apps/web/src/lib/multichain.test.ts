@@ -3,12 +3,15 @@ import { MOCK_FLOWS } from "./mock/flows";
 import { MOCK_MULTICHAIN } from "./mock/multichain";
 import {
   bridgeFeePct,
+  columnLeaders,
+  comparisonRows,
   filterProfileChains,
   groupActivitiesByDay,
   isEvmAddress,
   matchesActivityFilter,
   parseChainSelection,
   serializeChainSelection,
+  sortComparison,
   sortChainActivity,
   summarizeMultichain,
 } from "./multichain";
@@ -105,5 +108,29 @@ describe("linimasa lintas chain", () => {
     expect(groups.find((group) => group.day === "2026-10-02")).toBeUndefined();
     expect(groups.flatMap((group) => group.items)).toHaveLength(busy.activities.length);
     expect(groupActivitiesByDay([])).toEqual([]);
+  });
+});
+
+describe("tabel perbandingan antar chain", () => {
+  it("menghitung porsi transaksi, selisih, dan bridge per chain", () => {
+    const rows = comparisonRows(busy);
+    const ethereum = rows.find((row) => row.chain === "ethereum")!;
+    expect(ethereum.txSharePct).toBe(43.56);
+    expect(ethereum.netUsd).toBe(83_200);
+    expect([ethereum.bridgesOut, ethereum.bridgesIn]).toEqual([1, 0]);
+    expect(rows.find((row) => row.chain === "arbitrum")).toMatchObject({ bridgesOut: 0, bridgesIn: 1 });
+    expect(rows.reduce((sum, row) => sum + row.txSharePct, 0)).toBeCloseTo(100, 1);
+  });
+
+  it("mengurutkan per kolom, chain tidak aktif selalu di bawah", () => {
+    const rows = comparisonRows(funder);
+    expect(sortComparison(rows, "txCount", "asc").map((row) => row.chain)).toEqual(["base", "ethereum", "arbitrum", "bsc"]);
+    expect(sortComparison(rows, "chain", "desc").map((row) => row.chain)).toEqual(["ethereum", "base", "bsc", "arbitrum"]);
+  });
+
+  it("menandai chain tertinggi per kolom", () => {
+    const leaders = columnLeaders(comparisonRows(busy));
+    expect(leaders).toMatchObject({ txCount: "ethereum", balanceUsd: "ethereum", netUsd: "ethereum" });
+    expect(columnLeaders(comparisonRows(quiet))).toEqual({});
   });
 });

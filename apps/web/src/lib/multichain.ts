@@ -112,3 +112,82 @@ export function groupActivitiesByDay(activities: CrossChainActivity[]): Array<{ 
   }
   return groups;
 }
+
+/** Satu baris tabel perbandingan antar chain. */
+export interface ComparisonRow {
+  chain: ChainId;
+  active: boolean;
+  txCount: number;
+  /** Porsi transaksi chain ini dari total semua chain terpilih, dalam persen. */
+  txSharePct: number;
+  inUsd: number;
+  outUsd: number;
+  netUsd: number;
+  counterpartyCount: number;
+  balanceUsd: number;
+  firstSeen?: string;
+  lastSeen?: string;
+  bridgesOut: number;
+  bridgesIn: number;
+}
+
+export type ComparisonKey =
+  | "chain"
+  | "txCount"
+  | "inUsd"
+  | "outUsd"
+  | "netUsd"
+  | "counterpartyCount"
+  | "balanceUsd"
+  | "firstSeen"
+  | "lastSeen";
+
+export function comparisonRows(profile: MultichainProfile): ComparisonRow[] {
+  const totalTx = profile.chains.reduce((sum, item) => sum + item.txCount, 0);
+  return profile.chains.map((item) => ({
+    chain: item.chain,
+    active: isActive(item),
+    txCount: item.txCount,
+    txSharePct: totalTx > 0 ? round2((item.txCount / totalTx) * 100) : 0,
+    inUsd: item.inUsd,
+    outUsd: item.outUsd,
+    netUsd: round2(item.inUsd - item.outUsd),
+    counterpartyCount: item.counterpartyCount,
+    balanceUsd: item.balanceUsd,
+    firstSeen: item.firstSeen,
+    lastSeen: item.lastSeen,
+    bridgesOut: profile.bridges.filter((move) => move.fromChain === item.chain).length,
+    bridgesIn: profile.bridges.filter((move) => move.toChain === item.chain && move.status === "matched").length,
+  }));
+}
+
+function sortValue(row: ComparisonRow, key: ComparisonKey): number | string {
+  if (key === "chain") return row.chain;
+  if (key === "firstSeen" || key === "lastSeen") return row[key] ? Date.parse(row[key]) : 0;
+  return row[key];
+}
+
+/** Urutkan tabel; chain yang tidak aktif selalu di bawah apa pun urutannya. */
+export function sortComparison(rows: ComparisonRow[], key: ComparisonKey, direction: "asc" | "desc"): ComparisonRow[] {
+  const sign = direction === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    const va = sortValue(a, key);
+    const vb = sortValue(b, key);
+    const diff = typeof va === "string" ? va.localeCompare(vb as string) : va - (vb as number);
+    return diff * sign || a.chain.localeCompare(b.chain);
+  });
+}
+
+/** Chain dengan nilai tertinggi per kolom angka (hanya chain aktif); `null` bila semua nol. */
+export function columnLeaders(rows: ComparisonRow[]): Partial<Record<ComparisonKey, ChainId>> {
+  const keys: ComparisonKey[] = ["txCount", "inUsd", "outUsd", "netUsd", "counterpartyCount", "balanceUsd"];
+  const leaders: Partial<Record<ComparisonKey, ChainId>> = {};
+  for (const key of keys) {
+    const best = rows
+      .filter((row) => row.active)
+      .reduce<ComparisonRow | null>((top, row) => (top === null || (row[key] as number) > (top[key] as number) ? row : top), null);
+    if (best && (best[key] as number) > 0) leaders[key] = best.chain;
+  }
+  return leaders;
+}
