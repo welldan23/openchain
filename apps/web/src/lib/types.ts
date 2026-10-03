@@ -25,7 +25,8 @@ export type FindingClassification =
 
 export type RiskSeverity = "critical" | "high" | "medium" | "low" | "info";
 
-export type RiskLevel = "low" | "medium" | "high" | "critical";
+/** `unknown`: data belum cukup untuk menilai risiko. */
+export type RiskLevel = "unknown" | "low" | "medium" | "high" | "critical";
 
 export type EntityLabelType =
   | "exchange"

@@ -1,7 +1,7 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, RiskLevelBadge } from "@/components/badges";
-import { listSampleTokens, tokenPath } from "@/lib/api/tokens";
+import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
 import { shortenHash } from "@/lib/format";
 
 export default async function Home() {
@@ -61,6 +61,34 @@ export default async function Home() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="states-title" className="mt-10">
+        <h2 id="states-title" className="text-sm font-semibold">
+          Coba tampilan status
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Sunyi Protocol di atas memperlihatkan tampilan saat data token belum ada. Halaman token juga
+          menampilkan kerangka loading sebentar sebelum datanya muncul.
+        </p>
+        <Link
+          href={failureDemoPath()}
+          className="group mt-4 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi data gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka token yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
       </section>
     </main>
   );

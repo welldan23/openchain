@@ -635,4 +635,60 @@ const kodoCat: TokenInvestigation = {
   },
 };
 
-export const MOCK_TOKENS: TokenInvestigation[] = [nebulaFinance, kodoCat];
+/* -------------------------------------------------------------------------- */
+/* Sunyi Protocol (SUNY) — Base, token baru tanpa data (contoh status kosong)  */
+/* -------------------------------------------------------------------------- */
+
+const suny = {
+  token: mockEvmAddress("suny:token"),
+  deployer: mockEvmAddress("suny:deployer"),
+  deployTx: mockEvmTxHash("suny:deploy"),
+};
+
+const sunyiProtocol: TokenInvestigation = {
+  token: {
+    chain: "base",
+    address: suny.token,
+    name: "Sunyi Protocol",
+    symbol: "SUNY",
+    decimals: 18,
+    totalSupply: 500_000_000,
+    deployer: suny.deployer,
+    deployedAt: "2026-10-03T04:18:00.000Z",
+    deployTxHash: suny.deployTx,
+    verified: false,
+  },
+  market: {
+    priceUsd: 0,
+    priceChange24hPct: 0,
+    marketCapUsd: 0,
+    fdvUsd: 0,
+    liquidityUsd: 0,
+    volume24hUsd: 0,
+    holderCount: 0,
+    txCount24h: 0,
+  },
+  risk: { score: 0, level: "unknown", findings: [] },
+  holders: {
+    concentration: { top10Pct: 0, top50Pct: 0, classification: "calculation" },
+    top: [],
+  },
+  activity: [],
+  evidence: [],
+  snapshot: {
+    fetchedAt: SNAPSHOT_AT,
+    blockNumber: 36_118_402,
+    sources: ["Node RPC (tiruan)"],
+  },
+};
+
+export const MOCK_TOKENS: TokenInvestigation[] = [nebulaFinance, kodoCat, sunyiProtocol];
+
+/**
+ * Address yang sengaja membuat API tiruan gagal, untuk mencoba tampilan
+ * status gagal di halaman Token.
+ */
+export const MOCK_FAILING_TOKEN = {
+  chain: "arbitrum",
+  address: mockEvmAddress("demo:gagal-dimuat"),
+} as const;

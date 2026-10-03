@@ -35,10 +35,15 @@ npm run dev
 
 Lalu buka http://localhost:3000 dan pilih salah satu token contoh.
 
+Data tiruan sengaja diberi jeda sekitar 0,6 detik supaya tampilan loading
+terlihat. Beranda juga punya contoh token tanpa data (tampilan kosong) dan
+simulasi data gagal dimuat (tampilan error).
+
 Perintah lain:
 
 ```bash
 npm run lint       # ESLint
 npm run typecheck  # cek tipe TypeScript
+npm test           # tes unit (Vitest)
 npm run build      # build produksi
 ```

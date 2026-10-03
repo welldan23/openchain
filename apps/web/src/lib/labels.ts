@@ -61,6 +61,11 @@ export const SEVERITY_META: Record<RiskSeverity, Meta> = {
 };
 
 export const RISK_LEVEL_META: Record<RiskLevel, Meta & { barClass: string }> = {
+  unknown: {
+    label: "Belum dinilai",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+    barClass: "bg-slate-400",
+  },
   low: {
     label: "Risiko rendah",
     className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/40",
