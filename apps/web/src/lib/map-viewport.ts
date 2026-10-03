@@ -70,3 +70,19 @@ export function viewBoxOf(viewport: Viewport): string {
   const { width, height } = visibleSize(viewport.scale);
   return `${viewport.x} ${viewport.y} ${width} ${height}`;
 }
+
+/**
+ * Viewport yang memuat kotak `bounds` (satuan kanvas) beserta jarak tepi,
+ * dipakai untuk memusatkan peta ke wallet yang sedang ditelusuri.
+ */
+export function fitBounds(
+  bounds: { left: number; top: number; right: number; bottom: number },
+  padding = 24,
+): Viewport {
+  const width = Math.max(bounds.right - bounds.left + padding * 2, 1);
+  const height = Math.max(bounds.bottom - bounds.top + padding * 2, 1);
+  const scale = Math.min(Math.max(Math.min(MAP_WIDTH / width, MAP_HEIGHT / height), MIN_SCALE), MAX_SCALE);
+  const cx = (bounds.left + bounds.right) / 2;
+  const cy = (bounds.top + bounds.bottom) / 2;
+  return clampViewport({ scale, x: cx - MAP_WIDTH / scale / 2, y: cy - MAP_HEIGHT / scale / 2 });
+}

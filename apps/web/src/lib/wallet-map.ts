@@ -257,3 +257,50 @@ function resolveOverlaps(placed: PlacedNode[]): void {
     if (!moved) return;
   }
 }
+
+/** Pilihan kedalaman penelusuran dari wallet pusat; `null` = semua lapis. */
+export const LAYER_OPTIONS: ReadonlyArray<number | null> = [1, 2, 3, null];
+
+/**
+ * Jarak lapis setiap wallet dari wallet pusat lewat garis di peta (arah garis
+ * diabaikan). Wallet yang tidak terjangkau dalam `maxDepth` lapis tidak ikut.
+ */
+export function layersFrom(
+  chain: ChainId,
+  edges: MapEdge[],
+  center: string,
+  maxDepth: number | null,
+): Map<string, number> {
+  const adjacency = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    const set = adjacency.get(a) ?? new Set<string>();
+    set.add(b);
+    adjacency.set(a, set);
+  };
+  for (const edge of edges) {
+    const from = addressKey(chain, edge.from);
+    const to = addressKey(chain, edge.to);
+    link(from, to);
+    link(to, from);
+  }
+  const start = addressKey(chain, center);
+  const depth = new Map([[start, 0]]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const next = depth.get(current)! + 1;
+    if (maxDepth !== null && next > maxDepth) continue;
+    for (const neighbor of adjacency.get(current) ?? []) {
+      if (depth.has(neighbor)) continue;
+      depth.set(neighbor, next);
+      queue.push(neighbor);
+    }
+  }
+  return depth;
+}
+
+/** Baca `?lapis=` dari URL; nilai yang tidak dikenal berarti semua lapis. */
+export function parseLayerParam(value: string | undefined): number | null {
+  const parsed = Number(value);
+  return LAYER_OPTIONS.includes(parsed) ? parsed : null;
+}

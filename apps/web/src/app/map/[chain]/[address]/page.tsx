@@ -10,7 +10,8 @@ import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { getWalletMap } from "@/lib/api/maps";
 import { isChainId } from "@/lib/chains";
-import { clusterStyles, edgesOf, layoutWalletMap, nodeColor, summarizeMap } from "@/lib/wallet-map";
+import { firstParam } from "@/lib/flow-filter";
+import { clusterStyles, edgesOf, layoutWalletMap, nodeColor, parseLayerParam, summarizeMap } from "@/lib/wallet-map";
 
 /** Dipakai bersama oleh generateMetadata & Page; `cache` mencegah fetch ganda. */
 const loadMap = cache(async (chain: string, address: string) => {
@@ -28,8 +29,8 @@ export async function generateMetadata({ params }: PageProps<"/map/[chain]/[addr
   };
 }
 
-export default async function MapPage({ params }: PageProps<"/map/[chain]/[address]">) {
-  const { chain, address } = await params;
+export default async function MapPage({ params, searchParams }: PageProps<"/map/[chain]/[address]">) {
+  const [{ chain, address }, query] = await Promise.all([params, searchParams]);
   const map = await loadMap(chain, address);
   if (!map) notFound();
 
@@ -49,7 +50,14 @@ export default async function MapPage({ params }: PageProps<"/map/[chain]/[addre
       <MockDataNotice />
       <MapHeader map={map} />
       <MapStats summary={summarizeMap(map)} />
-      <WalletMapExplorer chain={map.chain} symbol={map.token.symbol} nodes={nodes} edges={map.edges} />
+      <WalletMapExplorer
+        chain={map.chain}
+        symbol={map.token.symbol}
+        nodes={nodes}
+        edges={map.edges}
+        initialCenter={firstParam(query.pusat)}
+        initialDepth={parseLayerParam(firstParam(query.lapis))}
+      />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah tabel lebar mendorong kolom melebihi layar HP. */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">

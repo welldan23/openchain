@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   FileSearch,
+  Crosshair,
   Highlighter,
   Maximize2,
   MousePointerClick,
@@ -27,7 +28,8 @@ import { formatDateTime, formatPct, formatTokenAmount, formatUsdCompact, shorten
 import { addressKey, addressTitle } from "@/lib/fund-flow";
 import type { ChainId, MapEdge, MapNode } from "@/lib/types";
 import { CHART_SURFACE } from "@/lib/chart-colors";
-import { MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf } from "@/lib/map-viewport";
+import { fitBounds, INITIAL_VIEWPORT, MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf, type Viewport } from "@/lib/map-viewport";
+import { LAYER_OPTIONS, layersFrom } from "@/lib/wallet-map";
 import { usePanZoom } from "./use-pan-zoom";
 
 export interface ExplorerNode {
@@ -44,7 +46,14 @@ interface WalletMapExplorerProps {
   symbol: string;
   nodes: ExplorerNode[];
   edges: MapEdge[];
+  /** Wallet pusat dari URL (`?pusat=`); diabaikan bila tidak ada di peta. */
+  initialCenter?: string;
+  /** Kedalaman lapis dari URL (`?lapis=`); `null` = semua lapis. */
+  initialDepth: number | null;
 }
+
+/** Kedalaman awal saat wallet pusat pertama kali dipilih. */
+const DEFAULT_DEPTH = 2;
 
 const EDGE_COLOR = "#3a4a63";
 const EDGE_ACTIVE_COLOR = "#8b9bb2";
@@ -57,6 +66,36 @@ const LABEL_MIN_RADIUS = 22;
 
 function nodeName(node: MapNode): string {
   return node.label ? addressTitle(node.label) : shortenHash(node.address, 4, 4);
+}
+
+/** Viewport yang memuat semua gelembung `items`; seluruh peta bila semuanya tampil. */
+function viewportFor(items: ExplorerNode[], total: number): Viewport {
+  if (items.length === 0 || items.length === total) return INITIAL_VIEWPORT;
+  return fitBounds({
+    left: Math.min(...items.map((item) => item.x - item.r)),
+    top: Math.min(...items.map((item) => item.y - item.r)),
+    right: Math.max(...items.map((item) => item.x + item.r)),
+    bottom: Math.max(...items.map((item) => item.y + item.r)),
+  });
+}
+
+/** "Wallet pusat" atau "Lapis 2 dari pusat". */
+function layerText(layer: number): string {
+  return layer === 0 ? "wallet pusat" : `lapis ${layer} dari pusat`;
+}
+
+function layerLabel(depth: number | null): string {
+  return depth === null ? "Semua" : `${depth} lapis`;
+}
+
+/** Simpan pilihan pusat dan lapis di URL tanpa memuat ulang halaman. */
+function syncUrl(centerAddress: string | null, depth: number | null) {
+  const url = new URL(window.location.href);
+  if (centerAddress) url.searchParams.set("pusat", centerAddress);
+  else url.searchParams.delete("pusat");
+  if (centerAddress && depth !== null) url.searchParams.set("lapis", String(depth));
+  else url.searchParams.delete("lapis");
+  window.history.replaceState(window.history.state, "", url);
 }
 
 /** Ujung garis berhenti di tepi gelembung tujuan supaya panahnya terlihat. */
@@ -74,10 +113,36 @@ function edgeEnds(from: ExplorerNode, to: ExplorerNode) {
   };
 }
 
-export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExplorerProps) {
+export function WalletMapExplorer({ chain, symbol, nodes, edges, initialCenter, initialDepth }: WalletMapExplorerProps) {
   const markerId = useId().replace(/:/g, "");
   const hintId = useId();
-  const { svgRef, viewport, dragging, zoomIn, zoomOut, reset, isDragClick, svgProps, onKeyDown } = usePanZoom();
+  const centerSelectId = useId();
+
+  const initialCenterKey =
+    initialCenter && nodes.some((item) => addressKey(chain, item.node.address) === addressKey(chain, initialCenter))
+      ? addressKey(chain, initialCenter)
+      : null;
+  const [center, setCenter] = useState<string | null>(initialCenterKey);
+  const [depth, setDepth] = useState<number | null>(initialCenterKey ? initialDepth : (initialDepth ?? DEFAULT_DEPTH));
+
+  /** Gelembung yang tampil untuk pusat dan kedalaman tertentu. */
+  function visibleFor(nextCenter: string | null, nextDepth: number | null) {
+    if (!nextCenter) return { layers: null, items: nodes };
+    const layers = layersFrom(chain, edges, nextCenter, nextDepth);
+    return { layers, items: nodes.filter((item) => layers.has(addressKey(chain, item.node.address))) };
+  }
+
+  const initialVisible = visibleFor(initialCenterKey, initialCenterKey ? initialDepth : null);
+  const { svgRef, viewport, dragging, zoomIn, zoomOut, reset, isDragClick, svgProps, onKeyDown, showViewport } = usePanZoom(
+    viewportFor(initialVisible.items, nodes.length),
+  );
+  const { layers, items: visibleNodes } = useMemo(
+    () => (center ? visibleFor(center, depth) : { layers: null, items: nodes }),
+    // visibleFor hanya memakai chain, edges, dan nodes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chain, edges, nodes, center, depth],
+  );
+  const isVisible = (address: string) => !layers || layers.has(addressKey(chain, address));
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -135,6 +200,21 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
     requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
+  /** Ganti wallet pusat atau kedalaman, lalu arahkan peta ke wallet yang tampil. */
+  function applyFocus(nextCenter: string | null, nextDepth: number | null) {
+    setCenter(nextCenter);
+    setDepth(nextDepth);
+    setHovered(null);
+    const next = visibleFor(nextCenter, nextDepth);
+    showViewport(viewportFor(next.items, nodes.length));
+    const shown = (key: string) => !next.layers || next.layers.has(key);
+    if (selected && !shown(selected)) setSelected(null);
+    if (selectedEdge && !(shown(addressKey(chain, selectedEdge.from)) && shown(addressKey(chain, selectedEdge.to)))) {
+      setSelectedEdgeId(null);
+    }
+    syncUrl(nextCenter ? (byKey.get(nextCenter)?.node.address ?? null) : null, nextDepth);
+  }
+
   function select(key: string) {
     if (isDragClick()) return;
     const next = selected === key && !selectedEdgeId ? null : key;
@@ -168,6 +248,50 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
           className="min-w-0 lg:col-span-2"
           action={<ClassificationBadge classification="heuristic" />}
         >
+          <div className="mb-3 flex flex-wrap items-end gap-x-4 gap-y-2">
+            <label htmlFor={centerSelectId} className="grid min-w-0 gap-1 text-[11px] text-muted">
+              Wallet pusat
+              <select
+                id={centerSelectId}
+                value={center ?? ""}
+                onChange={(event) => applyFocus(event.target.value || null, depth ?? (event.target.value ? DEFAULT_DEPTH : null))}
+                className="max-w-[16rem] rounded-lg border border-line bg-surface-raised px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                <option value="">Tanpa pusat (seluruh peta)</option>
+                {[...nodes]
+                  .sort((a, b) => b.node.sharePct - a.node.sharePct)
+                  .map((item) => (
+                    <option key={item.node.address} value={addressKey(chain, item.node.address)}>
+                      {nodeName(item.node)} · {shortenHash(item.node.address, 4, 4)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="grid gap-1 text-[11px] text-muted">
+              <span id={`${centerSelectId}-lapis`}>Kedalaman</span>
+              <div role="group" aria-labelledby={`${centerSelectId}-lapis`} className="inline-flex rounded-lg border border-line bg-surface-raised p-0.5">
+                {LAYER_OPTIONS.map((option) => (
+                  <button
+                    key={String(option)}
+                    type="button"
+                    disabled={!center}
+                    aria-pressed={center ? depth === option : false}
+                    onClick={() => applyFocus(center, option)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50",
+                      center && depth === option ? "bg-surface text-foreground shadow-sm ring-1 ring-line" : "text-muted hover:text-foreground",
+                    )}
+                  >
+                    {layerLabel(option)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="pb-1.5 text-[11px] text-muted" aria-live="polite">
+              {center ? `${visibleNodes.length} dari ${nodes.length} wallet tampil` : `${nodes.length} wallet`}
+            </p>
+          </div>
+
           <div
             className="-mx-2 sm:mx-0"
             onKeyDown={(event) => {
@@ -199,7 +323,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                   {edges.map((edge) => {
                     const from = byKey.get(addressKey(chain, edge.from));
                     const to = byKey.get(addressKey(chain, edge.to));
-                    if (!from || !to) return null;
+                    if (!from || !to || !isVisible(edge.from) || !isVisible(edge.to)) return null;
                     const ends = edgeEnds(from, to);
                     const active = highlight?.edges.has(edge.id) ?? false;
                     const isSelected = edge.id === selectedEdgeId;
@@ -228,7 +352,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                     );
                   })}
                 </g>
-                {nodes.map((item) => {
+                {visibleNodes.map((item) => {
                   const key = addressKey(chain, item.node.address);
                   const dimmed = highlight !== null && !highlight.nodes.has(key);
                   const isSelected = selected === key;
@@ -240,7 +364,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                       role="button"
                       tabIndex={0}
                       aria-pressed={isSelected}
-                      aria-label={`${nodeName(item.node)}, ${holder ? `${formatPct(item.node.sharePct)} supply` : "bukan holder"}${item.clusterName ? `, klaster ${item.clusterName}` : ""}`}
+                      aria-label={`${nodeName(item.node)}, ${holder ? `${formatPct(item.node.sharePct)} supply` : "bukan holder"}${item.clusterName ? `, klaster ${item.clusterName}` : ""}${key === center ? ", wallet pusat" : layers ? `, lapis ${layers.get(key)}` : ""}`}
                       className="cursor-pointer outline-none [&:focus-visible>circle:first-child]:stroke-accent"
                       opacity={dimmed ? 0.3 : 1}
                       onPointerEnter={(event) => {
@@ -263,6 +387,18 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                         strokeWidth={2}
                         vectorEffect="non-scaling-stroke"
                       />
+                      {key === center ? (
+                        <circle
+                          cx={item.x}
+                          cy={item.y}
+                          r={item.r + 8}
+                          fill="none"
+                          stroke="var(--color-accent)"
+                          strokeWidth={1.5}
+                          strokeDasharray="3 3"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ) : null}
                       {isSelected ? (
                         <circle cx={item.x} cy={item.y} r={item.r + 4} fill="none" stroke="var(--foreground)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
                       ) : null}
@@ -286,7 +422,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                   );
                 })}
               </svg>
-  
+
               <div className="absolute top-2 right-2 flex flex-col items-center gap-1 rounded-lg border border-line bg-surface-raised/90 p-1 backdrop-blur">
                 <MapControl label="Perbesar" onClick={zoomIn} disabled={viewport.scale >= MAX_SCALE} icon={ZoomIn} />
                 <MapControl label="Perkecil" onClick={zoomOut} disabled={viewport.scale <= MIN_SCALE} icon={ZoomOut} />
@@ -315,6 +451,7 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
                   <p className="mt-0.5 text-[11px] text-muted">
                     {shortenHash(hoveredItem.node.address)}
                     {hoveredItem.clusterName ? ` · ${hoveredItem.clusterName}` : " · tanpa klaster"}
+                    {layers ? ` · ${layerText(layers.get(hovered!) ?? 0)}` : ""}
                   </p>
                 </div>
               ) : null}
@@ -338,6 +475,9 @@ export function WalletMapExplorer({ chain, symbol, nodes, edges }: WalletMapExpl
             item={selectedItem}
             edges={edges}
             byKey={byKey}
+            layer={selected && layers ? layers.get(selected) : undefined}
+            isCenter={selected !== null && selected === center}
+            onMakeCenter={(key) => applyFocus(key, depth ?? DEFAULT_DEPTH)}
             onClose={() => setSelected(null)}
             onSelectEdge={(id) => {
               setSelectedEdgeId(id);
@@ -481,6 +621,9 @@ function WalletDetail({
   item,
   edges,
   byKey,
+  layer,
+  isCenter,
+  onMakeCenter,
   onClose,
   onSelectEdge,
 }: {
@@ -489,6 +632,10 @@ function WalletDetail({
   item: ExplorerNode | undefined;
   edges: MapEdge[];
   byKey: Map<string, ExplorerNode>;
+  /** Jarak lapis dari wallet pusat, bila sedang menelusuri. */
+  layer?: number;
+  isCenter: boolean;
+  onMakeCenter: (key: string) => void;
   onClose: () => void;
   onSelectEdge: (id: string) => void;
 }) {
@@ -530,8 +677,18 @@ function WalletDetail({
             <span className="inline-flex items-center gap-1.5 text-[11px] text-muted">
               <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
               {item.clusterName ? `Klaster ${item.clusterName}` : "Tanpa klaster"}
+              {layer !== undefined ? ` · ${layerText(layer)}` : ""}
             </span>
           </div>
+          <button
+            type="button"
+            disabled={isCenter}
+            onClick={() => onMakeCenter(key)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground/90 transition hover:border-accent/60 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-default disabled:border-accent/40 disabled:text-accent"
+          >
+            <Crosshair className="size-3.5" aria-hidden />
+            {isCenter ? "Pusat penelusuran" : "Jadikan pusat"}
+          </button>
         </div>
 
         <div>

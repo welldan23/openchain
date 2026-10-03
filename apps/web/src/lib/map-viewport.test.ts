@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampViewport,
+  fitBounds,
   INITIAL_VIEWPORT,
   MAX_SCALE,
   panBy,
@@ -41,5 +42,18 @@ describe("viewport peta", () => {
     expect(pixelsToCanvas(INITIAL_VIEWPORT, 360, 360)).toBe(720);
     expect(pixelsToCanvas({ scale: 2, x: 0, y: 0 }, 360, 720)).toBe(180);
     expect(pixelsToCanvas(INITIAL_VIEWPORT, 10, 0)).toBe(0);
+  });
+});
+
+describe("pas ke kotak", () => {
+  it("memperbesar ke area kecil dan memusatkannya", () => {
+    const viewport = fitBounds({ left: 300, top: 200, right: 420, bottom: 280 }, 0);
+    expect(viewport.scale).toBe(4);
+    expect(viewport.x + 720 / 4 / 2).toBe(360);
+    expect(viewport.y + 480 / 4 / 2).toBe(240);
+  });
+
+  it("area yang sudah memenuhi kanvas tidak diperbesar", () => {
+    expect(fitBounds({ left: 0, top: 0, right: 720, bottom: 480 })).toEqual(INITIAL_VIEWPORT);
   });
 });

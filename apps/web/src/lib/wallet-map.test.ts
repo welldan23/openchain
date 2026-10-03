@@ -5,12 +5,14 @@ import {
   CLUSTER_COLORS,
   clusterStyles,
   edgesOf,
+  layersFrom,
   layoutWalletMap,
   MAP_HEIGHT,
   MAP_WIDTH,
   neighborsOf,
   NEUTRAL_NODE_COLOR,
   nodeColor,
+  parseLayerParam,
   summarizeMap,
 } from "./wallet-map";
 
@@ -97,5 +99,33 @@ describe("tata letak", () => {
 
   it("deterministik: peta yang sama selalu punya posisi yang sama", () => {
     expect(layoutWalletMap(nbla)).toEqual(layoutWalletMap(nbla));
+  });
+});
+
+describe("penelusuran lapis dari wallet pusat", () => {
+  const funder = nbla.nodes.find((node) => node.sharePct === 0)!;
+  const pool = nbla.nodes.find((node) => node.label?.type === "liquidity_pool")!;
+  const whale = nbla.nodes.find((node) => node.label?.type === "whale")!;
+
+  it("menghitung jarak lapis tanpa peduli arah garis", () => {
+    const one = layersFrom(nbla.chain, nbla.edges, funder.address, 1);
+    expect(one.get(funder.address.toLowerCase())).toBe(0);
+    // Pendana terhubung langsung ke 5 bundler dan hot wallet exchange.
+    expect([...one.values()].filter((depth) => depth === 1)).toHaveLength(6);
+    expect(one.has(pool.address.toLowerCase())).toBe(false);
+  });
+
+  it("lapis lebih dalam menjangkau lebih banyak wallet, wallet tanpa garis tidak pernah terjangkau", () => {
+    const three = layersFrom(nbla.chain, nbla.edges, funder.address, 3);
+    expect(three.get(pool.address.toLowerCase())).toBe(3);
+    const all = layersFrom(nbla.chain, nbla.edges, funder.address, null);
+    expect(all.size).toBeGreaterThanOrEqual(three.size);
+    expect(all.has(whale.address.toLowerCase())).toBe(false);
+  });
+
+  it("membaca pilihan lapis dari URL", () => {
+    expect(parseLayerParam("2")).toBe(2);
+    expect(parseLayerParam("9")).toBeNull();
+    expect(parseLayerParam(undefined)).toBeNull();
   });
 });

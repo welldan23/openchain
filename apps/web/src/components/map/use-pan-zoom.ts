@@ -34,9 +34,9 @@ interface Gesture {
  * - tombol +, −, 0, dan panah dari keyboard.
  * Scroll biasa tetap menggulir halaman.
  */
-export function usePanZoom() {
+export function usePanZoom(initialViewport: Viewport = INITIAL_VIEWPORT) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
+  const [viewport, setViewport] = useState<Viewport>(initialViewport);
   const [dragging, setDragging] = useState(false);
   const gesture = useRef<Gesture | null>(null);
   /** Klik yang mengakhiri seretan tidak boleh ikut memilih gelembung. */
@@ -159,6 +159,8 @@ export function usePanZoom() {
     zoomIn: () => setViewport((current) => zoomCenter(current, ZOOM_STEP)),
     zoomOut: () => setViewport((current) => zoomCenter(current, 1 / ZOOM_STEP)),
     reset: () => setViewport(INITIAL_VIEWPORT),
+    /** Pindah ke viewport tertentu, mis. hasil `fitBounds`. */
+    showViewport: (next: Viewport) => setViewport(next),
     /** `true` bila klik barusan adalah akhir seretan, jadi harus diabaikan. */
     isDragClick: () => suppressClick.current,
     svgProps: {
