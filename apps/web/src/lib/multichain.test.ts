@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_FLOWS } from "./mock/flows";
 import { MOCK_MULTICHAIN } from "./mock/multichain";
-import { bridgeFeePct, isEvmAddress, sortChainActivity, summarizeMultichain } from "./multichain";
+import {
+  bridgeFeePct,
+  filterProfileChains,
+  isEvmAddress,
+  parseChainSelection,
+  serializeChainSelection,
+  sortChainActivity,
+  summarizeMultichain,
+} from "./multichain";
 
 const [funder, busy, quiet] = MOCK_MULTICHAIN;
 
@@ -43,5 +51,29 @@ describe("urutan dan detail", () => {
     expect(isEvmAddress(funder.address)).toBe(true);
     expect(isEvmAddress("0x1234")).toBe(false);
     expect(isEvmAddress("gfiT3SHJHGgq2bhMnP3HqRaV8dhMDvyqtvCvLok3sXPg")).toBe(false);
+  });
+});
+
+describe("pilihan jaringan", () => {
+  const available = funder.chains.map((item) => item.chain);
+
+  it("membaca pilihan dari URL, nilai asing diabaikan, kosong berarti semua", () => {
+    expect(parseChainSelection("base,ethereum,solana,palsu", available)).toEqual(["ethereum", "base"]);
+    expect(parseChainSelection(undefined, available)).toEqual(available);
+    expect(parseChainSelection("palsu", available)).toEqual(available);
+  });
+
+  it("menulis pilihan ke URL dengan urutan tetap, semua chain tidak ditulis", () => {
+    expect(serializeChainSelection(["base", "ethereum"], available)).toBe("ethereum,base");
+    expect(serializeChainSelection(available, available)).toBeUndefined();
+    expect(serializeChainSelection([], available)).toBeUndefined();
+  });
+
+  it("menyaring kartu chain dan bridge yang menyentuh chain terpilih", () => {
+    const onlyBsc = filterProfileChains(busy, ["bsc"]);
+    expect(onlyBsc.chains.map((item) => item.chain)).toEqual(["bsc"]);
+    expect(onlyBsc.bridges.map((move) => move.id)).toEqual(["busy-bsc-base"]);
+    expect(summarizeMultichain(onlyBsc).totalTx).toBe(88);
+    expect(filterProfileChains(busy, ["ethereum"]).bridges).toHaveLength(2);
   });
 });

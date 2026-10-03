@@ -4,14 +4,16 @@ import { cache } from "react";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { BridgesPanel } from "@/components/multichain/bridges-panel";
 import { ChainActivityGrid } from "@/components/multichain/chain-activity-grid";
+import { MultichainChainPicker } from "@/components/multichain/chain-picker";
 import { MultichainHeader } from "@/components/multichain/multichain-header";
 import { MultichainStats } from "@/components/multichain/multichain-stats";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { listFlowChains } from "@/lib/api/flows";
 import { getMultichainProfile } from "@/lib/api/multichain";
-import { shortenHash } from "@/lib/format";
+import { firstParam } from "@/lib/flow-filter";
+import { formatNumber, shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
-import { summarizeMultichain } from "@/lib/multichain";
+import { filterProfileChains, isActive, parseChainSelection, summarizeMultichain } from "@/lib/multichain";
 
 /** Dipakai bersama oleh generateMetadata & Page; `cache` mencegah fetch ganda. */
 const loadProfile = cache(async (address: string) => getMultichainProfile(address));
@@ -26,11 +28,14 @@ export async function generateMetadata({ params }: PageProps<"/multichain/[addre
   };
 }
 
-export default async function MultichainPage({ params }: PageProps<"/multichain/[address]">) {
-  const { address } = await params;
-  const profile = await loadProfile(address);
-  if (!profile) notFound();
+export default async function MultichainPage({ params, searchParams }: PageProps<"/multichain/[address]">) {
+  const [{ address }, query] = await Promise.all([params, searchParams]);
+  const fullProfile = await loadProfile(address);
+  if (!fullProfile) notFound();
 
+  const available = fullProfile.chains.map((item) => item.chain);
+  const selected = parseChainSelection(firstParam(query.jaringan), available);
+  const profile = filterProfileChains(fullProfile, selected);
   const summary = summarizeMultichain(profile);
   const flowChains = (await listFlowChains("ethereum", profile.address))
     .filter((item) => item.hasData)
@@ -39,7 +44,22 @@ export default async function MultichainPage({ params }: PageProps<"/multichain/
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
-      <MultichainHeader profile={profile} summary={summary} />
+      <MultichainHeader profile={fullProfile} summary={summarizeMultichain(fullProfile)} />
+      <div className="flex flex-wrap items-center gap-3">
+        <MultichainChainPicker
+          selected={selected}
+          options={fullProfile.chains.map((item) => ({
+            chain: item.chain,
+            detail: isActive(item) ? `${formatNumber(item.txCount)} transaksi` : "tidak aktif",
+            muted: !isActive(item),
+          }))}
+        />
+        {selected.length < available.length ? (
+          <p className="text-[11px] text-muted">
+            Ringkasan, kartu, dan bridge di bawah hanya untuk {selected.length} jaringan terpilih.
+          </p>
+        ) : null}
+      </div>
       <MultichainStats summary={summary} chainCount={profile.chains.length} />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}

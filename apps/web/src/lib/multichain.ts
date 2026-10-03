@@ -61,3 +61,30 @@ export function bridgeFeePct(amountSent: number, amountReceived: number | undefi
 export function isEvmAddress(value: string): boolean {
   return /^0x[0-9a-fA-F]{40}$/.test(value);
 }
+
+/**
+ * Chain terpilih dari `?jaringan=ethereum,base`. Nilai asing diabaikan;
+ * kosong atau tidak ada yang valid berarti semua chain.
+ */
+export function parseChainSelection(value: string | undefined, available: ChainId[]): ChainId[] {
+  const picked = new Set((value ?? "").split(",").map((item) => item.trim()));
+  const selected = available.filter((chain) => picked.has(chain));
+  return selected.length > 0 ? selected : [...available];
+}
+
+/** Nilai `?jaringan=`; `undefined` bila semua chain terpilih supaya URL tetap pendek. */
+export function serializeChainSelection(selected: ChainId[], available: ChainId[]): string | undefined {
+  const set = new Set(selected);
+  const ordered = available.filter((chain) => set.has(chain));
+  return ordered.length === 0 || ordered.length === available.length ? undefined : ordered.join(",");
+}
+
+/** Profil yang hanya memuat chain terpilih, dan bridge yang menyentuh salah satunya. */
+export function filterProfileChains(profile: MultichainProfile, selected: ChainId[]): MultichainProfile {
+  const set = new Set(selected);
+  return {
+    ...profile,
+    chains: profile.chains.filter((item) => set.has(item.chain)),
+    bridges: profile.bridges.filter((move) => set.has(move.fromChain) || set.has(move.toChain)),
+  };
+}
