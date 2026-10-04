@@ -210,6 +210,57 @@ describe('GET /api/multichain/:address', () => {
     );
   });
 
+  it('bukti aktivitas: transfer di linimasa beserta bukti transaksinya', async () => {
+    const profile = await request(app.getHttpServer()).get(url()).expect(200);
+    const received = profile.body.activities[1];
+    const { body } = await request(app.getHttpServer()).get(url(`/activities/${received.id}`)).expect(200);
+    expect(body.activity).toMatchObject({ id: received.id, chain: 'ethereum', kind: 'in', counterparty: RELAYER, bridgeId: received.bridgeId, classification: 'verified_fact' });
+    expect(body.activity).toHaveProperty('movement');
+    expect(body.transaction).toMatchObject({ txHash: received.txHash, chain: { id: 'ethereum' } });
+    expect(body.transaction.movements[0]).toMatchObject({ from: { address: RELAYER }, to: { address: SUBJECT } });
+
+    const toBridge = await request(app.getHttpServer()).get(url(`/activities/${profile.body.activities[2].id}`)).expect(200);
+    expect(toBridge.body.activity.kind).toBe('bridge_out');
+    expect(toBridge.body.caveats.join(' ')).toContain('label bisa keliru');
+  });
+
+  it('bukti bridge: kedua kaki beserta alasan pencocokannya', async () => {
+    const profile = await request(app.getHttpServer()).get(url()).expect(200);
+    const matched = profile.body.bridges.find((item: { status: string }) => item.status === 'matched');
+    const { body } = await request(app.getHttpServer()).get(url(`/bridges/${matched.id}`)).expect(200);
+    expect(body.bridge).toEqual(matched);
+    expect(body.checks.map((check: { id: string; passed: boolean | null }) => [check.id, check.passed])).toEqual([
+      ['asset', true],
+      ['amount', true],
+      ['timing', true],
+    ]);
+    expect(body.sent).toMatchObject({ txHash: matched.sentTxHash, chain: { id: 'base' } });
+    expect(body.received).toMatchObject({ txHash: matched.receivedTxHash, chain: { id: 'ethereum' } });
+    expect(body.caveats[0]).toContain('dugaan');
+
+    const unmatched = profile.body.bridges.find((item: { status: string }) => item.status === 'unmatched');
+    const lonely = await request(app.getHttpServer()).get(url(`/bridges/${unmatched.id}`)).expect(200);
+    expect(lonely.body.received).toBeNull();
+    expect(lonely.body.checks.map((check: { passed: boolean | null }) => check.passed)).toEqual([null, null, false]);
+    expect(lonely.body.caveats.join(' ')).toContain('Penerimaan belum ditemukan');
+  });
+
+  it('bukti: menolak id yang salah dan transfer atau bridge yang bukan milik address ini', async () => {
+    const server = app.getHttpServer();
+    const profile = await request(server).get(url()).expect(200);
+    const ethActivity = profile.body.activities.find((item: { chain: string }) => item.chain === 'ethereum');
+    await request(server).get(url(`/activities/${ethActivity.id.replace('ethereum:', 'base:')}`)).expect(404);
+    await request(server).get(url('/activities/ethereum:native:999999')).expect(404);
+    await request(server).get(url('/activities/acak')).expect(400);
+    await request(server).get(url('/bridges/999999')).expect(404);
+    await request(server).get(url('/bridges/abc')).expect(400);
+    const stranger = await request(server).get(url(`/activities/${ethActivity.id}`, '0x' + '99'.repeat(20))).expect(404);
+    expect(stranger.body.message).toContain('belum pernah tercatat');
+    // Transfer milik address lain di chain yang sama ditolak walau id-nya ada.
+    const shopTransfer = await request(server).get(url(`/activities/${ethActivity.id}`, SHOP)).expect(404);
+    expect(shopTransfer.body.message).toContain('tidak ditemukan untuk address ini');
+  });
+
   it('perbandingan antar chain: chain aktif dulu, nilai yang tidak diketahui tetap kosong', async () => {
     const { body } = await request(app.getHttpServer()).get(url('/compare')).expect(200);
     expect(body.sort).toEqual({ key: 'txCount', direction: 'desc' });

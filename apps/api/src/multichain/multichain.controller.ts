@@ -1,18 +1,35 @@
 import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { parseIsoTime, parsePositiveInteger } from '../common/query-params.js';
 import { COMPARISON_KEYS, type ComparisonKey } from './multichain-comparison.js';
-import type { MultichainComparisonResponse, MultichainProfileResponse } from './multichain.types.js';
+import { MultichainEvidenceService } from './multichain-evidence.service.js';
+import type { ActivityEvidenceResponse, BridgeEvidenceResponse, MultichainComparisonResponse, MultichainProfileResponse } from './multichain.types.js';
 import { MAX_ACTIVITY_LIMIT, MultichainService } from './multichain.service.js';
 
 /**
  * Aktivitas satu address EVM di semua chain EVM. `?chains=` (dipisah koma),
  * `?from=`/`?to=` (waktu ISO), `?limit=` (linimasa, 1–500), dan `?scan=`
  * (ringkasan tersimpan). `compare` memberi tabel perbandingan antar chain
- * (`?sort=` dan `?direction=`). Hanya dari data tersimpan.
+ * (`?sort=` dan `?direction=`); `activities/:id` dan `bridges/:id` memberi
+ * bukti hash transaksi sumbernya. Hanya dari data tersimpan.
  */
 @Controller('multichain')
 export class MultichainController {
-  constructor(private readonly service: MultichainService) {}
+  constructor(
+    private readonly service: MultichainService,
+    private readonly evidence: MultichainEvidenceService,
+  ) {}
+
+  @Get(':address/activities/:activityId')
+  activityEvidence(@Param('address') address: string, @Param('activityId') activityId: string): Promise<ActivityEvidenceResponse> {
+    return this.evidence.getActivity(address, activityId);
+  }
+
+  @Get(':address/bridges/:bridgeId')
+  bridgeEvidence(@Param('address') address: string, @Param('bridgeId') bridgeId: string): Promise<BridgeEvidenceResponse> {
+    const id = parsePositiveInteger(bridgeId, 'bridgeId');
+    if (id === undefined) throw new BadRequestException('Id bridge wajib diisi.');
+    return this.evidence.getBridge(address, id);
+  }
 
   @Get(':address/compare')
   compare(

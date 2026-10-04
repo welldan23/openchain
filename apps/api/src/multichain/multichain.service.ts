@@ -9,22 +9,20 @@
  */
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { EVM_CHAIN_DEFINITIONS } from '../chains/chain-definitions.js';
-import { formatUnits, numericToNumber } from '../common/units.js';
+import { numericToNumber } from '../common/units.js';
 import { InvalidIdentifierError, normalizeAddress } from '../database/identifiers.js';
 import type { DataStatus } from '../database/schema/enums.js';
 import type { addressFlowScans, chains, multichainChainActivity } from '../database/schema/index.js';
-import { nativeAssetOf, toChainInfo } from '../flows/flow-summary.mapper.js';
-import type { FlowAsset } from '../flows/flow-summary.types.js';
+import { toChainInfo } from '../flows/flow-summary.mapper.js';
 import { FlowsRepository } from '../flows/flows.repository.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
 import { BridgeDetectionService } from './bridge-detection.service.js';
+import { bridgeOfTransfers, bridgeViews, toActivityView } from './multichain.mapper.js';
 import { columnLeaders, comparisonRows, sortComparison, summarizeComparison, type ComparisonKey, type SortDirection } from './multichain-comparison.js';
-import { MultichainRepository, type ActivityRow, type ChainRange } from './multichain.repository.js';
+import { MultichainRepository, type ChainRange } from './multichain.repository.js';
 import type {
-  BridgeMoveView,
-  CrossChainActivityView,
   DetectedInfrastructureView,
   MultichainChainView,
   MultichainComparisonResponse,
@@ -184,20 +182,10 @@ export class MultichainService {
       this.flows.tokensByIds([...new Set(page.flatMap((row) => (row.tokenId === null ? [] : [row.tokenId])))]),
       this.repository.bridgeTransfersFor(ownIds),
     ]);
-    const bridgeOfTransfer = new Map<string, number>();
-    for (const row of bridgeRows) {
-      for (const [table, id] of [
-        ['native', row.sentNativeTransferId],
-        ['token', row.sentTokenTransferId],
-        ['native', row.receivedNativeTransferId],
-        ['token', row.receivedTokenTransferId],
-      ] as const) {
-        if (id !== null) bridgeOfTransfer.set(`${table}:${id}`, row.id);
-      }
-    }
+    const bridgeOfTransfer = bridgeOfTransfers(bridgeRows);
     const chainById = new Map(all.map((chain) => [chain.id, chain]));
-    const activities = page.map((row) => this.toActivity(row, chainById.get(row.chainId)!, counterpartyAddresses, counterpartyLabels, bridgeIds, tokensById, bridgeOfTransfer));
-    const bridges = await this.toBridges(bridgeRows, chainById);
+    const activities = page.map((row) => toActivityView(row, chainById.get(row.chainId)!, counterpartyAddresses, counterpartyLabels, bridgeIds, tokensById, bridgeOfTransfer));
+    const bridges = await bridgeViews(bridgeRows, chainById, this.repository, this.flows);
 
     const infrastructure = await this.infrastructure([...ranges.values()], chainById);
     const runs = await this.flows.providerRunsByIds(plans.flatMap((plan) => (plan.scan?.providerRunId ? [plan.scan.providerRunId] : [])));
@@ -337,72 +325,6 @@ export class MultichainService {
     };
   }
 
-  private toActivity(
-    row: ActivityRow,
-    chain: ChainRow,
-    addressById: Map<number, string>,
-    labelsById: Awaited<ReturnType<FlowsRepository['labelsByAddressIds']>>,
-    bridgeIds: Set<number>,
-    tokensById: Awaited<ReturnType<FlowsRepository['tokensByIds']>>,
-    bridgeOfTransfer: Map<string, number>,
-  ): CrossChainActivityView {
-    const token = row.tokenId === null ? undefined : tokensById.get(row.tokenId);
-    const asset: FlowAsset = token
-      ? { type: 'token', address: token.address, symbol: token.symbol, name: token.name, decimals: token.decimals }
-      : nativeAssetOf(chain);
-    const viaBridge = bridgeIds.has(row.counterpartyId);
-    const kind = row.direction === 'self' ? 'self' : viaBridge ? (row.direction === 'out' ? 'bridge_out' : 'bridge_in') : row.direction;
-    const table = row.source === 'token' ? 'token' : 'native';
-    return {
-      id: `${row.chainId}:${table}:${row.id}`,
-      chain: row.chainId,
-      kind,
-      timestamp: row.timestamp.toISOString(),
-      blockNumber: row.blockNumber,
-      counterparty: addressById.get(row.counterpartyId) ?? '',
-      counterpartyLabels: sortLabels(labelsById.get(row.counterpartyId) ?? []).map(toLabelView),
-      transferKind: row.source,
-      asset,
-      amountRaw: row.amountRaw,
-      amount: asset.decimals === null ? null : formatUnits(row.amountRaw, asset.decimals),
-      amountUsd: numericToNumber(row.amountUsd),
-      txHash: row.txHash,
-      bridgeId: bridgeOfTransfer.get(`${table}:${row.id}`) ?? null,
-      classification: 'verified_fact',
-    };
-  }
-
-  private async toBridges(rows: Awaited<ReturnType<MultichainRepository['bridgeTransfersFor']>>, chainById: Map<string, ChainRow>): Promise<BridgeMoveView[]> {
-    if (rows.length === 0) return [];
-    const nativeIds = rows.flatMap((row) => [row.sentNativeTransferId, row.receivedNativeTransferId]).filter((id): id is number => id !== null);
-    const tokenIds = rows.flatMap((row) => [row.sentTokenTransferId, row.receivedTokenTransferId]).filter((id): id is number => id !== null);
-    const [hashes, bridgeAddresses] = await Promise.all([
-      this.repository.transferHashes(nativeIds, tokenIds),
-      this.flows.addressesByIds(rows.map((row) => row.bridgeAddressId)),
-    ]);
-    const hashOf = (native: number | null, token: number | null) =>
-      native !== null ? (hashes.get(`native:${native}`) ?? null) : token !== null ? (hashes.get(`token:${token}`) ?? null) : null;
-    return rows
-      .filter((row) => chainById.has(row.sourceChainId) && (row.destChainId === null || chainById.has(row.destChainId)))
-      .map((row) => ({
-        id: row.id,
-        fromChain: row.sourceChainId,
-        toChain: row.destChainId,
-        protocolId: row.protocolId,
-        bridgeAddress: bridgeAddresses.get(row.bridgeAddressId) ?? '',
-        status: row.status,
-        amountSentRaw: row.amountSentRaw,
-        amountReceivedRaw: row.amountReceivedRaw,
-        amountUsd: numericToNumber(row.amountUsd),
-        sentTxHash: hashOf(row.sentNativeTransferId, row.sentTokenTransferId) ?? '',
-        sentAt: row.sentAt.toISOString(),
-        receivedTxHash: hashOf(row.receivedNativeTransferId, row.receivedTokenTransferId),
-        receivedAt: row.receivedAt?.toISOString() ?? null,
-        matchClassification: 'heuristic',
-        matchConfidence: row.matchConfidence,
-        matchReason: row.matchReason,
-      }));
-  }
 }
 
 function emptyView(plan: ChainPlan): MultichainChainView {

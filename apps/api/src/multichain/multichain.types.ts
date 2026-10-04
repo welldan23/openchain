@@ -4,7 +4,9 @@
  * belum dipindai tidak sama dengan chain tanpa aktivitas.
  */
 import type { BridgeMatchStatus, ConfidenceLevel, DataStatus } from '../database/schema/enums.js';
-import type { FlowAsset, FlowChainInfo, FlowLabelView } from '../flows/flow-summary.types.js';
+import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from '../flows/flow-summary.types.js';
+import type { TransactionEvidenceResponse } from '../flows/transaction-evidence.types.js';
+import type { BridgeCheck } from './bridge-checks.js';
 import type { ComparisonKey, ComparisonLeaders, ComparisonRow, ComparisonSummary, SortDirection } from './multichain-comparison.js';
 
 export interface MultichainChainView {
@@ -130,5 +132,30 @@ export interface MultichainComparisonResponse {
   leaders: ComparisonLeaders;
   status: DataStatus;
   statusReason: string | null;
+  caveats: string[];
+}
+
+/** `GET /api/multichain/:address/activities/:activityId`: bukti satu aktivitas di linimasa. */
+export interface ActivityEvidenceResponse {
+  address: string;
+  activity: CrossChainActivityView & {
+    /** Jenis perpindahan dan dasarnya; `null` bila belum diklasifikasikan. */
+    movement: MovementTypeView | null;
+  };
+  /** Bukti transaksi lengkap di chain aktivitas itu. */
+  transaction: TransactionEvidenceResponse;
+  caveats: string[];
+}
+
+/** `GET /api/multichain/:address/bridges/:bridgeId`: bukti kedua kaki sebuah bridge. */
+export interface BridgeEvidenceResponse {
+  address: string;
+  bridge: BridgeMoveView;
+  /** Alasan pencocokan: aset, jumlah, waktu; `passed: null` bila belum bisa dicek. */
+  checks: BridgeCheck[];
+  /** Bukti transaksi kaki kirim di chain asal (fakta on-chain). */
+  sent: TransactionEvidenceResponse;
+  /** Bukti transaksi kaki terima; `null` selama belum ditemukan. */
+  received: TransactionEvidenceResponse | null;
   caveats: string[];
 }

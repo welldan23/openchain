@@ -462,6 +462,23 @@ Tabel perbandingan aktivitas antar chain dari profil yang sama dengan
   dari transfer berharga, chain tersibuk, bridge yang belum cocok) dan
   `leaders` (chain aktif dengan nilai positif tertinggi per kolom angka).
 
+### `GET /api/multichain/:address/activities/:activityId` dan `/bridges/:bridgeId`
+
+Bukti hash transaksi sumber untuk Jelajah Multichain. Transfer atau bridge
+harus milik address yang diminta; selain itu `404`.
+
+- `activities/:activityId` (`<chain>:native:<id>` atau `<chain>:token:<id>`,
+  sama dengan `id` di linimasa): aktivitasnya beserta jenis perpindahan
+  (`movement`) dan bukti transaksi lengkap seperti
+  `GET /api/transactions/:chain/:hash`.
+- `bridges/:bridgeId`: perpindahan bridge, bukti transaksi kaki kirim
+  (`sent`) dan kaki terima (`received`, `null` bila belum ditemukan), serta
+  `checks` aset/jumlah/waktu dengan patokan yang sama seperti pencocokan
+  (`passed: null` bila belum bisa dicek, mis. penerimaan belum ada).
+- Respons error: `400` untuk address non-EVM atau id yang salah format;
+  `404` untuk address yang belum pernah tercatat, atau transfer/bridge yang
+  bukan miliknya.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,

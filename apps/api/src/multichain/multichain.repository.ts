@@ -332,6 +332,42 @@ export class MultichainRepository {
     return written;
   }
 
+  /** Satu transfer tersimpan beserta asetnya; `null` bila tidak ada. */
+  async transferDetail(table: 'native' | 'token', id: number) {
+    const result = (await this.db.execute(
+      table === 'native'
+        ? sql`select n.chain_id, case when n.kind = 'internal' then 'internal' else 'native' end as source, n.id, n.tx_hash,
+            n.from_address_id, n.to_address_id, n.amount_raw::text as amount_raw, n.amount_usd::text as amount_usd,
+            n.block_number, n.block_timestamp, null::bigint as token_id, c.native_symbol as symbol, 18 as decimals
+          from native_transfers n join chains c on c.id = n.chain_id where n.id = ${id}`
+        : sql`select t.chain_id, 'token' as source, t.id, t.tx_hash, t.from_address_id, t.to_address_id, t.amount_raw::text as amount_raw,
+            t.amount_usd::text as amount_usd, t.block_number, t.block_timestamp, t.token_id, tk.symbol, tk.decimals
+          from token_transfers t join tokens tk on tk.id = t.token_id where t.id = ${id}`,
+    )) as unknown as { rows: Raw[] };
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      chainId: String(row.chain_id),
+      source: (row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native') as 'native' | 'internal' | 'token',
+      id: Number(row.id),
+      txHash: String(row.tx_hash),
+      fromId: Number(row.from_address_id),
+      toId: Number(row.to_address_id),
+      amountRaw: String(row.amount_raw),
+      amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      blockNumber: Number(row.block_number),
+      timestamp: new Date(row.block_timestamp as string | Date),
+      tokenId: row.token_id === null ? null : Number(row.token_id),
+      symbol: row.symbol === null ? null : String(row.symbol),
+      decimals: row.decimals === null ? null : Number(row.decimals),
+    };
+  }
+
+  async findBridgeTransfer(id: number) {
+    const [row] = await this.db.select().from(bridgeTransfers).where(eq(bridgeTransfers.id, id)).limit(1);
+    return row ?? null;
+  }
+
   /** Hash transaksi transfer, per kunci `native:<id>` / `token:<id>`. */
   async transferHashes(nativeIds: number[], tokenIds: number[]): Promise<Map<string, string>> {
     const result = new Map<string, string>();
