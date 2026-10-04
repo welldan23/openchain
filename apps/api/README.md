@@ -387,9 +387,12 @@ exchange, liquidity pool, bridge, dan burn. Tag lain dibiarkan.
 ## Endpoint
 
 Semua endpoint memakai prefix `/api` dan bersifat read-only terhadap blockchain.
-Yang menulis ke database hanya `GET /api/maps` dan `GET /api/multichain`, yang
-menyimpan peta, ringkasan, hasil deteksi bridge, dan pengenalan kontrak
-protokol dari data yang sudah tersimpan supaya bisa dibuka ulang.
+Endpoint `GET` yang menulis ke database hanya `GET /api/maps`,
+`GET /api/multichain`, dan `GET /api/search`, yang menyimpan peta, ringkasan,
+hasil deteksi bridge, pengenalan kontrak protokol, dan indeks pencarian dari
+data yang sudah tersimpan. Riwayat investigasi dan kasus diubah lewat
+`POST`/`PATCH`/`DELETE`; semuanya data aplikasi, tidak ada yang menyentuh
+blockchain.
 
 Semua endpoint token memakai pemilih snapshot yang sama, supaya investigasi
 bisa dibuka ulang dengan hasil yang sama:
@@ -540,6 +543,26 @@ Pencarian cepat dari data tersimpan. Kontraknya ada di
   label ikut tersaring saat sumber label dipilih.
 - Tidak ditemukan dijelaskan di `caveats` ("bukan berarti tidak ada di
   blockchain"); nilai filter yang salah dijawab `400`.
+
+### `/api/investigations` (riwayat investigasi)
+
+Riwayat halaman investigasi yang pernah dibuka, untuk satu workspace (belum ada
+akun pengguna). Kontraknya ada di `src/investigations/investigations.types.ts`.
+
+- `GET /api/investigations` — terbaru dulu; `kind` (`token`, `flow`, `trace`,
+  `map`, `multichain`) dan `limit` (1–200, default 50); `total` adalah jumlah
+  sebelum dibatasi.
+- `POST /api/investigations` — catat halaman yang dibuka, body `{ kind, title,
+  chain?, href, note?, findingCount? }`. Waktu dan id dari server. Hanya
+  tautan `/token|flow|trace|map|multichain/…` yang jenisnya cocok yang diterima.
+  Membuka ulang halaman yang sama memperbarui baris yang sama (`200`, hitungan
+  naik, catatan dan jumlah temuan lama tidak dihapus bila tidak dikirim);
+  catatan baru dijawab `201`.
+- `DELETE /api/investigations/:id` — hapus satu riwayat beserta catatannya
+  (`204`, atau `404` bila sudah tidak ada). Data on-chain dan halamannya tidak
+  tersentuh.
+- Catatan maksimal 280 karakter; isian yang salah dan chain tak dikenal
+  dijawab `400`.
 
 ### `GET /api/tokens/:chain/:address/summary`
 
