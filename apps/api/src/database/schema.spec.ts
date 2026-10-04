@@ -23,6 +23,7 @@ const MIGRATION_COUNT = (
 ).entries.length;
 
 const EXPECTED_TABLES = [
+  'address_flow_scans',
   'addresses',
   'chains',
   'contract_check_evidence',
@@ -31,6 +32,7 @@ const EXPECTED_TABLES = [
   'holders',
   'label_evidence',
   'labels',
+  'native_transfers',
   'provider_runs',
   'risk_finding_evidence',
   'risk_findings',
@@ -96,7 +98,7 @@ afterAll(async () => {
 });
 
 describe('migrasi', () => {
-  it('membuat semua tabel data token', async () => {
+  it('membuat semua tabel data token dan aliran dana', async () => {
     const result = await db.execute<{ table_name: string }>(
       sql`select table_name from information_schema.tables where table_schema = 'public' order by table_name`,
     );
@@ -476,6 +478,177 @@ describe('aturan PRD ditegakkan oleh database', () => {
         value: 'Jual 5%',
       }),
       'contract_checks_unknown_has_no_classification',
+    );
+  });
+});
+
+describe('aliran dana: transfer native dan token', () => {
+  const nativeTransfer = (fromAddressId: number, toAddressId: number, overrides: Partial<typeof schema.nativeTransfers.$inferInsert> = {}) => ({
+    chainId: 'robinhood',
+    txHash: normalizeTxHash('evm', `0x${'e1'.repeat(32)}`),
+    kind: 'transaction' as const,
+    fromAddressId,
+    toAddressId,
+    amountRaw: '1500000000000000000',
+    blockNumber: 500,
+    blockTimestamp: FETCHED_AT,
+    fetchedAt: FETCHED_AT,
+    ...overrides,
+  });
+
+  it('mencatat nilai transaksi dan panggilan internal dalam satu transaksi tanpa duplikat', async () => {
+    const funder = await insertAddress('robinhood', '0x' + '51'.repeat(20));
+    const router = await insertAddress('robinhood', '0x' + '52'.repeat(20));
+    await db.insert(schema.nativeTransfers).values(nativeTransfer(funder.id, router.id));
+    await db
+      .insert(schema.nativeTransfers)
+      .values(nativeTransfer(router.id, funder.id, { kind: 'internal', tracePath: '0.1', amountRaw: '1000' }));
+    // Ingest ulang transaksi yang sama tidak menambah baris.
+    await db.insert(schema.nativeTransfers).values(nativeTransfer(funder.id, router.id)).onConflictDoNothing();
+    const rows = await db.select().from(schema.nativeTransfers).where(eq(schema.nativeTransfers.fromAddressId, funder.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ tracePath: '', amountUsd: null });
+    await expectConstraintViolation(
+      db.insert(schema.nativeTransfers).values(nativeTransfer(funder.id, router.id)),
+      'native_transfers_identity_unique',
+    );
+  });
+
+  it('menolak transfer bernilai nol dan trace path yang tidak cocok dengan jenisnya', async () => {
+    const a = await insertAddress('robinhood', '0x' + '53'.repeat(20));
+    const b = await insertAddress('robinhood', '0x' + '54'.repeat(20));
+    await expectConstraintViolation(
+      db.insert(schema.nativeTransfers).values(nativeTransfer(a.id, b.id, { amountRaw: '0' })),
+      'native_transfers_amount_positive',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.nativeTransfers).values(nativeTransfer(a.id, b.id, { tracePath: '0' })),
+      'native_transfers_trace_path_matches_kind',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.nativeTransfers).values(nativeTransfer(a.id, b.id, { kind: 'internal' })),
+      'native_transfers_trace_path_matches_kind',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.nativeTransfers).values(nativeTransfer(a.id, b.id, { amountUsd: '-1' })),
+      'native_transfers_usd_non_negative',
+    );
+  });
+
+  it('pengirim dan penerima wajib di chain yang sama dengan transfer', async () => {
+    const local = await insertAddress('robinhood', '0x' + '55'.repeat(20));
+    const other = await insertAddress('ethereum', '0x' + '56'.repeat(20));
+    await expectConstraintViolation(
+      db
+        .insert(schema.nativeTransfers)
+        .values(nativeTransfer(local.id, other.id, { txHash: normalizeTxHash('evm', `0x${'e3'.repeat(32)}`) })),
+      'native_transfers_chain_to_fk',
+    );
+    const { token } = await insertTokenWithSnapshot('0x' + '57'.repeat(20), 12);
+    await expectConstraintViolation(
+      db.insert(schema.tokenTransfers).values({
+        chainId: 'robinhood',
+        txHash: TX_HASH,
+        logIndex: 3,
+        tokenId: token.id,
+        fromAddressId: other.id,
+        toAddressId: local.id,
+        amountRaw: '10',
+        blockNumber: 12,
+        blockTimestamp: FETCHED_AT,
+        fetchedAt: FETCHED_AT,
+      }),
+      'token_transfers_chain_from_fk',
+    );
+  });
+
+  it('transfer token menyimpan nilai USD saat transaksi, atau kosong bila harga tidak diketahui', async () => {
+    const { token } = await insertTokenWithSnapshot('0x' + '58'.repeat(20), 13);
+    const from = await insertAddress('robinhood', '0x' + '59'.repeat(20));
+    const to = await insertAddress('robinhood', '0x' + '5a'.repeat(20));
+    const base = {
+      chainId: 'robinhood',
+      txHash: normalizeTxHash('evm', `0x${'e2'.repeat(32)}`),
+      tokenId: token.id,
+      fromAddressId: from.id,
+      toAddressId: to.id,
+      amountRaw: '25',
+      blockNumber: 13,
+      blockTimestamp: FETCHED_AT,
+      fetchedAt: FETCHED_AT,
+    };
+    const [priced] = await db.insert(schema.tokenTransfers).values({ ...base, logIndex: 0, amountUsd: '1234.56' }).returning();
+    const [unpriced] = await db.insert(schema.tokenTransfers).values({ ...base, logIndex: 1 }).returning();
+    expect(priced.amountUsd).toBe('1234.56');
+    expect(unpriced.amountUsd).toBeNull();
+    await expectConstraintViolation(
+      db.insert(schema.tokenTransfers).values({ ...base, logIndex: 2, amountUsd: '-5' }),
+      'token_transfers_usd_non_negative',
+    );
+  });
+});
+
+describe('aliran dana: cakupan pemindaian address', () => {
+  const scan = (addressId: number, overrides: Partial<typeof schema.addressFlowScans.$inferInsert> = {}) => ({
+    chainId: 'robinhood',
+    addressId,
+    blockFrom: 100,
+    blockTo: 900,
+    windowFrom: new Date('2026-09-03T00:00:00Z'),
+    windowTo: FETCHED_AT,
+    nativeScanned: true,
+    tokensScanned: true,
+    internalScanned: true,
+    status: 'complete' as const,
+    scannedAt: FETCHED_AT,
+    ...overrides,
+  });
+
+  it('menyimpan pemindaian lengkap dan sebagian yang dijelaskan', async () => {
+    const address = await insertAddress('robinhood', '0x' + '61'.repeat(20));
+    await db.insert(schema.addressFlowScans).values(scan(address.id));
+    const [partial] = await db
+      .insert(schema.addressFlowScans)
+      .values(scan(address.id, { internalScanned: false, status: 'partial', missingFields: ['internal_transfers'] }))
+      .returning();
+    expect(partial.missingFields).toEqual(['internal_transfers']);
+  });
+
+  it('tidak boleh mengaku lengkap bila ada jenis transfer yang belum dipindai', async () => {
+    const address = await insertAddress('robinhood', '0x' + '62'.repeat(20));
+    await expectConstraintViolation(
+      db.insert(schema.addressFlowScans).values(scan(address.id, { internalScanned: false })),
+      'address_flow_scans_complete_covers_all',
+    );
+  });
+
+  it('status sebagian atau tidak tersedia wajib menjelaskan alasannya', async () => {
+    const address = await insertAddress('robinhood', '0x' + '63'.repeat(20));
+    await expectConstraintViolation(
+      db.insert(schema.addressFlowScans).values(scan(address.id, { status: 'partial' })),
+      'address_flow_scans_partial_is_explained',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.addressFlowScans).values(
+        scan(address.id, { status: 'unavailable', nativeScanned: false, tokensScanned: false, internalScanned: false }),
+      ),
+      'address_flow_scans_unavailable_has_reason',
+    );
+  });
+
+  it('rentang blok dan waktu harus masuk akal, dan address dari chain yang sama', async () => {
+    const address = await insertAddress('robinhood', '0x' + '64'.repeat(20));
+    await expectConstraintViolation(
+      db.insert(schema.addressFlowScans).values(scan(address.id, { blockFrom: 901 })),
+      'address_flow_scans_block_range',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.addressFlowScans).values(scan(address.id, { windowFrom: new Date('2026-10-05T00:00:00Z') })),
+      'address_flow_scans_window',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.addressFlowScans).values(scan(address.id, { chainId: 'base' })),
+      'address_flow_scans_chain_address_fk',
     );
   });
 });

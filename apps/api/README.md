@@ -389,6 +389,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Referensi | `chains`, `addresses`, `labels`, `provider_runs` |
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
+| Aliran dana | `native_transfers`, `address_flow_scans` (plus `token_transfers`) |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
 Aturan PRD yang dijaga langsung oleh database:
@@ -405,6 +406,15 @@ Aturan PRD yang dijaga langsung oleh database:
   supaya penyimpanan idempotent.
 - Semua chain dimulai dengan status `planned`. Chain baru boleh disebut
   didukung (`validated`) setelah adapter dan smoke test-nya lulus.
+- Aliran dana: perpindahan native coin disimpan di `native_transfers`, baik
+  nilai transaksi itu sendiri (`transaction`) maupun panggilan internal kontrak
+  (`internal`, dengan `trace_path`); transfer bernilai nol ditolak. Pengirim dan
+  penerima transfer (native maupun token) wajib address di chain yang sama.
+  Nilai USD saat transaksi boleh kosong bila harganya tidak diketahui, tidak
+  diisi nol.
+- `address_flow_scans` mencatat rentang blok dan jenis transfer yang sudah
+  dipindai per address. Status `complete` hanya sah bila native, token, dan
+  transfer internal semuanya dipindai; `partial`/`unavailable` wajib dijelaskan.
 
-Tabel `internal_transfers`, `funding_edges`, `clusters`, `cluster_members`, dan
-`investigations` menyusul di task fitur yang memakainya.
+Tabel `funding_edges`, `clusters`, `cluster_members`, dan `investigations`
+menyusul di task fitur yang memakainya.

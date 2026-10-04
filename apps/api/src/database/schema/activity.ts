@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -54,6 +55,7 @@ export const transactions = pgTable(
 /**
  * Transfer token (event log). Tidak memakai foreign key ke `transactions`
  * supaya transfer tetap bisa disimpan walau detail transaksinya belum diambil.
+ * Dipakai halaman token dan halaman Lacak Aliran Dana (dicari per address).
  */
 export const tokenTransfers = pgTable(
   'token_transfers',
@@ -75,6 +77,11 @@ export const tokenTransfers = pgTable(
       .notNull()
       .references(() => addresses.id),
     amountRaw: rawAmount('amount_raw').notNull(),
+    /**
+     * Nilai USD saat transaksi (kalkulasi dari harga historis). Kosong bila
+     * harga token saat itu tidak diketahui; jangan diisi nol.
+     */
+    amountUsd: usdAmount('amount_usd'),
     blockNumber: blockNumber('block_number').notNull(),
     blockTimestamp: timestampTz('block_timestamp').notNull(),
     providerRunId: refId('provider_run_id').references(() => providerRuns.id),
@@ -87,8 +94,26 @@ export const tokenTransfers = pgTable(
       t.logIndex,
     ),
     index('token_transfers_token_block_idx').on(t.tokenId, t.blockNumber),
+    // Aliran dana dibaca per address: transfer keluar dan masuk, terbaru dulu.
+    index('token_transfers_from_time_idx').on(t.fromAddressId, t.blockTimestamp),
+    index('token_transfers_to_time_idx').on(t.toAddressId, t.blockTimestamp),
+    // Pengirim dan penerima wajib address di chain yang sama dengan transfer.
+    foreignKey({
+      name: 'token_transfers_chain_from_fk',
+      columns: [t.chainId, t.fromAddressId],
+      foreignColumns: [addresses.chainId, addresses.id],
+    }),
+    foreignKey({
+      name: 'token_transfers_chain_to_fk',
+      columns: [t.chainId, t.toAddressId],
+      foreignColumns: [addresses.chainId, addresses.id],
+    }),
     check('token_transfers_log_index_non_negative', sql`${t.logIndex} >= 0`),
     check('token_transfers_amount_non_negative', sql`${t.amountRaw} >= 0`),
+    check(
+      'token_transfers_usd_non_negative',
+      sql`${t.amountUsd} is null or ${t.amountUsd} >= 0`,
+    ),
   ],
 );
 
