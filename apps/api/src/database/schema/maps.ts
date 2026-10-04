@@ -44,9 +44,17 @@ export const walletMaps = pgTable(
       .notNull()
       .default(sql`'{}'::text[]`),
     builtAt: timestampTz('built_at').notNull(),
+    /**
+     * Waktu kelompok wallet dihitung; kosong berarti belum dianalisis, beda
+     * dengan sudah dianalisis tanpa kelompok.
+     */
+    clusteredAt: timestampTz('clustered_at'),
+    /** Nama dan versi heuristic pengelompokan yang dipakai. */
+    clusterHeuristic: text('cluster_heuristic'),
   },
   (t) => [
     index('wallet_maps_token_built_idx').on(t.tokenId, t.builtAt),
+    check('wallet_maps_clustering_complete', sql`(${t.clusteredAt} is null) = (${t.clusterHeuristic} is null)`),
     // Dipakai foreign key komposit node agar address tidak dari chain lain.
     unique('wallet_maps_id_chain_unique').on(t.id, t.chainId),
     foreignKey({ name: 'wallet_maps_chain_token_fk', columns: [t.chainId, t.tokenId], foreignColumns: [tokens.chainId, tokens.id] }),

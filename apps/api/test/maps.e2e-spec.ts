@@ -270,6 +270,74 @@ describe('GET /api/maps/:chain/:token', () => {
     expect(poolEdge.body.caveats.join(' ')).toContain('Pool NBLA/WETH adalah exchange, pool, atau kontrak');
   });
 
+  it('mengelompokkan holder dengan pendana yang sama, menyimpan hasilnya, dan menandai node anggota', async () => {
+    const { body } = await request(app.getHttpServer()).get(url(`/clusters?map=${firstMapId}`)).expect(200);
+    expect(body).toMatchObject({
+      map: { id: firstMapId, status: 'complete' },
+      clustering: { heuristic: 'openchain-cluster-v1' },
+      unclusteredHolders: 1,
+    });
+    expect(body.clusters).toHaveLength(1);
+    const [cluster] = body.clusters;
+    expect(cluster).toMatchObject({
+      name: 'Kelompok A',
+      labels: ['common_funding'],
+      confidence: 'medium',
+      classification: 'heuristic',
+      hasDirectEvidence: false,
+      holderCount: 2,
+      sharePct: 65,
+    });
+    expect([...cluster.members].sort()).toEqual([H1, H2, FUNDER, GRAND, CONNECTOR].sort());
+    expect(cluster.signals.map((signal: { id: string; matched: boolean }) => [signal.id, signal.matched])).toEqual([
+      ['common-funder', true],
+      ['funding-window', true],
+      ['direct-transfer', false],
+      ['shared-connector', true],
+      ['same-block-receive', false],
+      ['consolidation', false],
+      ['deployer-link', false],
+    ]);
+    expect(cluster.signals[0].evidence.map((item: { blockNumber: number }) => item.blockNumber)).toEqual([50, 100, 110]);
+    expect(cluster.signals[0].evidence[0]).toMatchObject({ transferKind: 'native', id: expect.stringMatching(/^native:\d+$/) });
+    expect(cluster.caveats[0]).toContain('belum tentu pemilik yang sama');
+
+    const again = await request(app.getHttpServer()).get(url(`/clusters?map=${firstMapId}`)).expect(200);
+    expect(again.body.clustering.computedAt).toBe(body.clustering.computedAt);
+    expect(again.body.clusters).toEqual(body.clusters);
+
+    const map = await request(app.getHttpServer()).get(url(`?map=${firstMapId}`)).expect(200);
+    expect(map.body.clusters).toEqual(body.clusters);
+    const clusterOf = Object.fromEntries(map.body.nodes.map((node: NodeBody & { clusterId: string | null }) => [node.address, node.clusterId]));
+    expect(clusterOf[H1]).toBe(cluster.id);
+    expect(clusterOf[GRAND]).toBe(cluster.id);
+    expect(clusterOf[POOL]).toBeNull();
+  });
+
+  it('label orang dalam hanya muncul bila deployer mengirim langsung ke anggota', async () => {
+    const [tokenAddress] = await db.select().from(schema.addresses).where(eq(schema.addresses.addressNormalized, TOKEN));
+    const [grand] = await db.select().from(schema.addresses).where(eq(schema.addresses.addressNormalized, GRAND));
+    await db.update(schema.tokens).set({ deployerAddressId: grand.id }).where(eq(schema.tokens.addressId, tokenAddress.id));
+    try {
+      const { body } = await request(app.getHttpServer()).get(url('?holders=2')).expect(200);
+      const [cluster] = body.clusters;
+      expect(cluster).toMatchObject({ hasDirectEvidence: true, confidence: 'high' });
+      expect(cluster.labels).toContain('insider_or_team');
+      const link = cluster.signals.find((signal: { id: string }) => signal.id === 'deployer-link');
+      expect(link).toMatchObject({ matched: true, evidence: [{ transferKind: 'native', blockNumber: 50 }] });
+    } finally {
+      await db.update(schema.tokens).set({ deployerAddressId: null }).where(eq(schema.tokens.addressId, tokenAddress.id));
+    }
+  });
+
+  it('kelompok: peta yang belum ada atau bukan milik token dijawab 404', async () => {
+    const server = app.getHttpServer();
+    const none = await request(server).get(url('/clusters', BARE)).expect(404);
+    expect(none.body.message).toContain('Belum ada peta');
+    await request(server).get(url(`/clusters?map=${firstMapId}`, BARE)).expect(404);
+    await request(server).get(url('/clusters?map=abc')).expect(400);
+  });
+
   it('detail garis menolak id yang salah dan garis yang tidak ada di peta', async () => {
     const server = app.getHttpServer();
     await request(server).get(url('/edges/abc')).expect(400);

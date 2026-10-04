@@ -862,6 +862,11 @@ describe('peta hubungan: node, edge, dan bukti transaksi', () => {
       db.insert(schema.walletMaps).values({ ...base, status: 'complete', fundingDepth: 9 }),
       'wallet_maps_funding_depth_range',
     );
+    // Waktu pengelompokan dan nama heuristic-nya selalu diisi bersamaan.
+    await expectConstraintViolation(
+      db.insert(schema.walletMaps).values({ ...base, status: 'complete', clusteredAt: FETCHED_AT }),
+      'wallet_maps_clustering_complete',
+    );
   });
 });
 

@@ -1,5 +1,6 @@
 /**
- * Kontrak respons `GET /api/maps/:chain/:token` dan
+ * Kontrak respons `GET /api/maps/:chain/:token`,
+ * `GET /api/maps/:chain/:token/clusters`, dan
  * `GET /api/maps/:chain/:token/edges/:edgeId`.
  *
  * Wallet dan garis adalah fakta: holder dari snapshot, garis dari transfer
@@ -7,7 +8,7 @@
  * wallet dimiliki orang yang sama; pengelompokan wallet adalah dugaan dan
  * disajikan terpisah.
  */
-import type { DataStatus, MapEdgeKind, MapNodeRole } from '../database/schema/enums.js';
+import type { ClusterLabel, ConfidenceLevel, DataStatus, MapEdgeKind, MapNodeRole } from '../database/schema/enums.js';
 import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from '../flows/flow-summary.types.js';
 import type { TransactionEvidenceResponse } from '../flows/transaction-evidence.types.js';
 
@@ -26,6 +27,64 @@ export interface WalletMapPartyView {
 export interface WalletMapNodeView extends WalletMapPartyView {
   /** Langkah dari holder terdekat; holder 0. */
   distance: number;
+  /** Id kelompok bila wallet ini masuk kelompok hasil heuristic. */
+  clusterId: string | null;
+}
+
+/** Transfer yang menjadi bukti sebuah sinyal kelompok. */
+export interface ClusterEvidenceView {
+  /** Kunci transfer, sama dengan id garis peta bila transfer itu juga garis. */
+  id: string;
+  transferKind: 'native' | 'internal' | 'token';
+  txHash: string;
+  blockNumber: number;
+}
+
+export interface ClusterSignalView {
+  id: string;
+  label: string;
+  detail: string;
+  matched: boolean;
+  evidence: ClusterEvidenceView[];
+}
+
+/** Kelompok wallet yang diduga terkait; selalu dugaan, bukan bukti kepemilikan. */
+export interface WalletClusterView {
+  id: string;
+  name: string;
+  /** Alasan pengelompokan dalam bahasa sederhana. */
+  reason: string;
+  labels: ClusterLabel[];
+  confidence: ConfidenceLevel;
+  classification: 'heuristic';
+  heuristic: string;
+  /** Ada transfer langsung dari deployer ke anggota; syarat label `insider_or_team`. */
+  hasDirectEvidence: boolean;
+  /** Address anggota, termasuk pendana dan penghubung. */
+  members: string[];
+  holderCount: number;
+  /** Total porsi supply holder anggota pada snapshot dasar. */
+  sharePct: number;
+  signals: ClusterSignalView[];
+  /** Hal yang bisa membuat dugaan ini keliru. */
+  caveats: string[];
+}
+
+/** Kapan dan dengan heuristic apa kelompok peta ini dihitung. */
+export interface ClusteringInfo {
+  heuristic: string;
+  computedAt: string;
+}
+
+export interface WalletMapClustersResponse {
+  chain: FlowChainInfo;
+  token: { address: string; symbol: string | null };
+  map: { id: number; builtAt: string; status: DataStatus };
+  clustering: ClusteringInfo;
+  clusters: WalletClusterView[];
+  /** Holder peta yang tidak masuk kelompok mana pun. */
+  unclusteredHolders: number;
+  caveats: string[];
 }
 
 export interface WalletMapEdgeView {
@@ -70,6 +129,9 @@ export interface WalletMapResponse {
   map: WalletMapInfo;
   nodes: WalletMapNodeView[];
   edges: WalletMapEdgeView[];
+  /** Kelompok wallet di seluruh peta (tidak dipotong radius). */
+  clusters: WalletClusterView[];
+  clustering: ClusteringInfo;
   /** Hal yang bisa membuat peta keliru atau tidak lengkap, dalam bahasa sederhana. */
   caveats: string[];
   /** Snapshot holder dasar peta; `null` bila peta dibentuk tanpa snapshot. */

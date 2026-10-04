@@ -7,6 +7,9 @@ import {
   chains,
   holders,
   labels,
+  mapClusterMembers,
+  mapClusters,
+  mapClusterSignals,
   mapNodes,
   providerRuns,
   tokens,
@@ -16,6 +19,7 @@ import {
 } from '../database/schema/index.js';
 import { HUB_LABEL_TYPES } from '../flows/flows.repository.js';
 import type { AddressProfile, GraphTransfer, HistoryCoverage, MapGraphLoader } from './map-graph.js';
+import type { ClusterLoader, EvidenceTransfer } from './wallet-clustering.js';
 
 type Raw = Record<string, unknown>;
 
@@ -37,6 +41,20 @@ export interface TransferRef {
 
 function transferFilter(edge: TransferRef): SQL {
   return edge.table === 'token' ? sql`e.token_transfer_id = ${edge.id}` : sql`e.native_transfer_id = ${edge.id}`;
+}
+
+/** Batas transfer bukti per pengecekan sinyal, supaya respons tetap kecil. */
+const CLUSTER_EVIDENCE_LIMIT = 200;
+
+function toEvidence(row: Raw, table: 'native' | 'token'): EvidenceTransfer {
+  return {
+    table,
+    id: Number(row.id),
+    fromAddressId: Number(row.from_address_id),
+    toAddressId: Number(row.to_address_id),
+    blockNumber: Number(row.block_number),
+    timestamp: new Date(row.block_timestamp as string | Date),
+  };
 }
 
 function toTransfer(row: Raw, source: GraphTransfer['source']): GraphTransfer {
@@ -77,12 +95,39 @@ export class MapsRepository {
 
   async findToken(chainId: string, addressNormalized: string) {
     const [row] = await this.db
-      .select({ id: tokens.id, address: addresses.address, name: tokens.name, symbol: tokens.symbol, decimals: tokens.decimals })
+      .select({
+        id: tokens.id,
+        address: addresses.address,
+        name: tokens.name,
+        symbol: tokens.symbol,
+        decimals: tokens.decimals,
+        deployerAddressId: tokens.deployerAddressId,
+      })
       .from(tokens)
       .innerJoin(addresses, eq(tokens.addressId, addresses.id))
       .where(and(eq(tokens.chainId, chainId), eq(addresses.addressNormalized, addressNormalized)))
       .limit(1);
     return row ?? null;
+  }
+
+  async findTokenById(tokenId: number) {
+    const [row] = await this.db
+      .select({ id: tokens.id, deployerAddressId: tokens.deployerAddressId })
+      .from(tokens)
+      .where(eq(tokens.id, tokenId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** Peta terbaru sebuah token, apa pun parameternya. */
+  async findLatestMap(tokenId: number) {
+    const [map] = await this.db
+      .select()
+      .from(walletMaps)
+      .where(eq(walletMaps.tokenId, tokenId))
+      .orderBy(desc(walletMaps.builtAt), desc(walletMaps.id))
+      .limit(1);
+    return map ?? null;
   }
 
   /** Snapshot pada blok tertentu, atau yang terbaru. */
@@ -217,6 +262,53 @@ export class MapsRepository {
     return rows.length === 0 ? null : this.findMap(Number(rows[0].id));
   }
 
+  /** Kelompok tersimpan sebuah peta beserta anggota, sinyal, dan bukti transfernya. */
+  async storedClusters(mapId: number) {
+    const clusters = await this.db.select().from(mapClusters).where(eq(mapClusters.mapId, mapId)).orderBy(asc(mapClusters.id));
+    if (clusters.length === 0) return [];
+    const clusterIds = clusters.map((cluster) => cluster.id);
+    const [members, signals] = await Promise.all([
+      this.db
+        .select({ clusterId: mapClusterMembers.clusterId, nodeId: mapClusterMembers.nodeId })
+        .from(mapClusterMembers)
+        .where(inArray(mapClusterMembers.clusterId, clusterIds))
+        .orderBy(asc(mapClusterMembers.nodeId)),
+      this.db
+        .select()
+        .from(mapClusterSignals)
+        .where(inArray(mapClusterSignals.clusterId, clusterIds))
+        .orderBy(asc(mapClusterSignals.position), asc(mapClusterSignals.id)),
+    ]);
+    const evidenceRows =
+      signals.length === 0
+        ? []
+        : await this.rows(sql`
+            select v.signal_id,
+              case when v.token_transfer_id is not null then 'token' when n.kind = 'internal' then 'internal' else 'native' end as source,
+              coalesce(v.native_transfer_id, v.token_transfer_id) as transfer_id,
+              coalesce(n.tx_hash, t.tx_hash) as tx_hash,
+              coalesce(n.block_number, t.block_number) as block_number
+            from map_cluster_signal_evidence v
+            left join native_transfers n on n.id = v.native_transfer_id
+            left join token_transfers t on t.id = v.token_transfer_id
+            where v.signal_id in (${idList(signals.map((signal) => signal.id))})
+            order by block_number, v.id`);
+    const evidence = evidenceRows.map((row) => ({
+      signalId: Number(row.signal_id),
+      source: (row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native') as 'native' | 'internal' | 'token',
+      transferId: Number(row.transfer_id),
+      txHash: String(row.tx_hash),
+      blockNumber: Number(row.block_number),
+    }));
+    return clusters.map((cluster) => ({
+      ...cluster,
+      nodeIds: members.filter((member) => member.clusterId === cluster.id).map((member) => member.nodeId),
+      signals: signals
+        .filter((signal) => signal.clusterId === cluster.id)
+        .map((signal) => ({ ...signal, evidence: evidence.filter((item) => item.signalId === signal.id) })),
+    }));
+  }
+
   async labelsByAddressIds(addressIds: number[]) {
     const grouped = new Map<number, (typeof labels.$inferSelect)[]>();
     if (addressIds.length === 0) return grouped;
@@ -244,6 +336,42 @@ export class MapsRepository {
       .where(eq(holders.snapshotId, snapshotId))
       .orderBy(asc(holders.rank))
       .limit(limit);
+  }
+
+  /** Query tambahan pengelompokan untuk satu token sampai blok peta. */
+  clusterLoader(chainId: string, tokenId: number, blockNumber: number): ClusterLoader {
+    return {
+      firstReceipts: async (addressIds) => {
+        if (addressIds.length === 0) return [];
+        const rows = await this.rows(sql`
+          select distinct on (t.to_address_id) t.id, t.from_address_id, t.to_address_id, t.block_number, t.block_timestamp
+          from token_transfers t
+          where t.chain_id = ${chainId} and t.token_id = ${tokenId} and t.block_number <= ${blockNumber}
+            and t.to_address_id in (${idList(addressIds)})
+          order by t.to_address_id, t.block_number, t.log_index, t.id`);
+        return rows.map((row) => toEvidence(row, 'token'));
+      },
+      transfersBetween: async (fromIds, toIds) => {
+        if (fromIds.length === 0 || toIds.length === 0) return [];
+        const from = idList(fromIds);
+        const to = idList(toIds);
+        const rows = await this.rows(sql`
+          select * from (
+            select 'native' as source, n.id, n.from_address_id, n.to_address_id, n.block_number, n.block_timestamp
+            from native_transfers n
+            where n.chain_id = ${chainId} and n.block_number <= ${blockNumber}
+              and n.from_address_id in (${from}) and n.to_address_id in (${to}) and n.from_address_id <> n.to_address_id
+            union all
+            select 'token', t.id, t.from_address_id, t.to_address_id, t.block_number, t.block_timestamp
+            from token_transfers t
+            where t.chain_id = ${chainId} and t.token_id = ${tokenId} and t.block_number <= ${blockNumber}
+              and t.from_address_id in (${from}) and t.to_address_id in (${to}) and t.from_address_id <> t.to_address_id
+          ) moves
+          order by block_number, source, id
+          limit ${CLUSTER_EVIDENCE_LIMIT}`);
+        return rows.map((row) => toEvidence(row, row.source === 'token' ? 'token' : 'native'));
+      },
+    };
   }
 
   /** Sumber data graf untuk satu token sampai blok peta. */
@@ -329,7 +457,8 @@ export class MapsRepository {
     return rows.map((row) => ({ addressId: Number(row.address_id), holderCount: Number(row.holder_count) }));
   }
 
-  private async profiles(addressIds: number[]): Promise<Map<number, AddressProfile>> {
+  /** Status kontrak, hub, dan address nol untuk sekumpulan address. */
+  async profiles(addressIds: number[]): Promise<Map<number, AddressProfile>> {
     const result = new Map<number, AddressProfile>();
     if (addressIds.length === 0) return result;
     const rows = await this.db

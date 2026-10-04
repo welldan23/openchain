@@ -554,6 +554,37 @@ default 50), `map` (id peta tersimpan).
   snapshot, atau peta yang bukan milik token itu; `400` untuk format address
   atau parameter yang salah.
 
+### `GET /api/maps/:chain/:token/clusters`
+
+Kelompok wallet di sebuah peta (`?map=<id>`, atau peta terbaru token ini).
+Respons peta (`GET /api/maps/:chain/:token`) juga memuat `clusters`,
+`clustering`, dan `clusterId` di tiap node.
+
+- Dihitung sekali per peta dengan heuristic `openchain-cluster-v1`, lalu
+  disimpan di `map_clusters` beserta anggota, sinyal, dan transfer buktinya.
+  `wallet_maps.clustered_at` membedakan "belum dianalisis" dari "tidak ada
+  kelompok". Data yang dipakai hanya garis peta dan transfer sampai blok peta,
+  jadi peta lama tetap memberi kelompok yang sama.
+- Holder disatukan bila punya pendana yang sama (langsung atau beberapa lapis),
+  saling kirim langsung, atau memakai wallet penghubung yang sama. Exchange,
+  router, bridge, pool, market maker, kontrak, dan pengirim yang hanya lewat
+  kiriman internal tidak pernah menyatukan wallet. Kelompok minimal dua holder.
+- Tiap kelompok membawa tujuh sinyal yang dicek, terpenuhi atau tidak, dengan
+  bukti transfernya: pendana yang sama, didanai dalam 60 menit, saling kirim
+  langsung, perantara yang sama, menerima token peta pertama kali di blok yang
+  sama, dana kembali ke pendana, dan menerima langsung dari deployer.
+- Label: `common_funding`, `likely_linked` (saling kirim atau dana kembali),
+  `bundled_or_sniper_activity` (blok penerimaan sama), `insider_or_team` hanya
+  bila ada transfer langsung dari deployer (database juga menolaknya tanpa
+  bukti itu), `visual_cluster` + `inconclusive` bila hanya lewat perantara, dan
+  `false_positive_possible` bila hanya satu sinyal kuat atau satu pendana
+  menyatukan 10 holder atau lebih. Keyakinan `high` untuk transfer dari
+  deployer atau minimal tiga sinyal kuat, `medium` untuk dua, selain itu `low`.
+- Semua kelompok berklasifikasi `heuristic`; `caveats` menyebut hal yang bisa
+  membuatnya keliru. Tidak ada kelompok bukan bukti bahwa holder tidak terkait.
+- Respons error: `404` bila token belum punya peta atau peta bukan milik token
+  itu; `400` untuk parameter yang salah.
+
 ### `GET /api/maps/:chain/:token/edges/:edgeId`
 
 Detail satu garis peta. `edgeId` adalah `id` garis di respons peta

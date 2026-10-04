@@ -9,6 +9,7 @@ import { trimToRadius } from './map-radius.js';
 import { tokenIdsOf, toEdgeView, toPartyView } from './maps.mapper.js';
 import { MapsRepository } from './maps.repository.js';
 import type { WalletMapEdgeView, WalletMapNodeView, WalletMapResponse } from './maps.types.js';
+import { WalletClusterService } from './wallet-cluster.service.js';
 import { FUNDING_DEPTH_RANGE, WALLET_MAP_DEFAULTS, WalletMapBuilder } from './wallet-map-builder.service.js';
 
 export const DEFAULT_RADIUS = WALLET_MAP_DEFAULTS.fundingDepth;
@@ -35,6 +36,7 @@ export class WalletMapService {
     private readonly repository: MapsRepository,
     private readonly builder: WalletMapBuilder,
     private readonly freshness: SnapshotFreshness,
+    private readonly clusters: WalletClusterService,
   ) {}
 
   async getMap(chainId: string, rawToken: string, query: WalletMapQuery = {}): Promise<WalletMapResponse> {
@@ -77,15 +79,17 @@ export class WalletMapService {
       map.snapshotId === null ? null : this.repository.findSnapshotById(map.snapshotId),
     ]);
     const { nodes, edges } = trimToRadius(storedNodes, storedEdges, radius);
-    const [labelsById, tokensById, sources] = await Promise.all([
+    const [labelsById, tokensById, sources, grouping] = await Promise.all([
       this.repository.labelsByAddressIds(nodes.map((node) => node.addressId)),
       this.repository.tokensByIds(tokenIdsOf(edges)),
       snapshot ? this.repository.snapshotSources(snapshot.id) : [],
+      this.clusters.forMap(map, storedNodes),
     ]);
 
     const nodeViews: WalletMapNodeView[] = nodes.map((node) => ({
       ...toPartyView(node, labelsById.get(node.addressId) ?? []),
       distance: node.distance,
+      clusterId: grouping.clusterOfNode.get(node.id) ?? null,
     }));
     const addressOf = new Map(nodes.map((node) => [node.id, node.address]));
     const edgeViews: WalletMapEdgeView[] = edges.map((edge) => toEdgeView(edge, chain, addressOf, tokensById));
@@ -123,6 +127,8 @@ export class WalletMapService {
       },
       nodes: nodeViews,
       edges: edgeViews,
+      clusters: grouping.clusters,
+      clustering: grouping.clustering,
       caveats,
       snapshot: snapshot ? { id: snapshot.id, fetchedAt: snapshot.fetchedAt.toISOString(), blockNumber: snapshot.blockNumber, sources } : null,
       dataStatus,
