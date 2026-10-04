@@ -387,6 +387,35 @@ Bukti transaksi yang mendukung temuan risiko dan cek kontrak pada snapshot.
 - Pemilih snapshot, status data, dan respons error sama dengan endpoint
   ringkasan.
 
+### `GET /api/flows/:chain/:address/summary`
+
+Ringkasan aliran masuk dan keluar satu address dari pemindaian yang tersimpan
+(`npm run flows:collect`). Tidak menghubungi provider saat diminta.
+
+| Parameter | Fungsi |
+| --- | --- |
+| tanpa parameter | pemindaian terbaru yang berhasil (bukan `unavailable`) |
+| `?scan=<id>` | pemindaian tertentu, supaya hasil bisa direproduksi |
+| `?at=<waktu ISO>` | pemindaian terakhir sampai waktu itu |
+| `?from=` / `?to=` (ISO) | persempit rentang waktu; dipotong ke cakupan pemindaian (`window.clipped`) |
+
+- `assets`: per aset (native dulu, lalu token), jumlah transfer, jumlah mentah
+  (string, presisi uint256), jumlah dalam satuan aset bila desimal diketahui,
+  dan selisih masuk dikurangi keluar (bisa negatif).
+- `totals`: jumlah transfer dan lawan transaksi unik per arah. Transfer ke diri
+  sendiri dihitung terpisah (`selfTransferCount`), tidak masuk maupun keluar.
+- USD (`derived_metric`) hanya dari transfer yang punya harga saat transaksi;
+  `unpricedCount` menyebut yang tidak. `netUsd` hanya diisi bila semua transfer
+  punya harga.
+- `scan` menjelaskan cakupan (rentang blok/waktu, jenis transfer yang terbaca,
+  status, alasan). `lastFailedAttempt` muncul bila ada pemindaian lebih baru
+  yang gagal. Status `stale` mengikuti `SNAPSHOT_STALE_AFTER_MINUTES`.
+- Address yang tercatat tapi belum pernah dipindai, atau rentang di luar
+  cakupan, menghasilkan `totals: null`: belum diketahui, bukan nol.
+- Respons error: `404` untuk chain tak dikenal, address yang belum pernah
+  dipindai, atau `scan` yang tidak ada; `400` untuk format address, waktu, id,
+  atau `from` setelah `to`.
+
 ## Merekam snapshot
 
 `SnapshotRecorder` (`src/snapshots`) adalah sisi tulis data. Service ini dipakai

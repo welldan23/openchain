@@ -32,7 +32,7 @@ export function sortLabels(rows: LabelRow[]): LabelRow[] {
   });
 }
 
-function toLabelView(row: LabelRow): HolderLabelView {
+export function toLabelView(row: LabelRow): HolderLabelView {
   return {
     type: row.labelType,
     name: row.name,

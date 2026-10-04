@@ -1,4 +1,5 @@
 import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
+import { parseIsoTime, parsePositiveInteger } from '../common/query-params.js';
 import { infoClassification, type InfoClassification } from '../database/schema/enums.js';
 import { ContractChecksService } from './contract-checks.service.js';
 import type { ContractChecksResponse } from './contract-checks.types.js';
@@ -100,23 +101,8 @@ function parseSelector(block: string | undefined, at: string | undefined): Snaps
   if (hasBlock && hasAt) {
     throw new BadRequestException('Pakai salah satu: parameter block atau at, bukan keduanya.');
   }
-  if (hasBlock) {
-    if (!/^\d+$/.test(block) || !Number.isSafeInteger(Number(block))) {
-      throw new BadRequestException('Parameter block harus berupa nomor blok yang valid.');
-    }
-    return { blockNumber: Number(block) };
-  }
-  if (hasAt) {
-    // Wajib ISO 8601 lengkap dengan zona waktu supaya tidak ambigu.
-    const isIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(at);
-    const date = new Date(at);
-    if (!isIso || Number.isNaN(date.getTime())) {
-      throw new BadRequestException(
-        'Parameter at harus waktu ISO 8601 dengan zona waktu, mis. 2026-10-03T04:30:00Z.',
-      );
-    }
-    return { at: date };
-  }
+  if (hasBlock) return { blockNumber: parsePositiveInteger(block, 'block', true)! };
+  if (hasAt) return { at: parseIsoTime(at, 'at')! };
   return {};
 }
 
