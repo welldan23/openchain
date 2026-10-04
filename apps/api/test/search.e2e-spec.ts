@@ -188,4 +188,23 @@ describe('GET /api/search', () => {
     await request(server).get('/api/search?q=a&limit=101').expect(400);
     await request(server).get(`/api/search?q=${'x'.repeat(201)}`).expect(400);
   });
+  it('GET /api/labels: pilihan filter dari label utama tersimpan, dengan jumlah dan sumbernya', async () => {
+    const server = app.getHttpServer();
+    const { body } = await request(server).get('/api/labels').expect(200);
+    // Address Bybit punya label eksternal dan dugaan; yang dihitung label utamanya (eksternal).
+    expect(body).toMatchObject({
+      filters: { chains: [], labelSource: 'all' },
+      labeledAddresses: 1,
+      types: [{ type: 'exchange', count: 1, bySource: { external: 1, heuristic: 0, user: 0 } }],
+      sources: [{ source: 'external', count: 1, providers: [{ name: 'Blockscout', count: 1 }] }],
+      chains: [{ chain: 'base', count: 1 }],
+    });
+    expect(body.caveats[0]).toContain('label utama');
+
+    const filtered = await request(server).get('/api/labels?chains=ethereum&labelSource=heuristic').expect(200);
+    expect(filtered.body).toMatchObject({ labeledAddresses: 0, types: [{ type: 'exchange', count: 0 }], chains: [{ chain: 'base', count: 0 }] });
+
+    await request(server).get('/api/labels?chains=mars').expect(400);
+    await request(server).get('/api/labels?labelSource=user').expect(400);
+  });
 });

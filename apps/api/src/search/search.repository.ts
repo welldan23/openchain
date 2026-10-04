@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
+import type { EntityLabelType, LabelSource } from '../database/schema/enums.js';
 import { addressFlowScans } from '../database/schema/index.js';
+import type { PrimaryLabelCount } from './label-options.js';
 
 type Raw = Record<string, unknown>;
 
@@ -160,6 +162,23 @@ export class SearchRepository {
       });
     }
     return result;
+  }
+
+  /** Jumlah address tersimpan per label utama (chain, jenis, sumber, nama sumber). */
+  async primaryLabelCounts(): Promise<PrimaryLabelCount[]> {
+    const rows = await this.rows(sql`
+      select a.chain_id, pl.label_type, pl.source, pl.source_name, count(*)::int as count
+      from addresses a
+      ${PRIMARY_LABEL(sql`a.id`)}
+      where pl.label_type is not null
+      group by a.chain_id, pl.label_type, pl.source, pl.source_name`);
+    return rows.map((row) => ({
+      chainId: String(row.chain_id),
+      type: row.label_type as EntityLabelType,
+      source: row.source as LabelSource,
+      sourceName: String(row.source_name),
+      count: Number(row.count),
+    }));
   }
 
   /** Address yang riwayatnya sudah pernah dipindai. */

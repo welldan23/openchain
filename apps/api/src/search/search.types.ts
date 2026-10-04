@@ -2,7 +2,7 @@
  * Kontrak respons `GET /api/search`. Hasil menunjuk halaman investigasi;
  * ringkasan (`meta`) yang kosong berarti datanya belum ada, bukan nol.
  */
-import type { RiskLevel } from '../database/schema/enums.js';
+import type { EntityLabelType, LabelSource, RiskLevel } from '../database/schema/enums.js';
 import type { FlowLabelView } from '../flows/flow-summary.types.js';
 
 export type SearchQueryKind = 'empty' | 'evm_address' | 'solana_address' | 'evm_tx' | 'solana_tx' | 'text';
@@ -80,5 +80,33 @@ export interface SearchResponse {
   limit: number;
   /** Pilihan filter beserta jumlahnya; jumlah dihitung dengan filter dimensi lain tetap berlaku. */
   facets: SearchFacets;
+  caveats: string[];
+}
+
+/** Kontrak `GET /api/labels`: pilihan filter label dari data tersimpan. */
+export interface LabelTypeOption {
+  type: EntityLabelType;
+  /** Address yang label utamanya jenis ini, dengan semua filter berlaku. */
+  count: number;
+  /** Rincian per sumber label utama, dengan filter chain saja. */
+  bySource: Record<LabelSource, number>;
+}
+
+export interface LabelSourceOption {
+  source: LabelSource;
+  /** Address yang label utamanya dari sumber ini, dengan filter chain berlaku. */
+  count: number;
+  /** Nama sumber, mis. "Blockscout" atau "OpenChain heuristic", terbanyak dulu. */
+  providers: Array<{ name: string; count: number }>;
+}
+
+export interface LabelOptionsResponse {
+  filters: { chains: string[]; labelSource: LabelSourceFilter };
+  /** Address berlabel setelah filter. */
+  labeledAddresses: number;
+  /** Pilihan diambil dari semua data supaya pilihan yang aktif tidak hilang; jumlahnya mengikuti filter. */
+  types: LabelTypeOption[];
+  sources: LabelSourceOption[];
+  chains: Array<{ chain: string; count: number }>;
   caveats: string[];
 }

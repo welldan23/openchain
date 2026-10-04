@@ -544,6 +544,23 @@ Pencarian cepat dari data tersimpan. Kontraknya ada di
 - Tidak ditemukan dijelaskan di `caveats` ("bukan berarti tidak ada di
   blockchain"); nilai filter yang salah dijawab `400`.
 
+### `GET /api/labels`
+
+Pilihan filter label untuk halaman pencarian dan peta: jenis label, sumber
+label (beserta nama penyedianya, mis. Blockscout atau OpenChain heuristic), dan
+chain, masing-masing dengan jumlah address dari data tersimpan.
+
+- Yang dihitung adalah label utama tiap address (eksternal dulu, lalu dugaan,
+  lalu user), sama dengan aturan filter di peta dan pencarian.
+- Filter `chains` (dipisah koma) dan `labelSource` (`all`, `external`,
+  `heuristic`) sama dengan `GET /api/search`. Pilihan selalu diambil dari semua
+  data supaya pilihan yang aktif tidak hilang; jumlahnya dihitung dengan filter
+  dimensi lain tetap berlaku (pilihan yang habis tersaring bernilai 0).
+- `types[].bySource` merinci jumlah per sumber dengan filter chain saja.
+- Belum ada address berlabel dijawab daftar kosong beserta caveat, bukan
+  jumlah nol yang dikarang. Chain tak dikenal atau `labelSource` yang salah
+  dijawab `400`.
+
 ### `/api/investigations` (riwayat investigasi)
 
 Riwayat halaman investigasi yang pernah dibuka, untuk satu workspace (belum ada

@@ -3,7 +3,7 @@
  * token, simbol, nama label). Hanya dari data tersimpan; indeks teks dibangun
  * ulang dari tabel sumber paling sering sekali per `INDEX_MAX_AGE_MS`.
  */
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { EVM_CHAIN_DEFINITIONS, PHASE_4_CHAINS } from '../chains/chain-definitions.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { numericToNumber } from '../common/units.js';
@@ -11,9 +11,10 @@ import { normalizeAddress, normalizeTxHash } from '../database/identifiers.js';
 import type { ChainFamily, RiskLevel } from '../database/schema/enums.js';
 import { FlowsRepository } from '../flows/flows.repository.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
+import { labelOptions, type LabelOptionFilters } from './label-options.js';
 import { applyFilters, classifyQuery, dedupeResults, normalizeText, searchFacets, textTsQuery, MIN_TEXT_QUERY } from './search-query.js';
 import { SearchRepository } from './search.repository.js';
-import type { SearchFilters, SearchResponse, SearchResultView } from './search.types.js';
+import type { LabelOptionsResponse, SearchFilters, SearchResponse, SearchResultView } from './search.types.js';
 
 export const INDEX_MAX_AGE_MS = 60_000;
 export const DEFAULT_SEARCH_LIMIT = 20;
@@ -92,6 +93,20 @@ export class SearchService {
       facets: searchFacets(unique, filters, CHAIN_ORDER),
       caveats,
     };
+  }
+
+  /** Pilihan filter label dari data tersimpan; chain yang tidak dikenal ditolak. */
+  async labelOptions(filters: LabelOptionFilters): Promise<LabelOptionsResponse> {
+    const known = new Set((await this.flows.listChains()).map((chain) => chain.id));
+    const unknown = filters.chains.filter((chain) => !known.has(chain));
+    if (unknown.length > 0) throw new BadRequestException(`Chain tidak dikenal: ${unknown.join(', ')}.`);
+    const options = labelOptions(await this.repository.primaryLabelCounts(), filters, chainRank);
+    const caveats = [
+      'Jumlah dihitung dari label utama tiap address (eksternal dulu, lalu dugaan OpenChain, lalu label user), sama dengan filter di peta dan pencarian.',
+      'Hanya address yang sudah tercatat di data tersimpan. Label bisa keliru; sumbernya selalu ditampilkan.',
+    ];
+    if (options.types.length === 0) caveats.unshift('Belum ada address berlabel di data tersimpan. Ini bukan berarti tidak ada entitas berlabel di blockchain.');
+    return { ...options, caveats };
   }
 
   private async labelsFor(addressIds: number[]) {
