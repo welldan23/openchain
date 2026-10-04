@@ -22,6 +22,9 @@ const FUNDER = '0x' + 'f1'.repeat(20);
 const GRAND = '0x' + 'f2'.repeat(20);
 const CONNECTOR = '0x' + 'c1'.repeat(20);
 const BARE = '0x' + '7c'.repeat(20);
+const NO_HOLDERS = '0x' + '7d'.repeat(20);
+const UNSCANNED = '0x' + '7e'.repeat(20);
+const LONELY = '0x' + '7f'.repeat(20);
 const SCANNED_AT = new Date('2026-10-03T04:30:00Z');
 const NOW = new Date('2026-10-03T05:00:00Z');
 
@@ -143,6 +146,24 @@ describe('GET /api/maps/:chain/:token', () => {
     // Token yang sudah dikenal tapi belum punya snapshot.
     const bare = await insertEvmAddress(db, 'robinhood', BARE);
     await db.insert(schema.tokens).values({ chainId: 'robinhood', addressId: bare.id, standard: 'erc20' });
+
+    // Token untuk empty state: snapshot tanpa holder, holder belum dipindai, dan holder yang tidak saling terhubung.
+    const tokenWithSnapshot = async (raw: string, symbol: string) => {
+      const address = await insertEvmAddress(db, 'robinhood', raw);
+      const [row] = await db.insert(schema.tokens).values({ chainId: 'robinhood', addressId: address.id, standard: 'erc20', symbol }).returning();
+      const [snap] = await db.insert(schema.tokenSnapshots).values({ tokenId: row.id, blockNumber: 900, fetchedAt: SCANNED_AT, dataStatus: 'partial' }).returning();
+      return snap;
+    };
+    await tokenWithSnapshot(NO_HOLDERS, 'KOSONG');
+    const unscannedSnap = await tokenWithSnapshot(UNSCANNED, 'BARU');
+    const lonelySnap = await tokenWithSnapshot(LONELY, 'SEPI');
+    const holderRows = async (snapshotId: number, seeds: string[]) => {
+      const rows = await Promise.all(seeds.map((seed) => insertEvmAddress(db, 'robinhood', '0x' + seed.repeat(20))));
+      await db.insert(schema.holders).values(rows.map((row, index) => ({ snapshotId, addressId: row.id, rank: index + 1, balanceRaw: '10', sharePct: '0.500000' })));
+    };
+    await holderRows(unscannedSnap.id, ['e1', 'e2']);
+    await holderRows(lonelySnap.id, ['d1', 'd2']);
+    for (const seed of ['d1', 'd2']) await ingestion.persist(scanOf('0x' + seed.repeat(20), []), 'evm');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(DATABASE)
@@ -419,7 +440,50 @@ describe('GET /api/maps/:chain/:token', () => {
     await request(server).get(url('', TOKEN, 'mars')).expect(404);
     const unknown = await request(server).get(url('', '0x' + '99'.repeat(20))).expect(404);
     expect(unknown.body.message).toContain('belum pernah diambil datanya');
-    const bare = await request(server).get(url('', BARE)).expect(404);
-    expect(bare.body.message).toContain('Belum ada snapshot holder');
+  });
+
+  it('empty state: token tanpa snapshot dijawab 200 dengan penjelasan, bukan 404', async () => {
+    const { body } = await request(app.getHttpServer()).get(url('', BARE)).expect(200);
+    expect(body).toMatchObject({
+      token: { address: BARE },
+      map: null,
+      nodes: [],
+      edges: [],
+      clusters: [],
+      clustering: null,
+      coordination: [],
+      snapshot: null,
+      dataStatus: 'unavailable',
+      emptyState: { reason: 'no_snapshot', scope: 'nodes', actions: ['ingest_token'] },
+    });
+    expect(body.emptyState.message).toContain('bukan berarti token aman');
+  });
+
+  it('empty state: snapshot tanpa holder, holder belum dipindai, dan holder tanpa hubungan dibedakan', async () => {
+    const noHolders = await request(app.getHttpServer()).get(url('', NO_HOLDERS)).expect(200);
+    expect(noHolders.body).toMatchObject({ nodes: [], map: { status: 'unavailable' }, emptyState: { reason: 'no_holders', scope: 'nodes' } });
+
+    const unscanned = await request(app.getHttpServer()).get(url('', UNSCANNED)).expect(200);
+    expect(unscanned.body.nodes).toHaveLength(2);
+    expect(unscanned.body.emptyState).toMatchObject({ reason: 'no_history', scope: 'edges', actions: ['collect_holder_history'] });
+    expect(unscanned.body.emptyState.message).toContain('BARU');
+
+    const lonely = await request(app.getHttpServer()).get(url('', LONELY)).expect(200);
+    expect(lonely.body.nodes).toHaveLength(2);
+    expect(lonely.body.map.status).toBe('complete');
+    expect(lonely.body.emptyState).toMatchObject({ reason: 'no_connections', scope: 'edges', actions: [] });
+  });
+
+  it('empty state: filter yang menyembunyikan semua wallet atau semua garis', async () => {
+    const all = await request(app.getHttpServer()).get(url(`?map=${firstMapId}&hide=whale,liquidity_pool,none`)).expect(200);
+    expect(all.body.nodes).toEqual([]);
+    expect(all.body.emptyState).toMatchObject({ reason: 'filtered_out', scope: 'nodes', actions: ['reset_filter'] });
+
+    const funding = await request(app.getHttpServer()).get(url(`?map=${firstMapId}&radius=0&kinds=funding`)).expect(200);
+    expect(funding.body.nodes).toHaveLength(3);
+    expect(funding.body.emptyState).toMatchObject({ reason: 'filtered_out', scope: 'edges', actions: ['reset_filter', 'widen_radius'] });
+
+    const full = await request(app.getHttpServer()).get(url(`?map=${firstMapId}`)).expect(200);
+    expect(full.body.emptyState).toBeNull();
   });
 });

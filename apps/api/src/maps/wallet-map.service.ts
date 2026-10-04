@@ -7,7 +7,8 @@ import { effectiveStatus } from '../tokens/token-summary.mapper.js';
 import { resolveMapToken } from './map-lookup.js';
 import { CoordinationService } from './coordination.service.js';
 import { EntityLabelService } from './entity-label.service.js';
-import { edgeMatches, labelCounts, NO_FILTER, nodeMatches, type MapFilter } from './map-filter.js';
+import { mapEmptyState } from './map-empty-state.js';
+import { edgeMatches, isFilterActive, labelCounts, NO_FILTER, nodeMatches, type MapFilter } from './map-filter.js';
 import { trimToRadius } from './map-radius.js';
 import { tokenIdsOf, toEdgeView, toPartyView } from './maps.mapper.js';
 import { MapsRepository } from './maps.repository.js';
@@ -61,8 +62,37 @@ export class WalletMapService {
       }
     } else {
       const snapshot = await this.repository.findSnapshot(token.id);
-      if (!snapshot) throw new NotFoundException('Belum ada snapshot holder untuk token ini, jadi peta belum bisa dibentuk.');
       radius = query.radius ?? DEFAULT_RADIUS;
+      if (!snapshot) {
+        // Token dikenal, tapi holder-nya belum diambil: jelaskan, jangan 404.
+        return {
+          chain: toChainInfo(chain),
+          token: { address: token.address, name: token.name, symbol: token.symbol, decimals: token.decimals },
+          map: null,
+          nodes: [],
+          edges: [],
+          clusters: [],
+          clustering: null,
+          coordination: [],
+          coordinationAnalysis: null,
+          labelCounts: [],
+          filter: filterView(query.filter ?? NO_FILTER, 0, 0),
+          emptyState: mapEmptyState({
+            symbol: token.symbol,
+            hasSnapshot: false,
+            storedNodes: 0,
+            storedEdges: 0,
+            shownNodes: 0,
+            shownEdges: 0,
+            historyIncomplete: false,
+            filterActive: isFilterActive(query.filter ?? NO_FILTER),
+            radius,
+          }),
+          caveats: [],
+          snapshot: null,
+          dataStatus: 'unavailable',
+        };
+      }
       const holderLimit = query.holders ?? WALLET_MAP_DEFAULTS.holderLimit;
       map = await this.repository.findReusableMap(snapshot.id, holderLimit, radius);
       if (!map || (await this.repository.hasScanAfter(chain.id, map.builtAt))) {
@@ -128,9 +158,6 @@ export class WalletMapService {
       caveats.push('Hanya garis dengan transfer di rentang waktu yang dipilih yang ditampilkan; wallet yang terhubung di luar rentang itu ikut tersembunyi.');
     }
     if (hiddenNodes > 0) caveats.push(`${hiddenNodes} wallet disembunyikan filter label, beserta ${hiddenEdges} garisnya.`);
-    if (nodeViews.length > 0 && edgeViews.length === 0) {
-      caveats.push('Belum ada transfer tersimpan di antara wallet peta. Ini bukan bukti bahwa mereka tidak berhubungan.');
-    }
 
     const dataStatus: DataStatus = snapshot
       ? effectiveStatus(map.status, snapshot.fetchedAt, this.freshness.now(), this.freshness.staleAfterMinutes)
@@ -156,18 +183,33 @@ export class WalletMapService {
       coordination: coordination.events,
       coordinationAnalysis: coordination.analysis,
       labelCounts: counts,
-      filter: {
-        hide: [...filter.hide].sort(),
-        labelSource: filter.labelSource,
-        from: filter.from?.toISOString() ?? null,
-        to: filter.to?.toISOString() ?? null,
-        kinds: filter.kinds && filter.kinds.size > 0 ? [...filter.kinds].sort() : null,
-        hiddenNodes,
-        hiddenEdges,
-      },
+      filter: filterView(filter, hiddenNodes, hiddenEdges),
+      emptyState: mapEmptyState({
+        symbol: token.symbol,
+        hasSnapshot: snapshot !== null,
+        storedNodes: storedNodes.length,
+        storedEdges: storedEdges.length,
+        shownNodes: nodeViews.length,
+        shownEdges: edgeViews.length,
+        historyIncomplete: map.missingFields.includes('holder_history'),
+        filterActive: isFilterActive(filter),
+        radius,
+      }),
       caveats,
       snapshot: snapshot ? { id: snapshot.id, fetchedAt: snapshot.fetchedAt.toISOString(), blockNumber: snapshot.blockNumber, sources } : null,
       dataStatus,
     };
   }
+}
+
+function filterView(filter: MapFilter, hiddenNodes: number, hiddenEdges: number): WalletMapResponse['filter'] {
+  return {
+    hide: [...filter.hide].sort(),
+    labelSource: filter.labelSource,
+    from: filter.from?.toISOString() ?? null,
+    to: filter.to?.toISOString() ?? null,
+    kinds: filter.kinds && filter.kinds.size > 0 ? [...filter.kinds].sort() : null,
+    hiddenNodes,
+    hiddenEdges,
+  };
 }

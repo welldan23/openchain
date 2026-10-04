@@ -26,6 +26,10 @@ export interface MapFilter {
 
 export const NO_FILTER: MapFilter = { hide: new Set(), labelSource: 'all' };
 
+export function isFilterActive(filter: MapFilter): boolean {
+  return filter.hide.size > 0 || filter.labelSource !== 'all' || filter.from !== undefined || filter.to !== undefined || (filter.kinds?.size ?? 0) > 0;
+}
+
 export function primaryLabelKey(labels: readonly FlowLabelView[]): string {
   return labels[0]?.type ?? 'none';
 }

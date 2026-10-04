@@ -20,6 +20,7 @@ import type {
 } from '../database/schema/enums.js';
 import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from '../flows/flow-summary.types.js';
 import type { TransactionEvidenceResponse } from '../flows/transaction-evidence.types.js';
+import type { MapEmptyState } from './map-empty-state.js';
 
 /** Wallet di peta. */
 export interface WalletMapPartyView {
@@ -213,15 +214,17 @@ export interface WalletMapInfo {
 export interface WalletMapResponse {
   chain: FlowChainInfo;
   token: { address: string; name: string | null; symbol: string | null; decimals: number | null };
-  map: WalletMapInfo;
+  /** `null` bila peta belum bisa dibentuk (lihat `emptyState`). */
+  map: WalletMapInfo | null;
   nodes: WalletMapNodeView[];
   edges: WalletMapEdgeView[];
   /** Kelompok wallet di seluruh peta (tidak dipotong radius). */
   clusters: WalletClusterView[];
-  clustering: ClusteringInfo;
+  /** `null` bila belum ada peta untuk dianalisis. */
+  clustering: ClusteringInfo | null;
   /** Kejadian gerak serempak di seluruh peta (tidak dipotong radius atau filter). */
   coordination: CoordinationEventView[];
-  coordinationAnalysis: ClusteringInfo;
+  coordinationAnalysis: ClusteringInfo | null;
   /**
    * Jumlah wallet per jenis label utama di dalam radius, sebelum filter label;
    * `none` = tanpa label. Dipakai untuk pilihan filter.
@@ -238,6 +241,11 @@ export interface WalletMapResponse {
     hiddenNodes: number;
     hiddenEdges: number;
   };
+  /**
+   * Penjelasan bila tidak ada wallet atau garis yang tampil: kenapa, dan apa
+   * langkah berikutnya. `null` bila peta punya wallet dan garis.
+   */
+  emptyState: MapEmptyState | null;
   /** Hal yang bisa membuat peta keliru atau tidak lengkap, dalam bahasa sederhana. */
   caveats: string[];
   /** Snapshot holder dasar peta; `null` bila peta dibentuk tanpa snapshot. */

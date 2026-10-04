@@ -564,8 +564,20 @@ default 50), `map` (id peta tersimpan), dan filter (lihat di bawah).
   disembunyikan) ada di respons. Nilai filter yang tidak dikenal dijawab `400`.
 - `map.status`/`statusReason`/`missingFields` adalah kelengkapan saat peta
   dibentuk; `dataStatus` menjadi `stale` bila snapshot dasarnya sudah lama.
-- Respons error: `404` untuk chain atau token yang belum dikenal, token tanpa
-  snapshot, atau peta yang bukan milik token itu; `400` untuk format address
+- `emptyState` menjelaskan bila tidak ada wallet atau garis yang tampil:
+  `reason` (`no_snapshot`, `no_holders`, `filtered_out`, `no_history`,
+  `no_connections`), `scope` (`nodes` = tidak ada wallet, `edges` = wallet tanpa
+  garis), judul, penjelasan sederhana, `nextSteps`, dan `actions` untuk tombol
+  (`ingest_token`, `collect_holder_history`, `reset_filter`, `widen_radius`).
+  Riwayat yang belum dipindai (`no_history`) dibedakan dari holder yang memang
+  tidak saling bertransaksi (`no_connections`); keduanya bukan tanda token
+  aman. `null` bila peta punya wallet dan garis.
+- Token yang dikenal tapi belum punya snapshot dijawab `200` dengan `map: null`,
+  daftar kosong, `dataStatus: unavailable`, dan `emptyState.reason:
+  no_snapshot`, supaya halaman tetap bisa menampilkan nama token dan langkah
+  berikutnya.
+- Respons error: `404` untuk chain atau token yang belum pernah diambil
+  datanya, atau peta yang bukan milik token itu; `400` untuk format address
   atau parameter yang salah.
 
 ### `GET /api/maps/:chain/:token/clusters`
