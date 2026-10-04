@@ -444,6 +444,24 @@ tersimpan).
 - Respons error: `400` untuk address non-EVM, chain tak dikenal/non-EVM, dan
   parameter yang salah; `404` untuk ringkasan yang bukan milik address itu.
 
+### `GET /api/multichain/:address/compare`
+
+Tabel perbandingan aktivitas antar chain dari profil yang sama dengan
+`GET /api/multichain/:address` (query `chains`, `from`, `to`, `scan` sama).
+`sort`: `chain`, `txCount` (default), `inUsd`, `outUsd`, `netUsd`,
+`counterpartyCount`, `firstSeen`, `lastSeen`; `direction`: `asc`/`desc`
+(default `desc`, `asc` untuk `chain`).
+
+- `rows`: per chain, aktif bila terbaca dan punya transaksi; porsi transaksi
+  dari total chain aktif; `netUsd` hanya bila semua transfer chain itu punya
+  harga; bridge keluar dan bridge masuk yang sudah cocok. Nilai yang belum
+  diketahui tetap `null`, tidak dijadikan nol.
+- Chain tidak aktif lalu yang tidak terbaca selalu di bawah apa pun urutannya;
+  nilai kosong di bawah nilai yang ada.
+- `summary` (chain aktif/tidak aktif/tidak terbaca/basi, total transaksi, USD
+  dari transfer berharga, chain tersibuk, bridge yang belum cocok) dan
+  `leaders` (chain aktif dengan nilai positif tertinggi per kolom angka).
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,

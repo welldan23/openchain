@@ -20,12 +20,14 @@ import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
 import { BridgeDetectionService } from './bridge-detection.service.js';
+import { columnLeaders, comparisonRows, sortComparison, summarizeComparison, type ComparisonKey, type SortDirection } from './multichain-comparison.js';
 import { MultichainRepository, type ActivityRow, type ChainRange } from './multichain.repository.js';
 import type {
   BridgeMoveView,
   CrossChainActivityView,
   DetectedInfrastructureView,
   MultichainChainView,
+  MultichainComparisonResponse,
   MultichainProfileResponse,
 } from './multichain.types.js';
 
@@ -227,6 +229,31 @@ export class MultichainService {
       sources: [...new Set(runs.map((run) => run.provider))].sort(),
       status: status.status,
       statusReason: status.statusReason,
+      caveats,
+    };
+  }
+
+  /** Tabel perbandingan antar chain dari profil yang sama dengan `getProfile`. */
+  async compare(rawAddress: string, query: Omit<MultichainQuery, 'limit'>, key: ComparisonKey, direction: SortDirection): Promise<MultichainComparisonResponse> {
+    // Linimasa tidak dipakai di sini, jadi cukup satu transfer.
+    const profile = await this.getProfile(rawAddress, { ...query, limit: 1 });
+    const rows = comparisonRows(profile.chains, profile.bridges);
+    const caveats = [
+      'Chain yang tidak terbaca tidak dihitung aktif maupun tidak aktif, dan tidak ikut dijumlahkan.',
+      'Selisih USD hanya dihitung bila semua transfer chain itu punya harga saat transaksi.',
+      'Saldo native belum diambil, jadi saldo selalu kosong untuk sementara.',
+    ];
+    if (rows.some((row) => row.status === 'stale')) caveats.push('Sebagian chain memakai pemindaian yang sudah lama (stale); angkanya bisa tertinggal.');
+    return {
+      address: profile.address,
+      scan: profile.scan,
+      window: profile.window,
+      sort: { key, direction },
+      rows: sortComparison(rows, key, direction),
+      summary: summarizeComparison(rows, profile.bridges),
+      leaders: columnLeaders(rows),
+      status: profile.status,
+      statusReason: profile.statusReason,
       caveats,
     };
   }

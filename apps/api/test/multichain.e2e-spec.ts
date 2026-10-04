@@ -210,6 +210,44 @@ describe('GET /api/multichain/:address', () => {
     );
   });
 
+  it('perbandingan antar chain: chain aktif dulu, nilai yang tidak diketahui tetap kosong', async () => {
+    const { body } = await request(app.getHttpServer()).get(url('/compare')).expect(200);
+    expect(body.sort).toEqual({ key: 'txCount', direction: 'desc' });
+    expect(body.rows.map((row: { chain: string; active: boolean; status: string }) => [row.chain, row.active, row.status])).toEqual([
+      ['ethereum', true, 'complete'],
+      ['base', true, 'complete'],
+      ['arbitrum', false, 'unavailable'],
+      ['bsc', false, 'unavailable'],
+      ['hyperevm', false, 'unavailable'],
+      ['optimism', false, 'unavailable'],
+      ['polygon', false, 'unavailable'],
+      ['robinhood', false, 'unavailable'],
+    ]);
+    expect(body.rows[0]).toMatchObject({ txCount: 3, txSharePct: 60, inUsd: null, netUsd: null, unpricedCount: 3, bridgesIn: 1, bridgesOut: 0, balanceUsd: null });
+    expect(body.rows[1]).toMatchObject({ txCount: 2, txSharePct: 40, bridgesOut: 2, bridgesIn: 0 });
+    expect(body.rows[2]).toMatchObject({ txCount: null, txSharePct: null, counterpartyCount: null });
+    expect(body.summary).toEqual({
+      activeChains: ['ethereum', 'base'],
+      inactiveChains: [],
+      unavailableChains: ['robinhood', 'bsc', 'arbitrum', 'optimism', 'polygon', 'hyperevm'],
+      staleChains: [],
+      totalTx: 5,
+      inUsd: null,
+      outUsd: null,
+      busiestChain: 'ethereum',
+      bridgeCount: 2,
+      unmatchedBridges: 1,
+    });
+    expect(body.leaders).toEqual({ txCount: 'ethereum', counterpartyCount: 'ethereum' });
+    expect(body.scan).toMatchObject({ reused: true });
+
+    const byChain = await request(app.getHttpServer()).get(url('/compare?sort=chain')).expect(200);
+    expect(byChain.body.sort).toEqual({ key: 'chain', direction: 'asc' });
+    expect(byChain.body.rows.slice(0, 2).map((row: { chain: string }) => row.chain)).toEqual(['base', 'ethereum']);
+    await request(app.getHttpServer()).get(url('/compare?sort=saldo')).expect(400);
+    await request(app.getHttpServer()).get(url('/compare?direction=naik')).expect(400);
+  });
+
   it('memakai ulang ringkasan tersimpan dan membukanya lagi lewat ?scan=', async () => {
     const again = await request(app.getHttpServer()).get(url()).expect(200);
     expect(again.body.scan).toMatchObject({ id: firstScanId, reused: true });

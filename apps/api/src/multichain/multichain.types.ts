@@ -5,6 +5,7 @@
  */
 import type { BridgeMatchStatus, ConfidenceLevel, DataStatus } from '../database/schema/enums.js';
 import type { FlowAsset, FlowChainInfo, FlowLabelView } from '../flows/flow-summary.types.js';
+import type { ComparisonKey, ComparisonLeaders, ComparisonRow, ComparisonSummary, SortDirection } from './multichain-comparison.js';
 
 export interface MultichainChainView {
   chain: FlowChainInfo;
@@ -112,6 +113,21 @@ export interface MultichainProfileResponse {
   bridgeDetection: { sends: number; matched: number; pending: number; unmatched: number } | null;
   /** Provider yang mencatat data pemindaian yang dipakai. */
   sources: string[];
+  status: DataStatus;
+  statusReason: string | null;
+  caveats: string[];
+}
+
+/** `GET /api/multichain/:address/compare`: tabel perbandingan antar chain. */
+export interface MultichainComparisonResponse {
+  address: string;
+  scan: MultichainProfileResponse['scan'];
+  window: MultichainProfileResponse['window'];
+  sort: { key: ComparisonKey; direction: SortDirection };
+  rows: ComparisonRow[];
+  summary: ComparisonSummary;
+  /** Chain aktif dengan nilai tertinggi per kolom angka. */
+  leaders: ComparisonLeaders;
   status: DataStatus;
   statusReason: string | null;
   caveats: string[];
