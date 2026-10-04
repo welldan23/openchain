@@ -100,6 +100,33 @@ function Party({ role, chain, address, label }: { role: string; chain: TxEvidenc
   );
 }
 
+/** Perpindahan aset di satu transaksi bukti: jumlah, pengirim, dan penerima. */
+export function EvidenceMovements({ evidence }: { evidence: TxEvidence }) {
+  return (
+    <div>
+      <p className="text-[11px] text-muted">
+        {evidence.movements.length > 1 ? `${evidence.movements.length} perpindahan aset di transaksi ini` : "Perpindahan aset"}
+      </p>
+      <ul className="mt-1 space-y-2">
+        {evidence.movements.map((movement, index) => (
+          <li key={index} className="space-y-2 rounded-lg border border-line px-3 py-2.5">
+            <p className="text-sm font-medium tabular-nums">
+              {formatTokenAmount(movement.amount, movement.asset.symbol)}
+              <span className="text-xs font-normal text-muted">
+                {" "}
+                · {movement.amountUsd !== undefined ? formatUsdCompact(movement.amountUsd) : "harga tidak diketahui"}
+              </span>
+            </p>
+            <Party role="Pengirim" chain={evidence.chain} address={movement.from} label={movement.fromLabel} />
+            <ArrowDown className="size-3.5 text-muted" aria-hidden />
+            <Party role="Penerima" chain={evidence.chain} address={movement.to} label={movement.toLabel} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function EvidenceBody({ evidence, shareUrl, onClose }: { evidence: TxEvidence; shareUrl: string; onClose: () => void }) {
   const chain = getChain(evidence.chain);
   return (
@@ -139,27 +166,7 @@ function EvidenceBody({ evidence, shareUrl, onClose }: { evidence: TxEvidence; s
           </p>
         </div>
 
-        <div>
-          <p className="text-[11px] text-muted">
-            {evidence.movements.length > 1 ? `${evidence.movements.length} perpindahan aset di transaksi ini` : "Perpindahan aset"}
-          </p>
-          <ul className="mt-1 space-y-2">
-            {evidence.movements.map((movement, index) => (
-              <li key={index} className="space-y-2 rounded-lg border border-line px-3 py-2.5">
-                <p className="text-sm font-medium tabular-nums">
-                  {formatTokenAmount(movement.amount, movement.asset.symbol)}
-                  <span className="text-xs font-normal text-muted">
-                    {" "}
-                    · {movement.amountUsd !== undefined ? formatUsdCompact(movement.amountUsd) : "harga tidak diketahui"}
-                  </span>
-                </p>
-                <Party role="Pengirim" chain={evidence.chain} address={movement.from} label={movement.fromLabel} />
-                <ArrowDown className="size-3.5 text-muted" aria-hidden />
-                <Party role="Penerima" chain={evidence.chain} address={movement.to} label={movement.toLabel} />
-              </li>
-            ))}
-          </ul>
-        </div>
+        <EvidenceMovements evidence={evidence} />
 
         <div className="flex flex-wrap gap-2 border-t border-line pt-4">
           <CopyButton value={evidence.txHash} label="Salin hash" variant="labeled" />

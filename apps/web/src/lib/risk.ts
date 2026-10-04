@@ -15,6 +15,7 @@ import type {
   RiskReason,
   RiskSeverity,
   RiskWarning,
+  TxEvidence,
 } from "./types";
 
 export const SEVERITY_ORDER: RiskSeverity[] = ["critical", "high", "medium", "low", "info"];
@@ -152,4 +153,54 @@ export function traitCheckCounts(checks: DangerTraitCheck[]): Record<DangerTrait
   const counts: Record<DangerTraitStatus, number> = { detected: 0, unknown: 0, clear: 0 };
   for (const check of checks) counts[check.status] += 1;
   return counts;
+}
+
+const REASON_DRAWER_PREFIX = "detail-alasan-";
+
+/** Fragmen URL yang membuka laci alasan, mis. `#detail-alasan-nbla-owner-tax`. */
+export function reasonDrawerAnchor(reasonId: string): string {
+  return `${REASON_DRAWER_PREFIX}${reasonId}`;
+}
+
+/** Id alasan dari fragmen URL (dengan atau tanpa `#`); `null` bila bukan tautan laci alasan. */
+export function parseReasonDrawerAnchor(fragment: string): string | null {
+  const value = decodeURIComponent(fragment.replace(/^#/, ""));
+  return value.startsWith(REASON_DRAWER_PREFIX) && value.length > REASON_DRAWER_PREFIX.length
+    ? value.slice(REASON_DRAWER_PREFIX.length)
+    : null;
+}
+
+export interface ReasonDetail {
+  reason: RiskReason;
+  /** Porsi poin alasan ini dari skor, dalam persen; `null` bila tidak dihitung atau skor kosong. */
+  scoreSharePct: number | null;
+  traits: DangerTraitCheck[];
+  /** Bukti urut waktu (lama ke baru); hash tanpa detail tersimpan di akhir, urutan asli. */
+  evidence: Array<{ txHash: string; detail: TxEvidence | null }>;
+  /** Alasan sebelum dan sesudahnya di urutan tampil, untuk navigasi di laci. */
+  previousId: string | null;
+  nextId: string | null;
+}
+
+export function reasonDetail(risk: Pick<ObjectRisk, "score" | "reasons" | "traitChecks" | "evidence">, reasonId: string): ReasonDetail | null {
+  const ordered = sortReasons(risk.reasons);
+  const index = ordered.findIndex((item) => item.id === reasonId);
+  if (index === -1) return null;
+  const reason = ordered[index];
+  const byHash = new Map(risk.evidence.map((item) => [item.txHash.toLowerCase(), item]));
+  const evidence = [...new Set(reason.evidenceTxHashes)]
+    .map((txHash, position) => ({ txHash, detail: byHash.get(txHash.toLowerCase()) ?? null, position }))
+    .sort((a, b) => {
+      if (a.detail && b.detail) return Date.parse(a.detail.timestamp) - Date.parse(b.detail.timestamp) || a.position - b.position;
+      return Number(a.detail === null) - Number(b.detail === null) || a.position - b.position;
+    })
+    .map(({ txHash, detail }) => ({ txHash, detail }));
+  return {
+    reason,
+    scoreSharePct: reason.points === null || !risk.score ? null : Math.round((reason.points / risk.score) * 100),
+    traits: risk.traitChecks.filter((check) => check.reasonId === reason.id),
+    evidence,
+    previousId: ordered[index - 1]?.id ?? null,
+    nextId: ordered[index + 1]?.id ?? null,
+  };
 }

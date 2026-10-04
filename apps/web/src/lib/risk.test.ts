@@ -3,6 +3,9 @@ import { MOCK_RISKS } from "./mock/risk";
 import { MOCK_TOKENS } from "./mock/tokens";
 import {
   groupTraitChecks,
+  parseReasonDrawerAnchor,
+  reasonDetail,
+  reasonDrawerAnchor,
   isNewWarning,
   traitCheckCounts,
   warningSummary,
@@ -161,5 +164,31 @@ describe("halaman risiko objek", () => {
         expect(risk.traitChecks.find((check) => check.trait === item.trait)?.status, `${risk.title}: ${item.id}`).toBe("detected");
       }
     }
+  });
+
+  it("tautan laci alasan bisa dibuat dan dibaca ulang; fragmen lain diabaikan", () => {
+    expect(reasonDrawerAnchor("nbla-owner-tax")).toBe("detail-alasan-nbla-owner-tax");
+    expect(parseReasonDrawerAnchor("#detail-alasan-nbla-owner-tax")).toBe("nbla-owner-tax");
+    expect(parseReasonDrawerAnchor("detail-alasan-a%20b")).toBe("a b");
+    expect(parseReasonDrawerAnchor("#detail-alasan-")).toBeNull();
+    expect(parseReasonDrawerAnchor("#bukti-0xabc")).toBeNull();
+  });
+
+  it("detail alasan: porsi skor, ciri terkait, bukti urut waktu dengan hash tanpa detail di akhir, dan navigasi", () => {
+    const [nbla, funder] = MOCK_RISKS;
+    const tax = reasonDetail(nbla, "nbla-owner-tax");
+    expect(tax).toMatchObject({ scoreSharePct: 37, previousId: null, nextId: "nbla-concentration" });
+    // Hash bukti pajak tidak ada di data aliran dana tiruan: tetap tampil, tanpa detail.
+    expect(tax?.evidence.map((item) => item.detail)).toEqual([null]);
+    const funding = reasonDetail(nbla, "nbla-common-funding");
+    expect(funding?.traits.map((check) => check.trait)).toEqual(["bundled_launch"]);
+    const withDetail = funding!.evidence.filter((item) => item.detail !== null);
+    expect(funding!.evidence.slice(0, withDetail.length)).toEqual(withDetail);
+    const times = withDetail.map((item) => Date.parse(item.detail!.timestamp));
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+    expect(reasonDetail(nbla, "nbla-liquidity-lock")).toMatchObject({ scoreSharePct: null, evidence: [] });
+    const last = reasonDetail(funder, sortReasons(funder.reasons).at(-1)!.id);
+    expect(last?.nextId).toBeNull();
+    expect(reasonDetail(nbla, "tidak-ada")).toBeNull();
   });
 });

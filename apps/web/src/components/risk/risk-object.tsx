@@ -20,6 +20,7 @@ import { ChainBadge, EntityLabelBadge, RiskLevelBadge, SeverityBadge } from "@/c
 import { CaseDataStatusBadge } from "@/components/case/case-badges";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { EvidenceTrigger } from "@/components/evidence/evidence-dialog";
+import { ReasonDrawerTrigger } from "@/components/risk/reason-drawer";
 import { RiskScoreSummary } from "@/components/risk/risk-score";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -213,6 +214,9 @@ export function RiskReasonsPanel({ risk }: { risk: ObjectRisk }) {
               <p className="mt-1 text-sm leading-relaxed text-muted">{reason.description}</p>
               <div className="mt-2">
                 <EvidenceHashes risk={risk} hashes={reason.evidenceTxHashes} />
+              </div>
+              <div className="mt-3">
+                <ReasonDrawerTrigger reasonId={reason.id} evidenceCount={new Set(reason.evidenceTxHashes).size} />
               </div>
             </li>
           ))}

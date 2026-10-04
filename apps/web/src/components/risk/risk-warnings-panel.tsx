@@ -8,7 +8,16 @@ import { warningAnchorId } from "@/lib/anchors";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatRelativeTime } from "@/lib/format";
 import { DANGER_CATEGORY_META, DANGER_STATUS_META, DANGER_TRAIT_META } from "@/lib/labels";
-import { groupTraitChecks, isNewWarning, NEW_WARNING_HOURS, SEVERITY_ORDER, sortWarnings, traitCheckCounts, warningSummary } from "@/lib/risk";
+import {
+  groupTraitChecks,
+  isNewWarning,
+  NEW_WARNING_HOURS,
+  reasonDrawerAnchor,
+  SEVERITY_ORDER,
+  sortWarnings,
+  traitCheckCounts,
+  warningSummary,
+} from "@/lib/risk";
 import type { DangerTraitCheck, DangerTraitStatus, ObjectRisk } from "@/lib/types";
 import { EvidenceHashes } from "./risk-object";
 
@@ -25,7 +34,7 @@ function TraitReference({ check, risk }: { check: DangerTraitCheck; risk: Object
   const target = warning
     ? { href: `#${warningAnchorId(warning.id)}`, text: "Lihat peringatan" }
     : reason
-      ? { href: `#alasan-${reason.id}`, text: "Lihat alasan penilaian" }
+      ? { href: `#${reasonDrawerAnchor(reason.id)}`, text: "Lihat alasan & bukti" }
       : null;
   if (!check.note && !target) return null;
   return (

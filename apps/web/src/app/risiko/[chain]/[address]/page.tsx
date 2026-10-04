@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { cache } from "react";
 import { EvidenceProvider } from "@/components/evidence/evidence-dialog";
 import { MockDataNotice } from "@/components/mock-data-notice";
+import { ReasonDrawerProvider } from "@/components/risk/reason-drawer";
 import {
   RiskDataStatusNotice,
   RiskLabelsPanel,
@@ -48,19 +49,21 @@ export default async function RiskPage({ params }: PageProps<"/risiko/[chain]/[a
       <RiskObjectHeader risk={risk} now={now} />
       <RiskDataStatusNotice risk={risk} />
       <EvidenceProvider evidence={risk.evidence}>
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-          <div className="min-w-0 space-y-5 lg:col-span-2">
-            <RiskScorePanel risk={risk} />
-            <RiskReasonsPanel risk={risk} />
-            <RiskWarningsPanel risk={risk} now={now} />
+        <ReasonDrawerProvider risk={risk}>
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+            <div className="min-w-0 space-y-5 lg:col-span-2">
+              <RiskScorePanel risk={risk} />
+              <RiskReasonsPanel risk={risk} />
+              <RiskWarningsPanel risk={risk} now={now} />
+            </div>
+            <div className="min-w-0 space-y-5">
+              <RiskLabelsPanel risk={risk} />
+              <RiskLinksPanel risk={risk} />
+              <RiskSnapshotPanel risk={risk} />
+              <ClassificationLegend />
+            </div>
           </div>
-          <div className="min-w-0 space-y-5">
-            <RiskLabelsPanel risk={risk} />
-            <RiskLinksPanel risk={risk} />
-            <RiskSnapshotPanel risk={risk} />
-            <ClassificationLegend />
-          </div>
-        </div>
+        </ReasonDrawerProvider>
       </EvidenceProvider>
     </main>
   );
