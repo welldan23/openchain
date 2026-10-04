@@ -564,6 +564,42 @@ akun pengguna). Kontraknya ada di `src/investigations/investigations.types.ts`.
 - Catatan maksimal 280 karakter; isian yang salah dan chain tak dikenal
   dijawab `400`.
 
+### `/api/cases` (kasus investigasi)
+
+Kasus menyimpan subjek (token atau address), temuan beserta hash bukti
+transaksinya, langkah investigasi, catatan, dan snapshot data supaya hasilnya
+bisa direproduksi. Satu workspace, belum ada akun pengguna. Kontraknya ada di
+`src/cases/cases.types.ts`.
+
+- `GET /api/cases` — ringkasan semua kasus, terbaru diperbarui dulu: status,
+  tag, chain yang terlibat, jumlah subjek, temuan, bukti, catatan, dan status
+  data snapshot.
+- `GET /api/cases/:id` — kasus lengkap. `evidence` berisi setiap hash bukti
+  beserta perpindahan dananya dari data tersimpan; hash yang belum tercatat
+  tetap ditampilkan dengan `stored: false` dan tanpa perpindahan, tidak
+  dikarang. Langkah dan catatan terbaru dulu.
+- `POST /api/cases` — kasus baru (`201`), body `{ title, summary?, tags?,
+  subject?, findings?, note?, step? }`. `POST /api/cases/:id/items` (`200`)
+  menambah `{ subject?, findings?, note?, step? }` ke kasus yang ada. Keduanya
+  menjawab `{ caseId, caseTitle, created, subjectAdded, addedFindings,
+  skippedFindings, noteAdded, stepAdded }`. Subjek, temuan (per `id`), dan
+  langkah (per `href`) yang sudah ada tidak digandakan.
+- Setiap temuan wajib punya `evidenceTxHashes`; chain buktinya `chain` temuan,
+  atau chain subjek bila kosong. Klasifikasi `fact` dan `calculation` dari
+  frontend diterima sebagai `verified_fact` dan `derived_metric`.
+- Snapshot dibekukan ulang setiap item ditambah atau subjek dihapus: blok
+  tertinggi per chain dan provider dari snapshot token terbaru (subjek token)
+  atau pemindaian aliran dana terbaru (subjek address; semua chain EVM untuk
+  subjek multichain). Kasus tanpa subjek atau tanpa data tersimpan bernilai
+  `unavailable`; data yang tidak lengkap membuatnya `partial`, selalu dengan
+  alasan.
+- `PATCH /api/cases/:id` — ubah `title`, `summary`, `status` (`open`,
+  `monitoring`, `closed`), atau `tags`; menjawab kasus lengkap.
+- `DELETE /api/cases/:id`, `…/subjects/:subjectId`, `…/findings/:findingKey`,
+  `…/notes/:noteId` — `204`, atau `404` bila sudah tidak ada.
+- Isian yang salah, chain tak dikenal, dan address atau hash yang tidak cocok
+  dengan chain-nya dijawab `400`.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,
