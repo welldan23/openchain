@@ -7,3 +7,7 @@ export function findingAnchorId(findingId: string): string {
 export function evidenceAnchorId(txHash: string): string {
   return `bukti-${txHash.slice(0, 18)}`;
 }
+
+export function warningAnchorId(warningId: string): string {
+  return `peringatan-${warningId}`;
+}

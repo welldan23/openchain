@@ -26,6 +26,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
+import { warningAnchorId } from "@/lib/anchors";
 import { explorerAddressUrl, explorerTxUrl, getChain } from "@/lib/chains";
 import { formatDateTime, formatNumber, formatPct, formatRelativeTime, shortenHash } from "@/lib/format";
 import { CASE_DATA_STATUS_META, CLASSIFICATION_META, RISK_OBJECT_KIND_META } from "@/lib/labels";
@@ -43,7 +44,7 @@ const LINK_ICONS: Record<RiskObjectLink["kind"], LucideIcon> = {
  * Hash bukti: yang detailnya tersedia membuka modal bukti, sisanya dibuka di
  * explorer. Harus berada di dalam `EvidenceProvider` halaman.
  */
-function EvidenceHashes({ risk, hashes }: { risk: ObjectRisk; hashes: string[] }) {
+export function EvidenceHashes({ risk, hashes }: { risk: ObjectRisk; hashes: string[] }) {
   if (hashes.length === 0) {
     return <span className="text-[11px] italic text-muted">Belum ada bukti transaksi, jadi anggap sebagai klaim.</span>;
   }
@@ -100,7 +101,7 @@ export function RiskObjectHeader({ risk, now }: { risk: ObjectRisk; now: Date })
       </p>
       {latestUrgent ? (
         <a
-          href="#peringatan"
+          href={`#${warningAnchorId(latestUrgent.id)}`}
           className="mt-4 flex items-start gap-2 rounded-lg border border-orange-400/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-200 transition hover:border-orange-300/60"
         >
           <BellRing className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -216,39 +217,6 @@ export function RiskReasonsPanel({ risk }: { risk: ObjectRisk }) {
             </li>
           ))}
         </ol>
-      )}
-    </Panel>
-  );
-}
-
-/** Peringatan dini: pola baru yang perlu dipantau, terbaru dulu. */
-export function RiskWarningsPanel({ risk, now }: { risk: ObjectRisk; now: Date }) {
-  const warnings = sortWarnings(risk.warnings);
-  return (
-    <Panel id="peringatan" title="Peringatan dini" description="Pola baru yang perlu dipantau sebelum jadi temuan." icon={BellRing}>
-      {warnings.length === 0 ? (
-        <EmptyState icon={BellRing} title="Tidak ada peringatan baru" description="Belum ada pola baru yang perlu dipantau pada snapshot ini." />
-      ) : (
-        <ul className="space-y-3">
-          {warnings.map((warning) => (
-            <li key={warning.id} className="rounded-lg border border-line p-3 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="flex flex-wrap items-center gap-1.5">
-                  <SeverityBadge severity={warning.severity} />
-                  <ClassificationBadge classification={warning.classification} />
-                </span>
-                <time dateTime={warning.detectedAt} title={formatDateTime(warning.detectedAt)} className="text-[11px] text-muted">
-                  {formatRelativeTime(warning.detectedAt, now)}
-                </time>
-              </div>
-              <h3 className="mt-2 text-sm font-medium">{warning.title}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-foreground/85">{warning.description}</p>
-              <div className="mt-2">
-                <EvidenceHashes risk={risk} hashes={warning.evidenceTxHashes} />
-              </div>
-            </li>
-          ))}
-        </ul>
       )}
     </Panel>
   );

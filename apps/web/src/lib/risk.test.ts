@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_RISKS } from "./mock/risk";
 import { MOCK_TOKENS } from "./mock/tokens";
-import { labelSourceSummary, RISK_BANDS, riskLevelForScore, scoreBreakdown, scorePosition, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "./risk";
-import type { RiskLabel, RiskReason, RiskWarning } from "./types";
+import {
+  groupTraitChecks,
+  isNewWarning,
+  traitCheckCounts,
+  warningSummary,
+  labelSourceSummary,
+  RISK_BANDS, riskLevelForScore, scoreBreakdown, scorePosition, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "./risk";
+import { DANGER_TRAIT_META } from "./labels";
+import type { DangerTraitCheck, RiskLabel, RiskReason, RiskWarning } from "./types";
 
 const reason = (id: string, severity: RiskReason["severity"], classification: RiskReason["classification"], points: number | null): RiskReason => ({
   id,
@@ -16,6 +23,7 @@ const reason = (id: string, severity: RiskReason["severity"], classification: Ri
 
 const warning = (id: string, severity: RiskWarning["severity"], detectedAt: string): RiskWarning => ({
   id,
+  trait: "tax_change",
   title: id,
   description: "",
   severity,
@@ -106,6 +114,52 @@ describe("halaman risiko objek", () => {
     for (const risk of MOCK_RISKS) expect(risk.level, risk.title).toBe(riskLevelForScore(risk.score));
     for (const { token, risk } of MOCK_TOKENS) {
       expect(risk.level, token.symbol).toBe(risk.level === "unknown" ? "unknown" : riskLevelForScore(risk.score));
+    }
+  });
+
+  it("peringatan baru: terdeteksi dalam 24 jam terakhir; ringkasan per tingkat", () => {
+    const now = new Date("2026-10-03T12:00:00.000Z");
+    const warnings = [
+      warning("baru", "high", "2026-10-03T00:00:00.000Z"),
+      warning("pas-24-jam", "medium", "2026-10-02T12:00:00.000Z"),
+      warning("lama", "medium", "2026-10-01T00:00:00.000Z"),
+    ];
+    expect(warnings.map((item) => isNewWarning(item, now))).toEqual([true, true, false]);
+    const summary = warningSummary(warnings, now);
+    expect(summary).toMatchObject({ total: 3, newCount: 2 });
+    expect(summary.bySeverity).toEqual({ critical: 0, high: 1, medium: 2, low: 0, info: 0 });
+  });
+
+  it("ciri dikelompokkan per kategori; terdeteksi dulu, lalu belum bisa dicek, lalu tidak terdeteksi", () => {
+    const checks: DangerTraitCheck[] = [
+      { trait: "bridge_hop", status: "clear", note: "x" },
+      { trait: "mint_active", status: "clear", note: "x" },
+      { trait: "sell_blocked", status: "unknown", note: "x" },
+      { trait: "tax_change", status: "detected", warningId: "w" },
+    ];
+    expect(groupTraitChecks(checks).map((group) => [group.category, group.checks.map((check) => check.trait)])).toEqual([
+      ["contract", ["tax_change", "sell_blocked", "mint_active"]],
+      ["flow", ["bridge_hop"]],
+    ]);
+    expect(traitCheckCounts(checks)).toEqual({ detected: 1, unknown: 1, clear: 2 });
+  });
+
+  it("data tiruan: ciri terdeteksi punya rujukan bukti, ciri lain punya keterangan, peringatan cocok dengan cirinya", () => {
+    for (const risk of MOCK_RISKS) {
+      const warningIds = new Set(risk.warnings.map((item) => item.id));
+      const reasonIds = new Set(risk.reasons.map((item) => item.id));
+      const traits = risk.traitChecks.map((check) => check.trait);
+      expect(new Set(traits).size, risk.title).toBe(traits.length);
+      for (const check of risk.traitChecks) {
+        expect(DANGER_TRAIT_META[check.trait], check.trait).toBeDefined();
+        if (check.warningId) expect(warningIds.has(check.warningId), `${risk.title}: ${check.warningId}`).toBe(true);
+        if (check.reasonId) expect(reasonIds.has(check.reasonId), `${risk.title}: ${check.reasonId}`).toBe(true);
+        if (check.status === "detected") expect(Boolean(check.warningId || check.reasonId || check.note), check.trait).toBe(true);
+        else expect(check.note, `${risk.title}: ${check.trait}`).toBeTruthy();
+      }
+      for (const item of risk.warnings) {
+        expect(risk.traitChecks.find((check) => check.trait === item.trait)?.status, `${risk.title}: ${item.id}`).toBe("detected");
+      }
     }
   });
 });

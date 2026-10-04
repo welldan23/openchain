@@ -725,9 +725,43 @@ export interface RiskReason {
   evidenceTxHashes: string[];
 }
 
+/** Ciri berbahaya yang dipantau, dikelompokkan per kategori di `DANGER_TRAIT_META`. */
+export type DangerTrait =
+  | "tax_change"
+  | "mint_active"
+  | "sell_blocked"
+  | "blacklist"
+  | "upgradeable"
+  | "liquidity_unlocked"
+  | "liquidity_pulled"
+  | "holder_concentration"
+  | "bundled_launch"
+  | "fresh_wallet_funding"
+  | "exchange_cashout"
+  | "bridge_hop";
+
+export type DangerCategory = "contract" | "liquidity" | "holders" | "flow";
+
+/**
+ * Hasil pemantauan satu ciri: `detected` terdeteksi, `clear` sudah dicek dan
+ * tidak ditemukan, `unknown` belum bisa dicek (bukan berarti aman).
+ */
+export type DangerTraitStatus = "detected" | "clear" | "unknown";
+
+export interface DangerTraitCheck {
+  trait: DangerTrait;
+  status: DangerTraitStatus;
+  /** Keterangan singkat, wajib untuk `clear` dan `unknown`. */
+  note?: string;
+  /** Peringatan atau alasan penilaian yang memuat buktinya, untuk `detected`. */
+  warningId?: string;
+  reasonId?: string;
+}
+
 /** Peringatan dini: pola baru yang perlu dipantau sebelum jadi temuan. */
 export interface RiskWarning {
   id: string;
+  trait: DangerTrait;
   title: string;
   description: string;
   severity: RiskSeverity;
@@ -767,6 +801,8 @@ export interface ObjectRisk {
   level: RiskLevel;
   reasons: RiskReason[];
   warnings: RiskWarning[];
+  /** Ciri berbahaya yang dipantau untuk objek ini beserta hasilnya. */
+  traitChecks: DangerTraitCheck[];
   labels: RiskLabel[];
   /** Detail transaksi bukti yang tersedia; hash lain dibuka di explorer. */
   evidence: TxEvidence[];

@@ -12,8 +12,8 @@ import {
   RiskReasonsPanel,
   RiskScorePanel,
   RiskSnapshotPanel,
-  RiskWarningsPanel,
 } from "@/components/risk/risk-object";
+import { RiskWarningsPanel } from "@/components/risk/risk-warnings-panel";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { getObjectRisk } from "@/lib/api/risk";
 import { isChainId } from "@/lib/chains";

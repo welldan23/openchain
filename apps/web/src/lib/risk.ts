@@ -3,8 +3,19 @@
  * skor per jenis informasi, dan ringkasan sumber label. Skor yang tidak
  * didukung poin alasan tidak disamarkan; selisihnya ditampilkan apa adanya.
  */
-import { CLASSIFICATION_ORDER } from "./labels";
-import type { FindingClassification, ObjectRisk, RiskLabel, RiskLevel, RiskReason, RiskSeverity, RiskWarning } from "./types";
+import { CLASSIFICATION_ORDER, DANGER_CATEGORY_META, DANGER_TRAIT_META } from "./labels";
+import type {
+  DangerCategory,
+  DangerTraitCheck,
+  DangerTraitStatus,
+  FindingClassification,
+  ObjectRisk,
+  RiskLabel,
+  RiskLevel,
+  RiskReason,
+  RiskSeverity,
+  RiskWarning,
+} from "./types";
 
 export const SEVERITY_ORDER: RiskSeverity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -100,4 +111,45 @@ export function riskLevelForScore(score: number | null): RiskLevel {
 /** Posisi skor di skala, dalam persen lebar; dibatasi 0–100. */
 export function scorePosition(score: number): number {
   return Math.min(100, Math.max(0, score));
+}
+
+/** Peringatan dianggap baru bila terdeteksi dalam rentang ini sebelum waktu acuan (mis. snapshot). */
+export const NEW_WARNING_HOURS = 24;
+
+export function isNewWarning(warning: Pick<RiskWarning, "detectedAt">, now: Date, hours = NEW_WARNING_HOURS): boolean {
+  const age = now.getTime() - Date.parse(warning.detectedAt);
+  return age <= hours * 3_600_000;
+}
+
+export interface WarningSummary {
+  total: number;
+  bySeverity: Record<RiskSeverity, number>;
+  newCount: number;
+}
+
+export function warningSummary(warnings: RiskWarning[], now: Date): WarningSummary {
+  const bySeverity = Object.fromEntries(SEVERITY_ORDER.map((severity) => [severity, 0])) as Record<RiskSeverity, number>;
+  for (const warning of warnings) bySeverity[warning.severity] += 1;
+  return { total: warnings.length, bySeverity, newCount: warnings.filter((warning) => isNewWarning(warning, now)).length };
+}
+
+/** Terdeteksi dulu, lalu yang belum bisa dicek, lalu yang tidak terdeteksi. */
+export const TRAIT_STATUS_ORDER: DangerTraitStatus[] = ["detected", "unknown", "clear"];
+
+/** Ciri yang dipantau per kategori (urut baku); kategori tanpa ciri tidak ditampilkan. */
+export function groupTraitChecks(checks: DangerTraitCheck[]): Array<{ category: DangerCategory; checks: DangerTraitCheck[] }> {
+  return (Object.keys(DANGER_CATEGORY_META) as DangerCategory[])
+    .map((category) => ({
+      category,
+      checks: checks
+        .filter((check) => DANGER_TRAIT_META[check.trait].category === category)
+        .sort((a, b) => TRAIT_STATUS_ORDER.indexOf(a.status) - TRAIT_STATUS_ORDER.indexOf(b.status)),
+    }))
+    .filter((group) => group.checks.length > 0);
+}
+
+export function traitCheckCounts(checks: DangerTraitCheck[]): Record<DangerTraitStatus, number> {
+  const counts: Record<DangerTraitStatus, number> = { detected: 0, unknown: 0, clear: 0 };
+  for (const check of checks) counts[check.status] += 1;
+  return counts;
 }

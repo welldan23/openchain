@@ -52,6 +52,7 @@ const nblaRisk: ObjectRisk = {
   warnings: [
     {
       id: "nbla-tax-raised",
+      trait: "tax_change",
       title: "Pajak jual baru saja dinaikkan",
       description:
         "Owner menaikkan pajak jual dari 2% ke 5%. Kenaikan bertahap sering mendahului pajak yang jauh lebih tinggi, jadi pantau transaksi owner berikutnya.",
@@ -62,6 +63,7 @@ const nblaRisk: ObjectRisk = {
     },
     {
       id: "nbla-funder-new-wallet",
+      trait: "fresh_wallet_funding",
       title: "Pendana bundler mulai mendanai wallet baru di Base",
       description:
         "Address yang dulu mendanai lima wallet bundler mengirim ETH ke wallet baru di Base. Belum tentu terkait NBLA, tapi polanya sama dengan sebelum peluncuran.",
@@ -70,6 +72,18 @@ const nblaRisk: ObjectRisk = {
       detectedAt: "2026-10-02T23:40:00.000Z",
       evidenceTxHashes: [tx("flow:base-funder-to-fresh-wallet")],
     },
+  ],
+  traitChecks: [
+    { trait: "tax_change", status: "detected", warningId: "nbla-tax-raised" },
+    { trait: "mint_active", status: "clear", note: "Tidak ada fungsi mint setelah deploy di kode terverifikasi." },
+    { trait: "sell_blocked", status: "unknown", note: "Simulasi jual belum dijalankan, jadi belum bisa dipastikan token bisa dijual." },
+    { trait: "blacklist", status: "detected", note: "Fungsi blacklist ada di kode terverifikasi dan bisa dipanggil owner; belum pernah dipakai." },
+    { trait: "upgradeable", status: "clear", note: "Bukan proxy, kode tidak bisa diganti." },
+    { trait: "liquidity_unlocked", status: "unknown", note: "Diklaim terkunci 12 bulan, tapi transaksi penguncian belum ditemukan." },
+    { trait: "liquidity_pulled", status: "clear", note: "Likuiditas pool belum pernah ditarik sejak ditambahkan." },
+    { trait: "holder_concentration", status: "detected", reasonId: "nbla-concentration" },
+    { trait: "bundled_launch", status: "detected", reasonId: "nbla-common-funding" },
+    { trait: "fresh_wallet_funding", status: "detected", warningId: "nbla-funder-new-wallet" },
   ],
   labels: [],
   evidence: flowEvidence(deployerFlow, funderFlow, funderBaseFlow),
@@ -139,6 +153,7 @@ const funderRisk: ObjectRisk = {
   warnings: [
     {
       id: "funder-fresh-wallet",
+      trait: "fresh_wallet_funding",
       title: "Mendanai wallet baru di Base",
       description: "Kiriman 0,25 ETH ke wallet yang belum punya riwayat. Pola yang sama muncul sebelum peluncuran NBLA.",
       severity: "medium",
@@ -148,6 +163,7 @@ const funderRisk: ObjectRisk = {
     },
     {
       id: "funder-exchange-deposit",
+      trait: "exchange_cashout",
       title: "Setoran ke deposit exchange",
       description: "6 ETH dikirim ke address deposit exchange. Bisa jadi dana dicairkan; asal penerimanya di exchange tidak terlihat on-chain.",
       severity: "low",
@@ -155,6 +171,12 @@ const funderRisk: ObjectRisk = {
       detectedAt: "2026-09-22T09:03:00.000Z",
       evidenceTxHashes: [tx("flow:funder-to-exchange-deposit")],
     },
+  ],
+  traitChecks: [
+    { trait: "bundled_launch", status: "detected", reasonId: "funder-batch-funding" },
+    { trait: "fresh_wallet_funding", status: "detected", warningId: "funder-fresh-wallet" },
+    { trait: "exchange_cashout", status: "detected", warningId: "funder-exchange-deposit" },
+    { trait: "bridge_hop", status: "detected", reasonId: "funder-bridge-out" },
   ],
   labels: [
     {
@@ -217,6 +239,11 @@ const poolRisk: ObjectRisk = {
     },
   ],
   warnings: [],
+  traitChecks: [
+    { trait: "upgradeable", status: "clear", note: "Kontrak pair Uniswap V2 standar, tidak bisa diganti." },
+    { trait: "liquidity_unlocked", status: "unknown", note: "Belum ada transaksi penguncian LP token; klaim tim belum terbukti." },
+    { trait: "liquidity_pulled", status: "clear", note: "Belum ada penarikan likuiditas sejak pool dibuat." },
+  ],
   labels: [
     {
       type: "liquidity_pool",
@@ -246,6 +273,11 @@ const emptyWalletRisk: ObjectRisk = {
   level: "unknown",
   reasons: [],
   warnings: [],
+  traitChecks: [
+    { trait: "fresh_wallet_funding", status: "clear", note: "Tidak ada transfer keluar di rentang yang dipindai." },
+    { trait: "exchange_cashout", status: "clear", note: "Tidak ada transfer keluar di rentang yang dipindai." },
+    { trait: "bridge_hop", status: "clear", note: "Tidak ada transfer keluar di rentang yang dipindai." },
+  ],
   labels: [],
   evidence: [],
   links: [{ kind: "flow", title: "Aliran dana di Base", href: flowPath(emptyWalletFlow.chain, emptyWalletFlow.address) }],

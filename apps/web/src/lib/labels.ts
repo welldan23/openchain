@@ -2,6 +2,9 @@ import type {
   ActivityType,
   CaseDataStatus,
   CaseStatus,
+  DangerCategory,
+  DangerTrait,
+  DangerTraitStatus,
   ClusterConfidence,
   ClusterLabel,
   CoordinationKind,
@@ -333,4 +336,33 @@ export const RISK_OBJECT_KIND_META: Record<RiskObjectKind, { label: string; desc
   token: { label: "Token", description: "Kontrak token beserta pasar dan holdernya." },
   wallet: { label: "Wallet", description: "Address biasa yang dikendalikan seseorang atau bot." },
   contract: { label: "Kontrak", description: "Kontrak selain token, mis. pool likuiditas atau router." },
+};
+
+/** Kategori ciri berbahaya, dalam urutan tampil. */
+export const DANGER_CATEGORY_META: Record<DangerCategory, { label: string }> = {
+  contract: { label: "Kontrak" },
+  liquidity: { label: "Likuiditas" },
+  holders: { label: "Holder" },
+  flow: { label: "Aliran dana" },
+};
+
+export const DANGER_TRAIT_META: Record<DangerTrait, { label: string; category: DangerCategory; description: string }> = {
+  tax_change: { label: "Pajak bisa diubah owner", category: "contract", description: "Owner bisa menaikkan pajak jual sampai token sulit dijual." },
+  mint_active: { label: "Supply bisa dicetak", category: "contract", description: "Supply baru bisa dicetak dan menekan harga." },
+  sell_blocked: { label: "Tidak bisa dijual (honeypot)", category: "contract", description: "Pembeli tidak bisa menjual kembali tokennya." },
+  blacklist: { label: "Address bisa diblokir", category: "contract", description: "Owner bisa memblokir address tertentu agar tidak bisa transfer." },
+  upgradeable: { label: "Kode bisa diganti", category: "contract", description: "Kontrak proxy bisa diganti logikanya setelah deploy." },
+  liquidity_unlocked: { label: "Likuiditas tidak terkunci", category: "liquidity", description: "LP token bisa ditarik pemiliknya kapan saja." },
+  liquidity_pulled: { label: "Likuiditas ditarik", category: "liquidity", description: "Sebagian besar likuiditas sudah ditarik dari pool." },
+  holder_concentration: { label: "Holder terkonsentrasi", category: "holders", description: "Segelintir wallet memegang sebagian besar supply." },
+  bundled_launch: { label: "Pembelian terkoordinasi saat peluncuran", category: "holders", description: "Beberapa wallet didanai sumber sama dan membeli bersamaan." },
+  fresh_wallet_funding: { label: "Mendanai wallet baru", category: "flow", description: "Dana dikirim ke wallet tanpa riwayat, pola umum sebelum peluncuran atau penyebaran dana." },
+  exchange_cashout: { label: "Setoran ke exchange", category: "flow", description: "Dana dikirim ke deposit exchange; jejak berikutnya tidak terlihat on-chain." },
+  bridge_hop: { label: "Pindah chain lewat bridge", category: "flow", description: "Dana dipindah ke chain lain, jejaknya perlu dilanjutkan di sana." },
+};
+
+export const DANGER_STATUS_META: Record<DangerTraitStatus, { label: string; className: string }> = {
+  detected: { label: "Terdeteksi", className: "text-orange-300" },
+  unknown: { label: "Belum bisa dicek", className: "text-muted" },
+  clear: { label: "Tidak terdeteksi", className: "text-emerald-300" },
 };
