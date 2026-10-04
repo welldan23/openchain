@@ -1,24 +1,22 @@
 /** Mengubah baris peta tersimpan menjadi bentuk respons API. */
 import { formatUnits, numericToNumber } from '../common/units.js';
-import type { chains, labels } from '../database/schema/index.js';
+import type { chains } from '../database/schema/index.js';
 import { movementKey, nativeAssetOf } from '../flows/flow-summary.mapper.js';
-import type { FlowAsset } from '../flows/flow-summary.types.js';
-import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
+import type { FlowAsset, FlowLabelView } from '../flows/flow-summary.types.js';
 import type { MapEdgeRow, MapsRepository } from './maps.repository.js';
 import type { WalletMapEdgeView, WalletMapPartyView } from './maps.types.js';
 
 type ChainRow = typeof chains.$inferSelect;
-type LabelRow = typeof labels.$inferSelect;
 type NodeRow = Awaited<ReturnType<MapsRepository['mapNodes']>>[number];
 type TokenMeta = { address: string; symbol: string | null; name: string | null; decimals: number | null };
 
-export function toPartyView(node: NodeRow, labelRows: LabelRow[]): WalletMapPartyView {
+export function toPartyView(node: NodeRow, labels: FlowLabelView[]): WalletMapPartyView {
   return {
     address: node.address,
     role: node.role,
     sharePct: numericToNumber(node.sharePct) ?? 0,
     isContract: node.isContract,
-    labels: sortLabels(labelRows).map(toLabelView),
+    labels,
   };
 }
 

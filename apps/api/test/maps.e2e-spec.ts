@@ -330,6 +330,58 @@ describe('GET /api/maps/:chain/:token', () => {
     }
   });
 
+  it('memberi label dugaan dari data peta dan menghitung jenis label untuk pilihan filter', async () => {
+    const { body } = await request(app.getHttpServer()).get(url(`?map=${firstMapId}`)).expect(200);
+    expect(body.labelCounts).toEqual([
+      { type: 'whale', count: 2 },
+      { type: 'liquidity_pool', count: 1 },
+      { type: 'none', count: 3 },
+    ]);
+    const h1 = body.nodes.find((node: NodeBody) => node.address === H1);
+    expect(h1.labels).toEqual([
+      { type: 'whale', name: 'Whale (40% supply)', source: 'heuristic', sourceName: 'OpenChain heuristic', classification: 'heuristic', confidence: 0.6 },
+    ]);
+    expect(body.filter).toEqual({ hide: [], labelSource: 'all', from: null, to: null, kinds: null, hiddenNodes: 0, hiddenEdges: 0 });
+  });
+
+  it('menyaring wallet menurut label dan sumbernya, beserta garisnya', async () => {
+    const noLabel = await request(app.getHttpServer()).get(url(`?map=${firstMapId}&hide=none`)).expect(200);
+    expect(noLabel.body.nodes.map((node: NodeBody) => node.address)).toEqual([H1, H2, POOL]);
+    expect(links(noLabel.body)).toEqual([['token_transfer', POOL, H1]]);
+    expect(noLabel.body.filter).toMatchObject({ hide: ['none'], hiddenNodes: 3, hiddenEdges: 6 });
+    expect(noLabel.body.labelCounts).toHaveLength(3);
+    expect(noLabel.body.caveats.join(' ')).toContain('3 wallet disembunyikan filter label');
+
+    const external = await request(app.getHttpServer()).get(url(`?map=${firstMapId}&labelSource=external`)).expect(200);
+    expect(external.body.nodes.map((node: NodeBody) => node.address)).toEqual([POOL]);
+    expect(external.body.edges).toEqual([]);
+  });
+
+  it('menyaring garis menurut jenis dan waktu; wallet yang tak lagi terhubung ikut keluar', async () => {
+    const funding = await request(app.getHttpServer()).get(url(`?map=${firstMapId}&kinds=funding`)).expect(200);
+    expect(funding.body.nodes.map((node: NodeBody) => node.address)).toEqual([H1, H2, POOL, FUNDER, GRAND]);
+    expect(funding.body.edges.every((edge: EdgeBody) => edge.kind === 'funding')).toBe(true);
+    expect(funding.body.filter.kinds).toEqual(['funding']);
+
+    const from = at(105).toISOString();
+    const recent = await request(app.getHttpServer()).get(url(`?map=${firstMapId}&from=${from}`)).expect(200);
+    expect(recent.body.nodes.map((node: NodeBody) => node.address)).toEqual([H1, H2, POOL, FUNDER, CONNECTOR]);
+    expect(links(recent.body)).toContainEqual(['funding', FUNDER, H2]);
+    expect(links(recent.body)).not.toContainEqual(['funding', FUNDER, H1]);
+    expect(recent.body.filter.from).toBe(from);
+    expect(recent.body.caveats.join(' ')).toContain('rentang waktu');
+  });
+
+  it('menolak filter yang salah', async () => {
+    const server = app.getHttpServer();
+    const unknown = await request(server).get(url('?hide=exchange,kucing')).expect(400);
+    expect(unknown.body.message).toContain('kucing');
+    await request(server).get(url('?labelSource=semua')).expect(400);
+    await request(server).get(url('?kinds=swap')).expect(400);
+    await request(server).get(url('?from=2026-10-01')).expect(400);
+    await request(server).get(url('?from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z')).expect(400);
+  });
+
   it('kelompok: peta yang belum ada atau bukan milik token dijawab 404', async () => {
     const server = app.getHttpServer();
     const none = await request(server).get(url('/clusters', BARE)).expect(404);

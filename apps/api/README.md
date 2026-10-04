@@ -532,7 +532,7 @@ Jalur dana dari satu wallet ke wallet lain lewat transfer yang tersimpan
 Peta Hubungan Wallet satu token: holder teratas, pendananya, wallet
 penghubung, dan garis transfer di antara mereka. Kontraknya ada di
 `src/maps/maps.types.ts`. Query: `radius` (0–5, default 2), `holders` (1–1000,
-default 50), `map` (id peta tersimpan).
+default 50), `map` (id peta tersimpan), dan filter (lihat di bawah).
 
 - Peta tersimpan dipakai ulang (`map.reused: true`) bila dibentuk dari snapshot
   terbaru dengan jumlah holder sama, kedalamannya ≥ radius, dan belum ada
@@ -548,6 +548,20 @@ default 50), `map` (id peta tersimpan).
 - Setiap garis adalah transfer on-chain (`verified_fact`) dengan hash, blok,
   aset, dan jumlahnya. `caveats` mengingatkan bahwa kedekatan di peta bukan
   bukti kepemilikan yang sama, dan menyebut hub/kontrak yang tidak ditelusuri.
+- Label wallet: label tersimpan (mis. tag Blockscout) dulu, lalu label dugaan
+  dari data peta dengan sumber `OpenChain heuristic` dan keyakinannya: `burn`
+  (address nol/dead, 1), `deployer` (pembuat kontrak token, 0,9), `bot`
+  (holder di kelompok berlabel `bundled_or_sniper_activity`, 0,5), dan `whale`
+  (holder biasa ≥1% supply tanpa label lain, 0,6). Label dugaan bergantung
+  pada token, jadi tidak disimpan sebagai label global address.
+- Filter: `hide` (jenis label utama dipisah koma, `none` = tanpa label),
+  `labelSource` (`external`/`heuristic`; wallet tanpa label ikut tersembunyi),
+  `from`/`to` (waktu transfer garis, ISO dengan zona waktu), dan `kinds`
+  (`funding`, `token_transfer`). Garis disaring waktu/jenis sebelum radius,
+  jadi wallet yang tak lagi terhubung ikut keluar; wallet disaring label
+  sesudahnya, beserta garisnya. `labelCounts` (jumlah per jenis label utama
+  sebelum filter label) dan `filter` (yang dipakai dan berapa yang
+  disembunyikan) ada di respons. Nilai filter yang tidak dikenal dijawab `400`.
 - `map.status`/`statusReason`/`missingFields` adalah kelengkapan saat peta
   dibentuk; `dataStatus` menjadi `stale` bila snapshot dasarnya sudah lama.
 - Respons error: `404` untuk chain atau token yang belum dikenal, token tanpa

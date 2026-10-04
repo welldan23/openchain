@@ -132,6 +132,22 @@ export interface WalletMapResponse {
   /** Kelompok wallet di seluruh peta (tidak dipotong radius). */
   clusters: WalletClusterView[];
   clustering: ClusteringInfo;
+  /**
+   * Jumlah wallet per jenis label utama di dalam radius, sebelum filter label;
+   * `none` = tanpa label. Dipakai untuk pilihan filter.
+   */
+  labelCounts: Array<{ type: string; count: number }>;
+  /** Filter yang dipakai respons ini dan apa yang disembunyikannya. */
+  filter: {
+    hide: string[];
+    labelSource: 'all' | 'external' | 'heuristic';
+    from: string | null;
+    to: string | null;
+    /** `null` = semua jenis garis. */
+    kinds: MapEdgeKind[] | null;
+    hiddenNodes: number;
+    hiddenEdges: number;
+  };
   /** Hal yang bisa membuat peta keliru atau tidak lengkap, dalam bahasa sederhana. */
   caveats: string[];
   /** Snapshot holder dasar peta; `null` bila peta dibentuk tanpa snapshot. */

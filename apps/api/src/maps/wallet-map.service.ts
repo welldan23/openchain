@@ -5,6 +5,8 @@ import { HUB_LABEL_TYPES } from '../flows/flows.repository.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
 import { resolveMapToken } from './map-lookup.js';
+import { EntityLabelService } from './entity-label.service.js';
+import { edgeMatches, labelCounts, NO_FILTER, nodeMatches, type MapFilter } from './map-filter.js';
 import { trimToRadius } from './map-radius.js';
 import { tokenIdsOf, toEdgeView, toPartyView } from './maps.mapper.js';
 import { MapsRepository } from './maps.repository.js';
@@ -22,6 +24,8 @@ export interface WalletMapQuery {
   holders?: number;
   /** Buka peta tersimpan tertentu. */
   mapId?: number;
+  /** Filter label, waktu, dan jenis garis. */
+  filter?: MapFilter;
 }
 
 /**
@@ -37,6 +41,7 @@ export class WalletMapService {
     private readonly builder: WalletMapBuilder,
     private readonly freshness: SnapshotFreshness,
     private readonly clusters: WalletClusterService,
+    private readonly entityLabels: EntityLabelService,
   ) {}
 
   async getMap(chainId: string, rawToken: string, query: WalletMapQuery = {}): Promise<WalletMapResponse> {
@@ -78,21 +83,33 @@ export class WalletMapService {
       this.repository.mapEdges(map.id),
       map.snapshotId === null ? null : this.repository.findSnapshotById(map.snapshotId),
     ]);
-    const { nodes, edges } = trimToRadius(storedNodes, storedEdges, radius);
-    const [labelsById, tokensById, sources, grouping] = await Promise.all([
-      this.repository.labelsByAddressIds(nodes.map((node) => node.addressId)),
+    const filter = query.filter ?? NO_FILTER;
+    // Garis disaring waktu/jenis dulu, supaya wallet yang tak lagi terhubung ikut keluar dari radius.
+    const { nodes: inRadius, edges: radiusEdges } = trimToRadius(
+      storedNodes,
+      storedEdges.filter((edge) => edgeMatches(edge, filter)),
+      radius,
+    );
+    const grouping = await this.clusters.forMap(map, storedNodes);
+    const labelsById = await this.entityLabels.labelsFor(map, inRadius, grouping);
+    const counts = labelCounts(inRadius.map((node) => ({ labels: labelsById.get(node.id) ?? [] })));
+    const nodes = inRadius.filter((node) => nodeMatches(labelsById.get(node.id) ?? [], filter));
+    const shown = new Set(nodes.map((node) => node.id));
+    const edges = radiusEdges.filter((edge) => shown.has(edge.fromNodeId) && shown.has(edge.toNodeId));
+    const [tokensById, sources] = await Promise.all([
       this.repository.tokensByIds(tokenIdsOf(edges)),
       snapshot ? this.repository.snapshotSources(snapshot.id) : [],
-      this.clusters.forMap(map, storedNodes),
     ]);
 
     const nodeViews: WalletMapNodeView[] = nodes.map((node) => ({
-      ...toPartyView(node, labelsById.get(node.addressId) ?? []),
+      ...toPartyView(node, labelsById.get(node.id) ?? []),
       distance: node.distance,
       clusterId: grouping.clusterOfNode.get(node.id) ?? null,
     }));
     const addressOf = new Map(nodes.map((node) => [node.id, node.address]));
     const edgeViews: WalletMapEdgeView[] = edges.map((edge) => toEdgeView(edge, chain, addressOf, tokensById));
+    const hiddenNodes = inRadius.length - nodes.length;
+    const hiddenEdges = radiusEdges.length - edges.length;
 
     const caveats = [
       'Setiap garis adalah transfer on-chain. Wallet yang berdekatan atau didanai pihak yang sama belum tentu dimiliki orang yang sama.',
@@ -104,6 +121,10 @@ export class WalletMapService {
     if (radius < map.fundingDepth) {
       caveats.push(`Hanya wallet sampai ${radius} langkah dari holder yang ditampilkan; peta ini menelusuri ${map.fundingDepth} lapis pendana.`);
     }
+    if (filter.from || filter.to) {
+      caveats.push('Hanya garis dengan transfer di rentang waktu yang dipilih yang ditampilkan; wallet yang terhubung di luar rentang itu ikut tersembunyi.');
+    }
+    if (hiddenNodes > 0) caveats.push(`${hiddenNodes} wallet disembunyikan filter label, beserta ${hiddenEdges} garisnya.`);
     if (nodeViews.length > 0 && edgeViews.length === 0) {
       caveats.push('Belum ada transfer tersimpan di antara wallet peta. Ini bukan bukti bahwa mereka tidak berhubungan.');
     }
@@ -129,6 +150,16 @@ export class WalletMapService {
       edges: edgeViews,
       clusters: grouping.clusters,
       clustering: grouping.clustering,
+      labelCounts: counts,
+      filter: {
+        hide: [...filter.hide].sort(),
+        labelSource: filter.labelSource,
+        from: filter.from?.toISOString() ?? null,
+        to: filter.to?.toISOString() ?? null,
+        kinds: filter.kinds && filter.kinds.size > 0 ? [...filter.kinds].sort() : null,
+        hiddenNodes,
+        hiddenEdges,
+      },
       caveats,
       snapshot: snapshot ? { id: snapshot.id, fetchedAt: snapshot.fetchedAt.toISOString(), blockNumber: snapshot.blockNumber, sources } : null,
       dataStatus,

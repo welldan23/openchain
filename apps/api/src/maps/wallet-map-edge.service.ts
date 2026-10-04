@@ -2,10 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { toChainInfo, toMovementType, movementKey } from '../flows/flow-summary.mapper.js';
 import { FlowsRepository, HUB_LABEL_TYPES } from '../flows/flows.repository.js';
 import { TransactionEvidenceService } from '../flows/transaction-evidence.service.js';
+import { EntityLabelService } from './entity-label.service.js';
 import { resolveMapToken } from './map-lookup.js';
 import { tokenIdsOf, toEdgeView, toPartyView } from './maps.mapper.js';
 import { MapsRepository, type TransferRef } from './maps.repository.js';
 import type { WalletMapEdgeDetailResponse } from './maps.types.js';
+import { WalletClusterService } from './wallet-cluster.service.js';
 
 const EDGE_ID = /^(native|token):(\d+)$/;
 
@@ -30,6 +32,8 @@ export class WalletMapEdgeService {
     private readonly repository: MapsRepository,
     private readonly flows: FlowsRepository,
     private readonly transactions: TransactionEvidenceService,
+    private readonly clusters: WalletClusterService,
+    private readonly entityLabels: EntityLabelService,
   ) {}
 
   async getEdge(chainId: string, rawToken: string, rawEdgeId: string, mapId?: number): Promise<WalletMapEdgeDetailResponse> {
@@ -49,8 +53,9 @@ export class WalletMapEdgeService {
       this.repository.edgesBetween(map.id, edge.fromNodeId, edge.toNodeId),
       this.flows.movementTypesFor([{ source: edge.source, id: edge.transferId }]),
     ]);
+    const grouping = await this.clusters.forMap(map);
     const [labelsById, tokensById, transaction] = await Promise.all([
-      this.repository.labelsByAddressIds(nodes.map((node) => node.addressId)),
+      this.entityLabels.labelsFor(map, nodes, grouping),
       this.repository.tokensByIds(tokenIdsOf(related)),
       this.transactions.getEvidence(chain.id, edge.txHash),
     ]);
@@ -58,7 +63,7 @@ export class WalletMapEdgeService {
     const party = (nodeId: number) => {
       const node = nodeById.get(nodeId);
       if (!node) throw new Error(`Node #${nodeId} tidak ada di peta #${map.id}`);
-      return toPartyView(node, labelsById.get(node.addressId) ?? []);
+      return toPartyView(node, labelsById.get(node.id) ?? []);
     };
     const from = party(edge.fromNodeId);
     const to = party(edge.toNodeId);
