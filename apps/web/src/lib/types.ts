@@ -820,3 +820,70 @@ export interface ObjectRiskSummary {
   level: RiskLevel;
   warningCount: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Laporan Bukti                                                               */
+/* -------------------------------------------------------------------------- */
+
+export type ReportStatus = "draft" | "review" | "final";
+
+/**
+ * Klaim di laporan. Sesuai PRD, setiap klaim penting wajib menyebut provider
+ * dan waktu datanya, serta hash transaksi bila tersedia. Nilai kosong di sini
+ * ditandai di panel kesiapan, tidak diisi tebakan.
+ */
+export interface ReportClaim {
+  id: string;
+  title: string;
+  detail: string;
+  classification: FindingClassification;
+  provider: string | null;
+  observedAt: string | null;
+  evidenceTxHashes: string[];
+}
+
+export type ReportBlock =
+  | { kind: "paragraph"; id: string; text: string }
+  | { kind: "claim"; id: string; claim: ReportClaim }
+  | { kind: "evidence"; id: string; chain: ChainId; txHash: string; caption: string }
+  | { kind: "note"; id: string; body: string; createdAt: string };
+
+export interface ReportSection {
+  id: string;
+  title: string;
+  blocks: ReportBlock[];
+}
+
+/**
+ * Laporan investigasi berbasis bukti, biasanya disusun dari satu kasus.
+ * Asumsi kontrak API: `GET /reports/:id` → `InvestigationReport`.
+ */
+export interface InvestigationReport {
+  id: string;
+  title: string;
+  summary: string;
+  status: ReportStatus;
+  createdAt: string;
+  updatedAt: string;
+  /** Kasus sumber laporan, bila ada. */
+  source: { caseId: string; title: string; href: string } | null;
+  sections: ReportSection[];
+  /** Detail transaksi bukti yang tersimpan; hash lain dibuka di explorer. */
+  evidence: TxEvidence[];
+  snapshot: InvestigationCase["snapshot"];
+}
+
+/** Ringkasan laporan untuk daftar. Asumsi kontrak API: `GET /reports` → `ReportSummary[]`. */
+export interface ReportSummary {
+  id: string;
+  title: string;
+  summary: string;
+  status: ReportStatus;
+  updatedAt: string;
+  sourceTitle: string | null;
+  sectionCount: number;
+  claimCount: number;
+  evidenceCount: number;
+  /** Masalah yang menghalangi laporan dianggap siap. */
+  blockerCount: number;
+}

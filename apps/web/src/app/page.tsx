@@ -1,4 +1,4 @@
-import { BellRing, ChevronRight, FolderOpen, Footprints, Globe2, Network, Search, ShieldAlert, TriangleAlert, Waypoints } from "lucide-react";
+import { BellRing, ChevronRight, FileText, FolderOpen, Footprints, Globe2, Network, Search, ShieldAlert, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { RiskScoreBadge } from "@/components/risk/risk-score";
@@ -7,6 +7,7 @@ import { listSampleMaps, mapFailureDemoPath, mapPath } from "@/lib/api/maps";
 import { listSampleMultichain, multichainFailureDemoPath, multichainPath } from "@/lib/api/multichain";
 import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
 import { caseFailureDemoPath } from "@/lib/api/cases";
+import { reportFailureDemoPath } from "@/lib/api/reports";
 import { listSampleRisks, riskFailureDemoPath, riskPath } from "@/lib/api/risk";
 import { searchFailureDemoPath } from "@/lib/api/search";
 import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
@@ -54,6 +55,18 @@ export default async function Home() {
         <span className="min-w-0 flex-1">
           <span className="block font-medium">Kasus investigasi tersimpan</span>
           <span className="mt-0.5 block text-xs text-muted">Temuan, bukti transaksi, catatan, dan snapshot data per kasus.</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden />
+      </Link>
+
+      <Link
+        href="/laporan"
+        className="group mt-3 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm transition hover:border-accent/50"
+      >
+        <FileText className="size-4 shrink-0 text-accent" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">Laporan investigasi</span>
+          <span className="mt-0.5 block text-xs text-muted">Klaim berbukti dengan provider, waktu data, dan hash transaksi; siap dibagikan.</span>
         </span>
         <ChevronRight className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden />
       </Link>
@@ -456,6 +469,24 @@ export default async function Home() {
             <span className="block font-medium">Simulasi penilaian risiko gagal dimuat</span>
             <span className="mt-0.5 block text-xs text-muted">
               Membuka objek yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
+        <Link
+          href={reportFailureDemoPath()}
+          className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi laporan gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka laporan yang sengaja dibuat gagal untuk melihat tampilan error.
             </span>
           </span>
           <ChevronRight

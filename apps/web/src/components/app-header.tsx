@@ -1,4 +1,4 @@
-import { FolderOpen, History, Radar, Search } from "lucide-react";
+import { FileText, FolderOpen, History, Radar, Search } from "lucide-react";
 import Link from "next/link";
 import { HeaderSearch } from "./search/header-search";
 
@@ -25,6 +25,14 @@ export function AppHeader() {
             className="grid size-8 place-items-center rounded-lg text-muted ring-1 ring-line transition hover:text-accent hover:ring-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
           >
             <FolderOpen className="size-4" aria-hidden />
+          </Link>
+          <Link
+            href="/laporan"
+            aria-label="Laporan investigasi"
+            title="Laporan investigasi"
+            className="grid size-8 place-items-center rounded-lg text-muted ring-1 ring-line transition hover:text-accent hover:ring-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <FileText className="size-4" aria-hidden />
           </Link>
           <Link
             href="/riwayat"

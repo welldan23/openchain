@@ -15,6 +15,7 @@ import type {
   FindingClassification,
   FlowDirection,
   InfoClassification,
+  ReportStatus,
   RiskLevel,
   RiskObjectKind,
   RiskSeverity,
@@ -412,4 +413,22 @@ export const DANGER_STATUS_META: Record<DangerTraitStatus, { label: string; clas
   detected: { label: "Terdeteksi", className: RISK_TONES.high.textClass },
   unknown: { label: "Belum bisa dicek", className: "text-muted" },
   clear: { label: "Tidak terdeteksi", className: RISK_TONES.low.textClass },
+};
+
+export const REPORT_STATUS_META: Record<ReportStatus, Meta & { description: string }> = {
+  draft: {
+    label: "Draf",
+    description: "Masih disusun; isi bisa berubah.",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+  },
+  review: {
+    label: "Ditinjau",
+    description: "Sedang dicek ulang sebelum dibagikan.",
+    className: "bg-sky-500/15 text-sky-300 ring-sky-400/30",
+  },
+  final: {
+    label: "Final",
+    description: "Selesai disusun dari snapshot data yang tercatat.",
+    className: "bg-teal-500/15 text-teal-300 ring-teal-400/30",
+  },
 };
