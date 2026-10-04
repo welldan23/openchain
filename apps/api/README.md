@@ -622,6 +622,26 @@ token ini). Respons peta juga memuat `coordination` dan `coordinationAnalysis`.
 - Respons error: `404` bila token belum punya peta atau peta bukan milik token
   itu; `400` untuk parameter yang salah.
 
+### `GET /api/maps/:chain/:token/coordination/:findingId`
+
+Detail satu temuan koordinasi. `findingId` adalah `id` kejadian di daftar
+koordinasi (encode untuk URL, mis. `same_block_buy%3A300`); `?map=<id>`
+memilih petanya, tanpa itu dipakai peta terbaru token ini yang memuatnya.
+
+- `finding`: kejadiannya dan transaksi pendukung, masing-masing dengan
+  `movement` (jenis perpindahan dan dasarnya; `null` bila belum
+  diklasifikasikan).
+- `parties`: semua pihak di transaksi pendukung dan anggota temuan, dengan
+  peran di peta (`null` bila di luar peta, mis. router), porsi supply, status
+  kontrak, label (termasuk label dugaan peta), `member`, dan `clusterId`.
+- `blocks` dan `sameBlockTransactions`: blok yang dipakai dan berapa transaksi
+  yang berbagi blok. `relatedClusters`: kelompok wallet yang memuat anggota
+  temuan.
+- `caveats` dimulai dengan penjelasan alternatif khusus jenis temuannya (mis.
+  bot publik saat peluncuran untuk `same_block_buy`).
+- Respons error: `404` bila temuan tidak ada di peta, atau peta bukan milik
+  token itu; `400` untuk parameter yang salah.
+
 ### `GET /api/maps/:chain/:token/edges/:edgeId`
 
 Detail satu garis peta. `edgeId` adalah `id` garis di respons peta

@@ -1,7 +1,7 @@
 /**
  * Kontrak respons `GET /api/maps/:chain/:token`,
  * `GET /api/maps/:chain/:token/clusters`,
- * `GET /api/maps/:chain/:token/coordination`, dan
+ * `GET /api/maps/:chain/:token/coordination(/:findingId)`, dan
  * `GET /api/maps/:chain/:token/edges/:edgeId`.
  *
  * Wallet dan garis adalah fakta: holder dari snapshot, garis dari transfer
@@ -139,6 +139,38 @@ export interface WalletMapCoordinationResponse {
   map: { id: number; builtAt: string; status: DataStatus };
   analysis: ClusteringInfo;
   coordination: CoordinationEventView[];
+  caveats: string[];
+}
+
+/** Pihak di sebuah temuan koordinasi: anggota, pendana, atau lawan transaksi. */
+export interface CoordinationPartyView {
+  address: string;
+  /** Peran di peta; `null` bila address ini tidak ada di peta (mis. pool di luar holder teratas). */
+  role: MapNodeRole | null;
+  sharePct: number | null;
+  isContract: boolean | null;
+  labels: FlowLabelView[];
+  /** Termasuk wallet yang bergerak serempak. */
+  member: boolean;
+  clusterId: string | null;
+}
+
+/** `GET /api/maps/:chain/:token/coordination/:findingId`. */
+export interface CoordinationFindingResponse {
+  chain: FlowChainInfo;
+  token: { address: string; symbol: string | null };
+  map: { id: number; builtAt: string; status: DataStatus };
+  analysis: ClusteringInfo;
+  finding: Omit<CoordinationEventView, 'transactions'> & {
+    transactions: Array<CoordinationTxView & { movement: MovementTypeView | null }>;
+  };
+  parties: CoordinationPartyView[];
+  /** Blok yang dipakai transaksi pendukung, urut naik. */
+  blocks: Array<{ blockNumber: number; transactionCount: number }>;
+  /** Transaksi yang berbagi blok dengan transaksi pendukung lain. */
+  sameBlockTransactions: number;
+  /** Kelompok wallet yang memuat anggota temuan ini. */
+  relatedClusters: Array<{ id: string; name: string; labels: ClusterLabel[]; confidence: ConfidenceLevel; membersInFinding: number }>;
   caveats: string[];
 }
 

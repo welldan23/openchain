@@ -1,9 +1,11 @@
 import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { parseIsoTime, parsePositiveInteger } from '../common/query-params.js';
 import { entityLabelType, mapEdgeKind, type MapEdgeKind } from '../database/schema/enums.js';
+import { CoordinationFindingService } from './coordination-finding.service.js';
 import { CoordinationService } from './coordination.service.js';
 import type { LabelSourceFilter, MapFilter } from './map-filter.js';
 import type {
+  CoordinationFindingResponse,
   WalletMapClustersResponse,
   WalletMapCoordinationResponse,
   WalletMapEdgeDetailResponse,
@@ -19,7 +21,8 @@ import { MAX_RADIUS, WalletMapService } from './wallet-map.service.js';
  * langkah dari holder, `?holders=` (1–1000, default 50) jumlah holder
  * teratas, dan `?map=` membuka peta tersimpan tertentu. Detail satu garis
  * beserta bukti transaksinya ada di `edges/:edgeId`, kelompok wallet di
- * `clusters`, dan gerak serempak di `coordination`. Filter: `hide` (jenis label utama, `none` = tanpa label),
+ * `clusters`, dan gerak serempak di `coordination` (detail satu temuan di
+ * `coordination/:findingId`). Filter: `hide` (jenis label utama, `none` = tanpa label),
  * `labelSource` (external/heuristic), `from`/`to` (waktu transfer), dan
  * `kinds` (funding/token_transfer). Hanya dari data tersimpan; provider tidak
  * dihubungi saat diminta.
@@ -31,6 +34,7 @@ export class MapsController {
     private readonly edges: WalletMapEdgeService,
     private readonly clusters: WalletClusterService,
     private readonly coordination: CoordinationService,
+    private readonly findings: CoordinationFindingService,
   ) {}
 
   @Get(':chain/:token')
@@ -66,6 +70,16 @@ export class MapsController {
     @Query('map') map?: string,
   ): Promise<WalletMapCoordinationResponse> {
     return this.coordination.getCoordination(chain, token, parsePositiveInteger(map, 'map'));
+  }
+
+  @Get(':chain/:token/coordination/:findingId')
+  getCoordinationFinding(
+    @Param('chain') chain: string,
+    @Param('token') token: string,
+    @Param('findingId') findingId: string,
+    @Query('map') map?: string,
+  ): Promise<CoordinationFindingResponse> {
+    return this.findings.getFinding(chain, token, findingId, parsePositiveInteger(map, 'map'));
   }
 
   @Get(':chain/:token/edges/:edgeId')

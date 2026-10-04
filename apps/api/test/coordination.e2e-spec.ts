@@ -21,6 +21,7 @@ const B3 = '0x' + 'b3'.repeat(20);
 const B4 = '0x' + 'b4'.repeat(20);
 const POOL = '0x' + 'a0'.repeat(20);
 const SYBIL = '0x' + '5b'.repeat(20);
+const ROUTER = '0x' + 'c0'.repeat(20);
 const SCANNED_AT = new Date('2026-10-03T04:30:00Z');
 const NOW = new Date('2026-10-03T05:00:00Z');
 
@@ -96,16 +97,25 @@ describe('GET /api/maps/:chain/:token/coordination', () => {
     ({ client, db } = await createTestDatabase());
     const ingestion = new FundFlowIngestionService(db as unknown as Database);
     // SYBIL mendanai B1–B3 dalam 3 menit dengan jumlah hampir sama; ketiganya membeli di blok 300,
-    // lalu B1 dan B2 menjual dalam 2 menit. B4 membeli sendiri di blok lain.
+    // lalu B1 (ke pool) dan B2 (ke router di luar peta) menjual dalam 2 menit. B4 membeli sendiri di blok lain.
     await ingestion.persist(scanOf(B1, [native(SYBIL, B1, 200, '1000000000000000000')], [token(POOL, B1, 300), token(B1, POOL, 400)]), 'evm');
-    await ingestion.persist(scanOf(B2, [native(SYBIL, B2, 201, '1005000000000000000')], [token(POOL, B2, 300), token(B2, POOL, 402)]), 'evm');
+    await ingestion.persist(scanOf(B2, [native(SYBIL, B2, 201, '1005000000000000000')], [token(POOL, B2, 300), token(B2, ROUTER, 402)]), 'evm');
     await ingestion.persist(scanOf(B3, [native(SYBIL, B3, 203, '1002000000000000000')], [token(POOL, B3, 300)]), 'evm');
     await ingestion.persist(scanOf(B4, [], [token(POOL, B4, 500)]), 'evm');
     await ingestion.persist(scanOf(SYBIL, [], []), 'evm');
 
     const byAddress = async (raw: string) => (await db.select().from(schema.addresses).where(eq(schema.addresses.addressNormalized, raw)))[0];
-    const [tokenAddress, b1, b2, b3, b4, pool] = await Promise.all([TOKEN, B1, B2, B3, B4, POOL].map(byAddress));
+    const [tokenAddress, b1, b2, b3, b4, pool, router] = await Promise.all([TOKEN, B1, B2, B3, B4, POOL, ROUTER].map(byAddress));
     await db.update(schema.addresses).set({ isContract: true }).where(eq(schema.addresses.id, pool.id));
+    await db.update(schema.addresses).set({ isContract: true }).where(eq(schema.addresses.id, router.id));
+    await db.insert(schema.labels).values({
+      addressId: router.id,
+      labelType: 'router',
+      name: 'DEX Router',
+      source: 'external',
+      sourceName: 'Blockscout',
+      classification: 'external_label',
+    });
     const [row] = await db.select().from(schema.tokens).where(eq(schema.tokens.addressId, tokenAddress.id));
     const [snapshot] = await db
       .insert(schema.tokenSnapshots)
@@ -175,6 +185,44 @@ describe('GET /api/maps/:chain/:token/coordination', () => {
     const b1 = body.nodes.find((node: { address: string }) => node.address === B1);
     expect(b1.labels[0]).toMatchObject({ type: 'bot', source: 'heuristic' });
     expect(body.clusters[0].labels).toEqual(expect.arrayContaining(['common_funding', 'bundled_or_sniper_activity']));
+  });
+
+  it('detail temuan: transaksi beserta jenisnya, pihak-pihak, blok, dan kelompok terkait', async () => {
+    const list = await request(app.getHttpServer()).get(url('/coordination')).expect(200);
+    const bundleId = list.body.coordination.find((item: { kind: string }) => item.kind === 'same_block_buy').id;
+    const { body } = await request(app.getHttpServer()).get(url(`/coordination/${encodeURIComponent(bundleId)}`)).expect(200);
+    expect(body.finding).toMatchObject({ id: bundleId, kind: 'same_block_buy', blockNumber: 300, classification: 'heuristic' });
+    expect(body.finding.transactions).toHaveLength(3);
+    expect(body.finding.transactions[0]).toHaveProperty('movement');
+    expect(body.blocks).toEqual([{ blockNumber: 300, transactionCount: 3 }]);
+    expect(body.sameBlockTransactions).toBe(3);
+    const party = (address: string) => body.parties.find((item: { address: string }) => item.address === address);
+    expect(party(B1)).toMatchObject({ role: 'holder', member: true, sharePct: 5 });
+    expect(party(B1).clusterId).not.toBeNull();
+    expect(party(POOL)).toMatchObject({ role: 'holder', member: false, isContract: true });
+    expect(body.relatedClusters).toEqual([expect.objectContaining({ membersInFinding: 3, labels: expect.arrayContaining(['bundled_or_sniper_activity']) })]);
+    expect(body.caveats[0]).toContain('bot publik');
+
+    const sellId = list.body.coordination.find((item: { kind: string }) => item.kind === 'coordinated_sell').id;
+    const sell = await request(app.getHttpServer()).get(url(`/coordination/${encodeURIComponent(sellId)}?map=${list.body.map.id}`)).expect(200);
+    // Router bukan holder: tetap tampil sebagai pihak, dengan label dari sumbernya.
+    expect(sell.body.parties.find((item: { address: string }) => item.address === ROUTER)).toMatchObject({
+      role: null,
+      sharePct: null,
+      member: false,
+      isContract: true,
+      labels: [expect.objectContaining({ type: 'router', name: 'DEX Router', source: 'external' })],
+    });
+    expect(sell.body.caveats[0]).toContain('reaksi pasar');
+  });
+
+  it('detail temuan yang tidak ada dijawab 404', async () => {
+    const server = app.getHttpServer();
+    const missing = await request(server).get(url('/coordination/same_block_buy:1')).expect(404);
+    expect(missing.body.message).toContain('tidak ada di peta mana pun');
+    const list = await request(server).get(url('/coordination')).expect(200);
+    const other = await request(server).get(url(`/coordination/same_block_buy:1?map=${list.body.map.id}`)).expect(404);
+    expect(other.body.message).toContain(`tidak ada di peta #${list.body.map.id}`);
   });
 
   it('menolak parameter peta yang salah', async () => {

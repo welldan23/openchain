@@ -37,6 +37,8 @@ export function coordinationCaveats(eventCount: number, mapStatus: DataStatus): 
 export interface MapCoordination {
   analysis: ClusteringInfo;
   events: CoordinationEventView[];
+  /** Baris tersimpan, urutannya sama dengan `events`. */
+  stored: Awaited<ReturnType<MapsRepository['storedCoordination']>>;
 }
 
 @Injectable()
@@ -115,7 +117,7 @@ export class CoordinationService {
         }),
       }),
     );
-    return { analysis: { heuristic: done.heuristic, computedAt: done.at.toISOString() }, events };
+    return { analysis: { heuristic: done.heuristic, computedAt: done.at.toISOString() }, events, stored };
   }
 
   private async compute(map: MapRow, nodes: NodeRow[]): Promise<{ at: Date; heuristic: string }> {

@@ -328,6 +328,18 @@ export class MapsRepository {
     return rows.map((row) => toEvidence(row, 'token'));
   }
 
+  /** Peta terbaru token ini yang memuat kejadian koordinasi dengan id tersebut. */
+  async findLatestMapWithEvent(tokenId: number, key: string) {
+    const [row] = await this.db
+      .select({ id: walletMaps.id })
+      .from(walletMaps)
+      .innerJoin(coordinationEvents, eq(coordinationEvents.mapId, walletMaps.id))
+      .where(and(eq(walletMaps.tokenId, tokenId), eq(coordinationEvents.key, key)))
+      .orderBy(desc(walletMaps.builtAt), desc(walletMaps.id))
+      .limit(1);
+    return row ? this.findMap(row.id) : null;
+  }
+
   /** Kejadian koordinasi tersimpan beserta anggota dan transaksi pendukungnya. */
   async storedCoordination(mapId: number) {
     const events = await this.db
@@ -351,7 +363,7 @@ export class MapsRepository {
         coalesce(n.block_timestamp, t.block_timestamp) as block_timestamp,
         coalesce(n.amount_raw, t.amount_raw)::text as amount_raw,
         coalesce(n.amount_usd, t.amount_usd)::text as amount_usd,
-        fa.address as from_address, ta.address as to_address, t.token_id
+        fa.id as from_address_id, ta.id as to_address_id, fa.address as from_address, ta.address as to_address, t.token_id
       from coordination_txs c
       left join native_transfers n on n.id = c.native_transfer_id
       left join token_transfers t on t.id = c.token_transfer_id
@@ -371,6 +383,8 @@ export class MapsRepository {
       amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
       from: String(row.from_address),
       to: String(row.to_address),
+      fromAddressId: Number(row.from_address_id),
+      toAddressId: Number(row.to_address_id),
       tokenId: row.token_id === null ? null : Number(row.token_id),
     }));
     return events.map((item) => ({
