@@ -71,6 +71,15 @@ export const bridgeMatchStatus = pgEnum('bridge_match_status', ['matched', 'pend
 /** Jenis entitas di indeks pencarian teks. */
 export const searchEntityKind = pgEnum('search_entity_kind', ['token', 'address']);
 
+/** Jenis halaman investigasi yang dicatat di riwayat. */
+export const investigationKind = pgEnum('investigation_kind', ['token', 'flow', 'trace', 'map', 'multichain']);
+
+/** Tahap kasus: masih diselidiki, dipantau, atau sudah ditutup. */
+export const caseStatus = pgEnum('case_status', ['open', 'monitoring', 'closed']);
+
+/** Jenis entitas yang diselidiki dalam kasus. */
+export const caseSubjectKind = pgEnum('case_subject_kind', ['token', 'address']);
+
 /** Klasifikasi informasi: dari fakta terverifikasi sampai data yang tidak tersedia. */
 export const infoClassification = pgEnum('info_classification', [
   'verified_fact',
@@ -214,6 +223,9 @@ export type BridgeMatchStatus = (typeof bridgeMatchStatus.enumValues)[number];
 export type InfrastructureKind = (typeof infrastructureKind.enumValues)[number];
 export type InfrastructureRole = (typeof infrastructureRole.enumValues)[number];
 export type SearchEntityKind = (typeof searchEntityKind.enumValues)[number];
+export type InvestigationKind = (typeof investigationKind.enumValues)[number];
+export type CaseStatus = (typeof caseStatus.enumValues)[number];
+export type CaseSubjectKind = (typeof caseSubjectKind.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];

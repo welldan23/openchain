@@ -26,6 +26,13 @@ const EXPECTED_TABLES = [
   'address_flow_scans',
   'addresses',
   'bridge_transfers',
+  'case_finding_evidence',
+  'case_findings',
+  'case_notes',
+  'case_snapshot_blocks',
+  'case_steps',
+  'case_subjects',
+  'cases',
   'chain_capabilities',
   'chain_smoke_checks',
   'chains',
@@ -39,6 +46,7 @@ const EXPECTED_TABLES = [
   'info_classification_labels',
   'infrastructure_contracts',
   'infrastructure_protocols',
+  'investigations',
   'label_evidence',
   'labels',
   'map_cluster_members',
@@ -1301,5 +1309,73 @@ describe('indeks pencarian', () => {
       db.insert(schema.searchEntities).values({ ...base, kind: 'address', addressId: elsewhere.id, title: 'x', searchText: 'x' }),
       'search_entities_chain_address_fk',
     );
+  });
+});
+
+describe('riwayat investigasi dan kasus', () => {
+  it('riwayat: satu baris per halaman, hanya halaman investigasi, catatan pendek', async () => {
+    const base = { kind: 'token' as const, title: 'Nebula Finance (NBLA)', chainId: 'robinhood', href: '/token/robinhood/0xabc', firstOpenedAt: FETCHED_AT, openedAt: FETCHED_AT };
+    await db.insert(schema.investigations).values(base);
+    await expectConstraintViolation(db.insert(schema.investigations).values(base), 'investigations_href_unique');
+    await expectConstraintViolation(
+      db.insert(schema.investigations).values({ ...base, href: '/admin/rahasia' }),
+      'investigations_href_is_investigation',
+    );
+    // Jenis harus cocok dengan awalan tautannya.
+    await expectConstraintViolation(
+      db.insert(schema.investigations).values({ ...base, kind: 'map', href: '/token/robinhood/0xdef' }),
+      'investigations_href_is_investigation',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.investigations).values({ ...base, href: '/token/robinhood/0x1', note: 'x'.repeat(281) }),
+      'investigations_note_length',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.investigations).values({ ...base, href: '/token/robinhood/0x2', note: '   ' }),
+      'investigations_note_length',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.investigations).values({ ...base, href: '/token/robinhood/0x3', firstOpenedAt: new Date(FETCHED_AT.getTime() + 1) }),
+      'investigations_opened_order',
+    );
+  });
+
+  it('kasus: data tidak lengkap wajib dijelaskan, temuan bukan "tidak tersedia", dan semua isi ikut terhapus', async () => {
+    const base = { title: 'Hubungan holder NBLA', dataStatus: 'complete' as const, snapshotAt: FETCHED_AT, createdAt: FETCHED_AT, updatedAt: FETCHED_AT };
+    await expectConstraintViolation(db.insert(schema.cases).values({ ...base, dataStatus: 'partial' }), 'cases_not_complete_is_explained');
+    await expectConstraintViolation(db.insert(schema.cases).values({ ...base, title: 'x'.repeat(121) }), 'cases_title_length');
+    const [kasus] = await db.insert(schema.cases).values({ ...base, tags: ['bundler'], sources: ['blockscout'] }).returning();
+    expect(kasus).toMatchObject({ status: 'open', summary: '', tags: ['bundler'] });
+
+    const subject = { caseId: kasus.id, kind: 'token' as const, chainId: 'robinhood', address: '0xABC', addressNormalized: '0xabc', title: 'NBLA', href: '/token/robinhood/0xabc', addedAt: FETCHED_AT };
+    await db.insert(schema.caseSubjects).values(subject);
+    await expectConstraintViolation(db.insert(schema.caseSubjects).values({ ...subject, address: '0xabc' }), 'case_subjects_unique');
+    const [finding] = await db
+      .insert(schema.caseFindings)
+      .values({ caseId: kasus.id, key: 'kelompok-a', title: 'Pendana bersama', detail: '5 wallet', classification: 'heuristic', addedAt: FETCHED_AT })
+      .returning();
+    await expectConstraintViolation(
+      db.insert(schema.caseFindings).values({ caseId: kasus.id, key: 'kosong', title: 'x', detail: 'x', classification: 'unavailable', addedAt: FETCHED_AT }),
+      'case_findings_classification_is_claim',
+    );
+    await db.insert(schema.caseFindingEvidence).values({ findingId: finding.id, chainId: 'robinhood', txHash: '0x' + 'ab'.repeat(32) });
+    await expectConstraintViolation(
+      db.insert(schema.caseFindingEvidence).values({ findingId: finding.id, chainId: 'robinhood', txHash: '0x' + 'ab'.repeat(32) }),
+      'case_finding_evidence_unique',
+    );
+    await db.insert(schema.caseNotes).values({ caseId: kasus.id, body: 'Cek ulang setelah listing', createdAt: FETCHED_AT });
+    await expectConstraintViolation(db.insert(schema.caseNotes).values({ caseId: kasus.id, body: '', createdAt: FETCHED_AT }), 'case_notes_body_length');
+    await db.insert(schema.caseSteps).values({ caseId: kasus.id, kind: 'map', title: 'Peta NBLA', chainId: 'robinhood', href: '/map/robinhood/0xabc', openedAt: FETCHED_AT });
+    await db.insert(schema.caseSnapshotBlocks).values({ caseId: kasus.id, chainId: 'robinhood', blockNumber: 900 });
+    await expectConstraintViolation(
+      db.insert(schema.caseSnapshotBlocks).values({ caseId: kasus.id, chainId: 'robinhood', blockNumber: 901 }),
+      'case_snapshot_blocks_unique',
+    );
+
+    await db.delete(schema.cases).where(eq(schema.cases.id, kasus.id));
+    for (const table of [schema.caseSubjects, schema.caseFindings, schema.caseNotes, schema.caseSteps, schema.caseSnapshotBlocks]) {
+      expect(await db.select().from(table)).toEqual([]);
+    }
+    expect(await db.select().from(schema.caseFindingEvidence)).toEqual([]);
   });
 });

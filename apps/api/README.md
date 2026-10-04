@@ -859,6 +859,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Lintas chain | `multichain_scans`, `multichain_chain_activity`, `bridge_transfers`, `infrastructure_protocols`, `infrastructure_contracts` |
 | Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges`, `map_clusters` (+ `map_cluster_members`, `map_cluster_signals`, `map_cluster_signal_evidence`), `coordination_events` (+ `coordination_event_members`, `coordination_txs`) |
 | Pencarian | `search_entities` (indeks turunan dari token, address, dan label) |
+| Riwayat dan kasus | `investigations`, `cases`, `case_subjects`, `case_findings`, `case_finding_evidence`, `case_notes`, `case_steps`, `case_snapshot_blocks` |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
 Aturan PRD yang dijaga langsung oleh database:
@@ -948,4 +949,14 @@ Aturan PRD yang dijaga langsung oleh database:
   ulang; ikut terhapus bila address atau tokennya dihapus. Hash transaksi dan
   address persis dicari langsung di tabel sumber.
 
-Tabel `investigations` menyusul di task fitur yang memakainya.
+- Riwayat dan kasus belum punya akun pengguna, jadi milik satu workspace.
+  `investigations` menyimpan satu baris per halaman investigasi (`href` unik,
+  hanya `/token|flow|trace|map|multichain/…` dengan jenis yang cocok); membuka
+  ulang memperbarui waktu dan hitungannya. Catatan dan catatan kasus maksimal
+  280 karakter dan tidak boleh kosong; judul kasus maksimal 120.
+- `cases` wajib menjelaskan data yang tidak lengkap (`status_reason`) dan
+  menyimpan sumber serta blok per chain (`case_snapshot_blocks`) supaya bisa
+  direproduksi. Temuan kasus (`case_findings`) memakai klasifikasi jenis
+  informasi, tidak boleh `unavailable`, dan buktinya hash transaksi per chain
+  (`case_finding_evidence`). Subjek dan temuan tidak digandakan dalam satu
+  kasus; menghapus kasus menghapus semua isinya.
