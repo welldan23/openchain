@@ -1,0 +1,81 @@
+/**
+ * Aturan tampilan halaman risiko objek: urutan alasan dan peringatan, rincian
+ * skor per jenis informasi, dan ringkasan sumber label. Skor yang tidak
+ * didukung poin alasan tidak disamarkan; selisihnya ditampilkan apa adanya.
+ */
+import { CLASSIFICATION_ORDER } from "./labels";
+import type { FindingClassification, ObjectRisk, RiskLabel, RiskReason, RiskSeverity, RiskWarning } from "./types";
+
+export const SEVERITY_ORDER: RiskSeverity[] = ["critical", "high", "medium", "low", "info"];
+
+const severityRank = (severity: RiskSeverity) => SEVERITY_ORDER.indexOf(severity);
+
+/** Alasan terberat dulu; di tingkat yang sama, sumbangan poin terbesar dulu. */
+export function sortReasons(reasons: RiskReason[]): RiskReason[] {
+  return [...reasons].sort(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity) || (b.points ?? -1) - (a.points ?? -1),
+  );
+}
+
+/** Peringatan terbaru dulu; di waktu yang sama, yang terberat dulu. */
+export function sortWarnings(warnings: RiskWarning[]): RiskWarning[] {
+  return [...warnings].sort(
+    (a, b) => Date.parse(b.detectedAt) - Date.parse(a.detectedAt) || severityRank(a.severity) - severityRank(b.severity),
+  );
+}
+
+export interface ScoreBreakdown {
+  /** Poin per jenis informasi, urut baku, hanya yang punya poin. */
+  parts: Array<{ classification: FindingClassification; points: number; reasonCount: number }>;
+  countedPoints: number;
+  /** Alasan yang tidak ikut dihitung ke skor (poin kosong). */
+  uncounted: number;
+  /** Skor dikurangi jumlah poin; bukan nol berarti sebagian skor belum dijelaskan alasan. */
+  unexplained: number | null;
+}
+
+export function scoreBreakdown(risk: Pick<ObjectRisk, "score" | "reasons">): ScoreBreakdown {
+  const parts = CLASSIFICATION_ORDER.map((classification) => {
+    const counted = risk.reasons.filter((reason) => reason.classification === classification && reason.points !== null);
+    return {
+      classification,
+      points: counted.reduce((total, reason) => total + (reason.points ?? 0), 0),
+      reasonCount: counted.length,
+    };
+  }).filter((part) => part.reasonCount > 0);
+  const countedPoints = parts.reduce((total, part) => total + part.points, 0);
+  return {
+    parts,
+    countedPoints,
+    uncounted: risk.reasons.filter((reason) => reason.points === null).length,
+    unexplained: risk.score === null ? null : risk.score - countedPoints,
+  };
+}
+
+export interface LabelSourceSummary {
+  external: number;
+  heuristic: number;
+  /** Nama sumber unik, eksternal dulu. */
+  sourceNames: string[];
+}
+
+export function labelSourceSummary(labels: RiskLabel[]): LabelSourceSummary {
+  const ordered = [...labels].sort((a, b) => Number(a.source === "heuristic") - Number(b.source === "heuristic"));
+  return {
+    external: labels.filter((label) => label.source === "external").length,
+    heuristic: labels.filter((label) => label.source === "heuristic").length,
+    sourceNames: [...new Set(ordered.map((label) => label.sourceName))],
+  };
+}
+
+/** Label eksternal dulu, lalu heuristic dengan keyakinan tertinggi. */
+export function sortLabels(labels: RiskLabel[]): RiskLabel[] {
+  return [...labels].sort(
+    (a, b) => Number(a.source === "heuristic") - Number(b.source === "heuristic") || (b.confidence ?? 1) - (a.confidence ?? 1),
+  );
+}
+
+/** Peringatan dengan tingkat tinggi atau kritis, untuk penanda di kepala halaman. */
+export function urgentWarnings(warnings: RiskWarning[]): RiskWarning[] {
+  return warnings.filter((warning) => severityRank(warning.severity) <= severityRank("high"));
+}

@@ -698,3 +698,81 @@ export interface CaseSummary {
   noteCount: number;
   dataStatus: CaseDataStatus;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Risiko & Label                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Objek yang dinilai risikonya. */
+export type RiskObjectKind = "token" | "wallet" | "contract";
+
+/** Satu alasan penilaian beserta sumbangannya ke skor. */
+export interface RiskReason {
+  id: string;
+  title: string;
+  description: string;
+  severity: RiskSeverity;
+  classification: FindingClassification;
+  /** Poin yang disumbangkan ke skor; `null` bila tidak ikut dihitung, mis. asumsi. */
+  points: number | null;
+  evidenceTxHashes: string[];
+}
+
+/** Peringatan dini: pola baru yang perlu dipantau sebelum jadi temuan. */
+export interface RiskWarning {
+  id: string;
+  title: string;
+  description: string;
+  severity: RiskSeverity;
+  classification: FindingClassification;
+  detectedAt: string;
+  evidenceTxHashes: string[];
+}
+
+/** Label entitas beserta asal dan dasar pemberiannya. */
+export interface RiskLabel extends EntityLabel {
+  /** Keyakinan 0–1; hanya untuk label heuristic. */
+  confidence?: number;
+  /** Kenapa label ini diberikan, dalam bahasa sederhana. */
+  basis: string;
+  addedAt: string;
+  evidenceTxHashes: string[];
+}
+
+/** Halaman investigasi lain untuk objek yang sama. */
+export interface RiskObjectLink {
+  kind: "token" | "flow" | "map" | "multichain";
+  title: string;
+  href: string;
+}
+
+/**
+ * Penilaian risiko satu objek (token, wallet, atau kontrak) pada satu
+ * snapshot. Skor `null` berarti data belum cukup untuk dinilai, bukan aman.
+ */
+export interface ObjectRisk {
+  kind: RiskObjectKind;
+  chain: ChainId;
+  address: string;
+  title: string;
+  /** Skor 0–100, makin tinggi makin berisiko. */
+  score: number | null;
+  level: RiskLevel;
+  reasons: RiskReason[];
+  warnings: RiskWarning[];
+  labels: RiskLabel[];
+  /** Detail transaksi bukti yang tersedia; hash lain dibuka di explorer. */
+  evidence: TxEvidence[];
+  links: RiskObjectLink[];
+  snapshot: DataSnapshot & { dataStatus: CaseDataStatus; statusReason?: string };
+}
+
+/** Ringkasan objek berisiko untuk daftar/tautan. */
+export interface ObjectRiskSummary {
+  kind: RiskObjectKind;
+  chain: ChainId;
+  address: string;
+  title: string;
+  level: RiskLevel;
+  warningCount: number;
+}

@@ -1,4 +1,4 @@
-import { ChevronRight, FolderOpen, Footprints, Globe2, Network, Search, TriangleAlert, Waypoints } from "lucide-react";
+import { BellRing, ChevronRight, FolderOpen, Footprints, Globe2, Network, Search, ShieldAlert, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
 import { flowFailureDemoPath, flowPath, listSampleFlows } from "@/lib/api/flows";
@@ -6,18 +6,21 @@ import { listSampleMaps, mapFailureDemoPath, mapPath } from "@/lib/api/maps";
 import { listSampleMultichain, multichainFailureDemoPath, multichainPath } from "@/lib/api/multichain";
 import { failureDemoPath, listSampleTokens, tokenPath } from "@/lib/api/tokens";
 import { caseFailureDemoPath } from "@/lib/api/cases";
+import { listSampleRisks, riskFailureDemoPath, riskPath } from "@/lib/api/risk";
 import { searchFailureDemoPath } from "@/lib/api/search";
 import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
 import { shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
+import { RISK_OBJECT_KIND_META } from "@/lib/labels";
 
 export default async function Home() {
-  const [samples, flows, traces, maps, multichain] = await Promise.all([
+  const [samples, flows, traces, maps, multichain, risks] = await Promise.all([
     listSampleTokens(),
     listSampleFlows(),
     listSampleTraces(),
     listSampleMaps(),
     listSampleMultichain(),
+    listSampleRisks(),
   ]);
 
   return (
@@ -261,6 +264,50 @@ export default async function Home() {
         </ul>
       </section>
 
+      <section aria-labelledby="sample-risk-title" className="mt-10">
+        <h2 id="sample-risk-title" className="text-sm font-semibold">
+          Coba lihat risiko objek
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Skor risiko token, wallet, atau kontrak beserta alasan, peringatan dini, dan sumber labelnya.
+        </p>
+        <ul className="mt-4 space-y-3">
+          {risks.map((risk) => (
+            <li key={`${risk.chain}:${risk.address}`}>
+              <Link
+                href={riskPath(risk.chain, risk.address)}
+                className="group flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-accent/50"
+              >
+                <span
+                  aria-hidden
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent ring-1 ring-accent/30"
+                >
+                  <ShieldAlert className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{risk.title}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-muted">{RISK_OBJECT_KIND_META[risk.kind].label}</span>
+                    <ChainBadge chain={risk.chain} />
+                    <RiskLevelBadge level={risk.level} />
+                    {risk.warningCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-orange-300">
+                        <BellRing className="size-3" aria-hidden />
+                        {risk.warningCount} peringatan
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent"
+                  aria-hidden
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section aria-labelledby="states-title" className="mt-10">
         <h2 id="states-title" className="text-sm font-semibold">
           Coba tampilan status
@@ -390,6 +437,24 @@ export default async function Home() {
             <span className="block font-medium">Simulasi kasus gagal dimuat</span>
             <span className="mt-0.5 block text-xs text-muted">
               Membuka kasus yang sengaja dibuat gagal untuk melihat tampilan error.
+            </span>
+          </span>
+          <ChevronRight
+            className="size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-rose-300"
+            aria-hidden
+          />
+        </Link>
+        <Link
+          href={riskFailureDemoPath()}
+          className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 transition hover:border-rose-400/50"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/30">
+            <TriangleAlert className="size-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">Simulasi penilaian risiko gagal dimuat</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Membuka objek yang sengaja dibuat gagal untuk melihat tampilan error.
             </span>
           </span>
           <ChevronRight

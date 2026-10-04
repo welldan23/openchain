@@ -12,6 +12,7 @@ import type {
   FindingClassification,
   FlowDirection,
   RiskLevel,
+  RiskObjectKind,
   RiskSeverity,
 } from "./types";
 
@@ -310,4 +311,11 @@ export const CASE_DATA_STATUS_META: Record<CaseDataStatus, Meta & { description:
     description: "Sumber data gagal dihubungi; hasil tidak dikarang.",
     className: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
   },
+};
+
+/** Jenis objek yang dinilai risikonya. */
+export const RISK_OBJECT_KIND_META: Record<RiskObjectKind, { label: string; description: string }> = {
+  token: { label: "Token", description: "Kontrak token beserta pasar dan holdernya." },
+  wallet: { label: "Wallet", description: "Address biasa yang dikendalikan seseorang atau bot." },
+  contract: { label: "Kontrak", description: "Kontrak selain token, mis. pool likuiditas atau router." },
 };
