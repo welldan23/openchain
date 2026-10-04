@@ -11,6 +11,7 @@ import type {
   EntityLabelType,
   FindingClassification,
   FlowDirection,
+  InfoClassification,
   RiskLevel,
   RiskObjectKind,
   RiskSeverity,
@@ -31,34 +32,48 @@ export const CLASSIFICATION_ORDER: FindingClassification[] = [
   "assumption",
 ];
 
+/** Urutan legenda jenis informasi: klasifikasi temuan, lalu data yang tidak tersedia. */
+export const INFO_CLASSIFICATION_ORDER: InfoClassification[] = [...CLASSIFICATION_ORDER, "unavailable"];
+
 export const CLASSIFICATION_META: Record<
-  FindingClassification,
-  Meta & { description: string }
+  InfoClassification,
+  Meta & { description: string; howToCheck: string }
 > = {
   fact: {
     label: "Fakta on-chain",
     description: "Tercatat langsung di blockchain dan bisa dicek lewat hash transaksi.",
+    howToCheck: "Buka hash buktinya di explorer; transaksinya harus ada dan isinya sama.",
     className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30",
   },
   calculation: {
     label: "Kalkulasi",
     description: "Hasil hitungan dari data on-chain pada waktu snapshot.",
+    howToCheck: "Hitung ulang dari data di blok snapshot; angkanya bisa berubah di blok lain.",
     className: "bg-sky-500/15 text-sky-300 ring-sky-400/30",
   },
   heuristic: {
     label: "Heuristic",
     description: "Dugaan berbasis pola. Selalu estimasi, bukan kepastian.",
+    howToCheck: "Lihat bukti dan tingkat keyakinannya; pola yang sama bisa punya penjelasan lain.",
     className: "bg-amber-500/15 text-amber-300 ring-amber-400/30",
   },
   external_label: {
     label: "Label eksternal",
     description: "Berasal dari sumber pihak ketiga, bukan hasil analisis internal.",
+    howToCheck: "Perhatikan nama sumbernya; label pihak ketiga bisa keliru atau sudah usang.",
     className: "bg-violet-500/15 text-violet-300 ring-violet-400/30",
   },
   assumption: {
     label: "Asumsi",
     description: "Belum terverifikasi on-chain. Perlakukan sebagai klaim.",
+    howToCheck: "Cari transaksi yang membuktikannya; sampai ada, jangan jadikan dasar kesimpulan.",
     className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+  },
+  unavailable: {
+    label: "Data tidak tersedia",
+    description: "Sumber data gagal dihubungi atau belum dipindai. Nilainya tidak ditebak dan tidak dianggap nol.",
+    howToCheck: "Coba muat ulang nanti, dan lihat status sumber data di bagian snapshot.",
+    className: "bg-rose-500/10 text-rose-300 ring-rose-400/30",
   },
 };
 

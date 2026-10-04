@@ -23,6 +23,13 @@ export type FindingClassification =
   | "external_label"
   | "assumption";
 
+/**
+ * Jenis informasi yang bisa ditandai badge: klasifikasi temuan, ditambah
+ * `unavailable` untuk data yang gagal diambil atau belum dipindai. Data yang
+ * tidak tersedia bukan temuan, jadi tidak dipakai di `FindingClassification`.
+ */
+export type InfoClassification = FindingClassification | "unavailable";
+
 export type RiskSeverity = "critical" | "high" | "medium" | "low" | "info";
 
 /** `unknown`: data belum cukup untuk menilai risiko. */

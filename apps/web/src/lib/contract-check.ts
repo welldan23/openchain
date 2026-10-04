@@ -2,7 +2,7 @@
  * Logika seksi Cek Kontrak: urutan tampil dan rekap status pemeriksaan.
  */
 import { CHECK_STATUS_META } from "./labels";
-import type { ContractCheckItem, ContractCheckStatus } from "./types";
+import type { ContractCheckItem, ContractCheckStatus, InfoClassification } from "./types";
 
 /** Urutan tampil: yang bermasalah dulu supaya langsung terlihat. */
 export const CHECK_STATUS_ORDER: ContractCheckStatus[] = ["fail", "warn", "unknown", "pass"];
@@ -29,4 +29,13 @@ export function describeContractChecks(items: ContractCheckItem[]): string {
   return countContractChecks(items)
     .map(({ status, count }) => `${count} ${CHECK_STATUS_META[status].label.toLowerCase()}`)
     .join(", ");
+}
+
+/**
+ * Jenis informasi hasil cek: klasifikasinya bila ada; pemeriksaan yang belum
+ * dijalankan ditandai "data tidak tersedia", bukan dibiarkan tanpa tanda.
+ */
+export function contractCheckInfo(item: Pick<ContractCheckItem, "status" | "classification">): InfoClassification | null {
+  if (item.classification) return item.classification;
+  return item.status === "unknown" ? "unavailable" : null;
 }

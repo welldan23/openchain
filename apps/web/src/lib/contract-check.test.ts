@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  contractCheckInfo,
   countContractChecks,
   describeContractChecks,
   sortContractChecks,
@@ -36,6 +37,14 @@ describe("cek kontrak", () => {
       "1 berisiko, 2 perlu perhatian, 1 belum dicek, 1 lolos",
     );
     expect(countContractChecks([])).toEqual([]);
+  });
+});
+
+describe("jenis informasi hasil cek kontrak", () => {
+  it("memakai klasifikasi bila ada; cek yang belum dijalankan ditandai tidak tersedia", () => {
+    expect(contractCheckInfo({ status: "fail", classification: "fact" })).toBe("fact");
+    expect(contractCheckInfo({ status: "unknown" })).toBe("unavailable");
+    expect(contractCheckInfo({ status: "pass" })).toBeNull();
   });
 });
 

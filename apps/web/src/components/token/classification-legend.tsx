@@ -1,7 +1,7 @@
 import { Info } from "lucide-react";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { Panel } from "@/components/ui/panel";
-import { CLASSIFICATION_META, CLASSIFICATION_ORDER } from "@/lib/labels";
+import { CLASSIFICATION_META, INFO_CLASSIFICATION_ORDER } from "@/lib/labels";
 
 /** Penjelasan tag klasifikasi supaya user tahu seberapa kuat tiap temuan. */
 export function ClassificationLegend() {
@@ -13,7 +13,7 @@ export function ClassificationLegend() {
       icon={Info}
     >
       <dl className="space-y-3">
-        {CLASSIFICATION_ORDER.map((key) => (
+        {INFO_CLASSIFICATION_ORDER.map((key) => (
           <div key={key}>
             <dt>
               <ClassificationBadge classification={key} interactive={false} />

@@ -8,20 +8,29 @@ const VIEWPORT_MARGIN = 8;
 /**
  * Popover kecil untuk badge: terbuka saat di-tap/klik (tersemat), di-hover
  * mouse, atau difokus keyboard. Tutup saat tap di luar atau menekan Escape.
- * Rata kanan bila popover selebar `width` akan terpotong di tepi layar.
+ * Rata kanan bila popover selebar `width` akan terpotong di tepi layar, dan
+ * membuka ke atas bila setinggi `estimatedHeight` akan terpotong di bawah
+ * (0 = selalu ke bawah).
  */
-export function usePopover<T extends HTMLElement>(width: number) {
+export function usePopover<T extends HTMLElement>(width: number, estimatedHeight = 0) {
   const rootRef = useRef<HTMLSpanElement>(null);
   const triggerRef = useRef<T>(null);
   const [pinned, setPinned] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [keyboardFocused, setKeyboardFocused] = useState(false);
   const [alignEnd, setAlignEnd] = useState(false);
+  const [placeAbove, setPlaceAbove] = useState(false);
   const open = pinned || hovered || keyboardFocused;
 
   function updateAlignment() {
     const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setAlignEnd(rect.left + width > window.innerWidth - VIEWPORT_MARGIN);
+    if (!rect) return;
+    setAlignEnd(rect.left + width > window.innerWidth - VIEWPORT_MARGIN);
+    setPlaceAbove(
+      estimatedHeight > 0 &&
+        rect.bottom + estimatedHeight > window.innerHeight - VIEWPORT_MARGIN &&
+        rect.top - estimatedHeight > VIEWPORT_MARGIN,
+    );
   }
 
   useEffect(() => {
@@ -69,5 +78,5 @@ export function usePopover<T extends HTMLElement>(width: number) {
     onBlur: () => setKeyboardFocused(false),
   };
 
-  return { rootRef, triggerRef, open, alignEnd, triggerProps };
+  return { rootRef, triggerRef, open, alignEnd, placeAbove, triggerProps };
 }

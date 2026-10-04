@@ -6,7 +6,7 @@ import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
 import { explorerTxUrl } from "@/lib/chains";
-import { countContractChecks, sortContractChecks } from "@/lib/contract-check";
+import { contractCheckInfo, countContractChecks, sortContractChecks } from "@/lib/contract-check";
 import { CHECK_STATUS_META } from "@/lib/labels";
 import type { ChainId, ContractCheck, ContractCheckStatus } from "@/lib/types";
 
@@ -54,6 +54,7 @@ export function ContractCheckPanel({ chain, contract }: ContractCheckPanelProps)
             {items.map((item) => {
               const meta = CHECK_STATUS_META[item.status];
               const Icon = STATUS_ICONS[item.status];
+              const info = contractCheckInfo(item);
               return (
                 <li key={item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
                   <Icon className={`mt-0.5 size-4 shrink-0 ${meta.iconClass}`} aria-hidden />
@@ -66,11 +67,9 @@ export function ContractCheckPanel({ chain, contract }: ContractCheckPanelProps)
                     {item.description ? (
                       <p className="mt-1 text-xs leading-relaxed text-muted">{item.description}</p>
                     ) : null}
-                    {item.classification || item.evidenceTxHashes.length > 0 ? (
+                    {info || item.evidenceTxHashes.length > 0 ? (
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                        {item.classification ? (
-                          <ClassificationBadge classification={item.classification} />
-                        ) : null}
+                        {info ? <ClassificationBadge classification={info} /> : null}
                         {item.evidenceTxHashes.map((hash) => (
                           <HashLink
                             key={hash}

@@ -152,7 +152,7 @@ export function RiskScorePanel({ risk }: { risk: ObjectRisk }) {
             {breakdown.parts.map((part) => (
               <li key={part.classification} className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2">
                 <span className="flex min-w-0 items-center gap-2">
-                  <ClassificationBadge classification={part.classification} />
+                  <ClassificationBadge classification={part.classification} detail={`${part.points} poin dari ${part.reasonCount} alasan.`} />
                   <span className="text-[11px] text-muted">{part.reasonCount} alasan</span>
                 </span>
                 <span className="font-mono text-sm tabular-nums">+{part.points}</span>
@@ -196,7 +196,10 @@ export function RiskReasonsPanel({ risk }: { risk: ObjectRisk }) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex flex-wrap items-center gap-1.5">
                   <SeverityBadge severity={reason.severity} />
-                  <ClassificationBadge classification={reason.classification} />
+                  <ClassificationBadge
+                    classification={reason.classification}
+                    detail={reason.points === null ? "Tidak ikut dihitung ke skor." : `Menyumbang ${reason.points} poin ke skor.`}
+                  />
                 </span>
                 <span
                   className="font-mono text-xs tabular-nums text-muted"
@@ -270,7 +273,10 @@ export function RiskLabelsPanel({ risk }: { risk: ObjectRisk }) {
             <li key={`${label.type}:${label.sourceName}:${label.name ?? ""}`} className="rounded-lg border border-line p-3">
               <div className="flex flex-wrap items-center gap-1.5">
                 <EntityLabelBadge label={label} />
-                <ClassificationBadge classification={label.source === "external" ? "external_label" : "heuristic"} />
+                <ClassificationBadge
+                  classification={label.source === "external" ? "external_label" : "heuristic"}
+                  detail={`Sumber: ${label.sourceName}${label.confidence === undefined ? "" : ` · keyakinan ${formatPct(label.confidence * 100, { maximumFractionDigits: 0 })}`}.`}
+                />
               </div>
               <dl className="mt-2 space-y-1.5 text-xs">
                 <div className="flex flex-wrap gap-x-1.5">
