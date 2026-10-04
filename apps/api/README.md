@@ -722,7 +722,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
 | Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
-| Lintas chain | `multichain_scans`, `multichain_chain_activity`, `bridge_transfers` |
+| Lintas chain | `multichain_scans`, `multichain_chain_activity`, `bridge_transfers`, `infrastructure_protocols`, `infrastructure_contracts` |
 | Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges`, `map_clusters` (+ `map_cluster_members`, `map_cluster_signals`, `map_cluster_signal_evidence`), `coordination_events` (+ `coordination_event_members`, `coordination_txs`) |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
@@ -793,5 +793,14 @@ Aturan PRD yang dijaga langsung oleh database:
   wajib menunjuk kaki terima, penerima, jumlah, waktu, nama heuristic, dan
   keyakinan; `pending`/`unmatched` tidak boleh punya kaki terima. Pencocokan
   selalu `heuristic` dan penerimaan tidak boleh sebelum pengiriman.
+- Jembatan dan router dikelompokkan per protokol (`infrastructure_protocols`:
+  bridge, router, atau aggregator) dengan kontraknya per chain
+  (`infrastructure_contracts`: peran pintu masuk/keluar bridge atau router).
+  Setiap pengenalan menyimpan sumbernya dengan aturan yang sama seperti
+  `labels` (eksternal = `external_label`, heuristic wajib keyakinan, user =
+  `assumption`) dan bila merujuk label, label itu wajib milik address yang
+  sama. Satu kontrak boleh dikenali beberapa sumber. Address kontrak tidak
+  diisi dari ingatan: hanya dari sumber yang bisa ditelusuri.
+  `bridge_transfers.protocol_id` menunjuk protokol bridge yang dipakai.
 
 Tabel `investigations` menyusul di task fitur yang memakainya.

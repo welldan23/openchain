@@ -85,6 +85,13 @@
       "when": 1791112759471,
       "tag": "0011_multichain_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791112929391,
+      "tag": "0012_infrastructure_contracts",
+      "breakpoints": true
     }
   ]
 }

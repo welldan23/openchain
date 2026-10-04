@@ -1,8 +1,17 @@
 import { sql } from 'drizzle-orm';
-import { check, foreignKey, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { check, foreignKey, index, integer, numeric, pgTable, text, unique } from 'drizzle-orm/pg-core';
 import { blockNumber, idColumn, rawAmount, refId, timestampTz, usdAmount } from './columns.js';
-import { bridgeMatchStatus, chainFamily, confidenceLevel, dataStatus, infoClassification } from './enums.js';
-import { addresses, chains, labels } from './reference.js';
+import {
+  bridgeMatchStatus,
+  chainFamily,
+  confidenceLevel,
+  dataStatus,
+  infoClassification,
+  infrastructureKind,
+  infrastructureRole,
+  labelSource,
+} from './enums.js';
+import { addresses, chains, labels, providerRuns } from './reference.js';
 import { tokenTransfers } from './activity.js';
 import { addressFlowScans, nativeTransfers } from './transfers.js';
 
@@ -97,6 +106,76 @@ export const multichainChainActivity = pgTable(
 );
 
 /**
+ * Protokol bridge, router, atau aggregator, mis. satu bridge yang punya
+ * kontrak di banyak chain. Dipakai untuk mencocokkan kaki kirim dan kaki
+ * terima bridge yang sama, dan untuk menandai hub di peta dan aliran dana.
+ */
+export const infrastructureProtocols = pgTable(
+  'infrastructure_protocols',
+  {
+    /** Slug stabil, mis. `across`. */
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    kind: infrastructureKind('kind').notNull(),
+    /** Situs atau dokumentasi resmi yang menyebut address kontraknya, bila ada. */
+    referenceUrl: text('reference_url'),
+  },
+  (t) => [check('infrastructure_protocols_id_is_slug', sql`${t.id} ~ '^[a-z0-9-]+$'`)],
+);
+
+/**
+ * Kontrak sebuah protokol di satu chain, beserta asal pengenalannya. Aturan
+ * sumbernya sama dengan `labels`: sumber eksternal = `external_label`,
+ * heuristic = `heuristic` dengan keyakinan, user = `assumption`. Bukan bukti
+ * kepemilikan, dan tidak pernah disebut fakta.
+ */
+export const infrastructureContracts = pgTable(
+  'infrastructure_contracts',
+  {
+    id: idColumn(),
+    protocolId: text('protocol_id')
+      .notNull()
+      .references(() => infrastructureProtocols.id),
+    chainId: text('chain_id').notNull(),
+    addressId: refId('address_id').notNull(),
+    role: infrastructureRole('role').notNull(),
+    source: labelSource('source').notNull(),
+    /** Nama sumber, mis. "Blockscout" atau "OpenChain heuristic". */
+    sourceName: text('source_name').notNull(),
+    classification: infoClassification('classification').notNull(),
+    /** 0–1; wajib untuk pengenalan heuristic. */
+    confidence: numeric('confidence', { precision: 4, scale: 3 }),
+    /** Label address yang menjadi dasar pengenalan ini, bila ada. */
+    labelId: refId('label_id'),
+    providerRunId: refId('provider_run_id').references(() => providerRuns.id),
+    createdAt: timestampTz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    unique('infrastructure_contracts_protocol_address_source_unique').on(t.protocolId, t.chainId, t.addressId, t.sourceName),
+    index('infrastructure_contracts_address_idx').on(t.addressId),
+    foreignKey({
+      name: 'infrastructure_contracts_chain_address_fk',
+      columns: [t.chainId, t.addressId],
+      foreignColumns: [addresses.chainId, addresses.id],
+    }),
+    // Label dasar pengenalan wajib label milik address yang sama.
+    foreignKey({
+      name: 'infrastructure_contracts_label_address_fk',
+      columns: [t.labelId, t.addressId],
+      foreignColumns: [labels.id, labels.addressId],
+    }),
+    check(
+      'infrastructure_contracts_classification_matches_source',
+      sql`(${t.source} = 'external' and ${t.classification} = 'external_label')
+        or (${t.source} = 'heuristic' and ${t.classification} = 'heuristic')
+        or (${t.source} = 'user' and ${t.classification} = 'assumption')`,
+    ),
+    check('infrastructure_contracts_heuristic_has_confidence', sql`${t.source} <> 'heuristic' or ${t.confidence} is not null`),
+    check('infrastructure_contracts_confidence_range', sql`${t.confidence} is null or (${t.confidence} >= 0 and ${t.confidence} <= 1)`),
+  ],
+);
+
+/**
  * Perpindahan aset lewat bridge. Kaki kirim (transfer ke kontrak bridge di
  * chain asal) adalah fakta on-chain. Kaki terima di chain tujuan dicocokkan
  * lewat jumlah, waktu, dan penerima, jadi pencocokannya selalu `heuristic`
@@ -117,6 +196,8 @@ export const bridgeTransfers = pgTable(
     bridgeAddressId: refId('bridge_address_id').notNull(),
     /** Label yang mengenali kontrak itu sebagai bridge, beserta sumbernya. */
     bridgeLabelId: refId('bridge_label_id').references(() => labels.id),
+    /** Protokol bridge, bila kontraknya sudah dikenali; dipakai mencocokkan kaki terima. */
+    protocolId: text('protocol_id').references(() => infrastructureProtocols.id),
     senderAddressId: refId('sender_address_id').notNull(),
     /** Penerima di chain tujuan; kosong sampai kaki terima ditemukan. */
     recipientAddressId: refId('recipient_address_id'),

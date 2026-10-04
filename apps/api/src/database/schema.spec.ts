@@ -37,6 +37,8 @@ const EXPECTED_TABLES = [
   'evidence',
   'holders',
   'info_classification_labels',
+  'infrastructure_contracts',
+  'infrastructure_protocols',
   'label_evidence',
   'labels',
   'map_cluster_members',
@@ -1196,5 +1198,54 @@ describe('aktivitas lintas chain', () => {
     const [row] = await db.insert(schema.bridgeTransfers).values(matched).returning();
     expect(row).toMatchObject({ status: 'matched', matchClassification: 'heuristic', matchConfidence: 'medium' });
     await expectConstraintViolation(db.insert(schema.bridgeTransfers).values(pending), 'bridge_transfers_sent_native_unique');
+  });
+});
+
+describe('jembatan dan router', () => {
+  it('kontrak protokol menyimpan sumber pengenalannya dengan aturan yang sama seperti label', async () => {
+    await expectConstraintViolation(
+      db.insert(schema.infrastructureProtocols).values({ id: 'Across Bridge', name: 'Across', kind: 'bridge' }),
+      'infrastructure_protocols_id_is_slug',
+    );
+    await db.insert(schema.infrastructureProtocols).values({ id: 'contoh-bridge', name: 'Contoh Bridge', kind: 'bridge' });
+    const entry = await insertAddress('ethereum', '0x' + 'e7'.repeat(20));
+    const other = await insertAddress('ethereum', '0x' + 'e8'.repeat(20));
+    const onBase = await insertAddress('base', '0x' + 'e9'.repeat(20));
+    const [label] = await db
+      .insert(schema.labels)
+      .values({ addressId: entry.id, labelType: 'bridge', name: 'Contoh Bridge: Spoke', source: 'external', sourceName: 'Blockscout', classification: 'external_label' })
+      .returning();
+    const base = {
+      protocolId: 'contoh-bridge',
+      chainId: 'ethereum',
+      addressId: entry.id,
+      role: 'bridge_entry' as const,
+      source: 'external' as const,
+      sourceName: 'Blockscout',
+      classification: 'external_label' as const,
+      labelId: label.id,
+    };
+    await expectConstraintViolation(
+      db.insert(schema.infrastructureContracts).values({ ...base, classification: 'verified_fact' }),
+      'infrastructure_contracts_classification_matches_source',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.infrastructureContracts).values({ ...base, source: 'heuristic', classification: 'heuristic', sourceName: 'OpenChain heuristic' }),
+      'infrastructure_contracts_heuristic_has_confidence',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.infrastructureContracts).values({ ...base, addressId: other.id }),
+      'infrastructure_contracts_label_address_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.infrastructureContracts).values({ ...base, addressId: onBase.id, labelId: null }),
+      'infrastructure_contracts_chain_address_fk',
+    );
+    await db.insert(schema.infrastructureContracts).values(base);
+    await expectConstraintViolation(db.insert(schema.infrastructureContracts).values(base), 'infrastructure_contracts_protocol_address_source_unique');
+    // Sumber lain boleh mengenali kontrak yang sama, masing-masing dengan klasifikasinya.
+    await db
+      .insert(schema.infrastructureContracts)
+      .values({ ...base, source: 'heuristic', classification: 'heuristic', sourceName: 'OpenChain heuristic', confidence: '0.700', labelId: null });
   });
 });

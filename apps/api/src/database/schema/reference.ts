@@ -149,6 +149,8 @@ export const labels = pgTable(
     createdAt: timestampTz('created_at').notNull().defaultNow(),
   },
   (t) => [
+    // Dipakai foreign key komposit agar rujukan label menunjuk address yang benar.
+    unique('labels_id_address_unique').on(t.id, t.addressId),
     unique('labels_address_type_source_unique').on(
       t.addressId,
       t.labelType,

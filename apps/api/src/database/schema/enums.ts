@@ -52,6 +52,15 @@ export const chainCapability = pgEnum('chain_capability', [
   'multichain_profile',
 ]);
 
+/** Jenis protokol infrastruktur yang mencampur dana banyak pengguna. */
+export const infrastructureKind = pgEnum('infrastructure_kind', ['bridge', 'router', 'aggregator']);
+
+/**
+ * Peran kontrak di protokolnya: pintu masuk bridge (menerima dana di chain
+ * asal), pintu keluar (mengirim dana di chain tujuan), keduanya, atau router.
+ */
+export const infrastructureRole = pgEnum('infrastructure_role', ['bridge_entry', 'bridge_exit', 'bridge_both', 'router']);
+
 /**
  * Pencocokan kiriman bridge di chain asal dengan penerimaan di chain tujuan:
  * `matched` = penerimaan ditemukan (dugaan), `pending` = masih dalam batas waktu
@@ -199,6 +208,8 @@ export type CheckStatus = (typeof checkStatus.enumValues)[number];
 export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];
 export type ChainCapability = (typeof chainCapability.enumValues)[number];
 export type BridgeMatchStatus = (typeof bridgeMatchStatus.enumValues)[number];
+export type InfrastructureKind = (typeof infrastructureKind.enumValues)[number];
+export type InfrastructureRole = (typeof infrastructureRole.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];
