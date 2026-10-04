@@ -522,7 +522,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
 | Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
-| Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges` |
+| Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges`, `map_clusters` (+ `map_cluster_members`, `map_cluster_signals`, `map_cluster_signal_evidence`), `coordination_events` (+ `coordination_event_members`, `coordination_txs`) |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
 Aturan PRD yang dijaga langsung oleh database:
@@ -564,6 +564,15 @@ Aturan PRD yang dijaga langsung oleh database:
   (`map_edges`) wajib menunjuk tepat satu transfer tersimpan sebagai bukti
   transaksinya dan hanya boleh menghubungkan node dari peta yang sama.
   Menghapus peta menghapus node dan garisnya, tidak transfernya.
+- Kelompok wallet (`map_clusters`) dan kejadian koordinasi
+  (`coordination_events`) selalu `heuristic`: dugaan dari pola transaksi,
+  lengkap dengan nama heuristic, tingkat keyakinan, dan catatan hal yang bisa
+  membuatnya keliru. Kelompok wajib punya minimal satu label, dan label
+  `insider_or_team` ditolak tanpa bukti transaksi langsung
+  (`has_direct_evidence`). Satu wallet paling banyak masuk satu kelompok per
+  peta, dan anggota kelompok/kejadian wajib node dari peta yang sama. Bukti
+  sinyal dan transaksi koordinasi menunjuk tepat satu transfer tersimpan, jadi
+  pihak, jumlah, dan waktunya tetap fakta on-chain. Semuanya ikut terhapus
+  bersama peta, transfernya tidak.
 
-Tabel `clusters`, `cluster_members`, dan `investigations` menyusul di task
-fitur yang memakainya.
+Tabel `investigations` menyusul di task fitur yang memakainya.

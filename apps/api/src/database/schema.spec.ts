@@ -28,10 +28,17 @@ const EXPECTED_TABLES = [
   'chains',
   'contract_check_evidence',
   'contract_checks',
+  'coordination_event_members',
+  'coordination_events',
+  'coordination_txs',
   'evidence',
   'holders',
   'label_evidence',
   'labels',
+  'map_cluster_members',
+  'map_cluster_signal_evidence',
+  'map_cluster_signals',
+  'map_clusters',
   'map_edges',
   'map_nodes',
   'movement_classifications',
@@ -731,48 +738,49 @@ describe('aliran dana: klasifikasi jenis perpindahan', () => {
   });
 });
 
-describe('peta hubungan: node, edge, dan bukti transaksi', () => {
-  async function mapFixture(seed: string) {
-    const { token, snapshot } = await insertTokenWithSnapshot('0x' + `${seed}0c`.repeat(10), 50);
-    const [map] = await db
-      .insert(schema.walletMaps)
-      .values({
-        chainId: 'robinhood',
-        tokenId: token.id,
-        snapshotId: snapshot.id,
-        blockNumber: 50,
-        holderLimit: 50,
-        fundingDepth: 2,
-        status: 'complete',
-        builtAt: FETCHED_AT,
-      })
-      .returning();
-    const holder = await insertAddress('robinhood', '0x' + `${seed}a1`.repeat(10));
-    const funder = await insertAddress('robinhood', '0x' + `${seed}f2`.repeat(10));
-    const [holderNode, funderNode] = await db
-      .insert(schema.mapNodes)
-      .values([
-        { mapId: map.id, chainId: 'robinhood', addressId: holder.id, role: 'holder', sharePct: '12.500000' },
-        { mapId: map.id, chainId: 'robinhood', addressId: funder.id, role: 'funder' },
-      ])
-      .returning();
-    const [transfer] = await db
-      .insert(schema.nativeTransfers)
-      .values({
-        chainId: 'robinhood',
-        txHash: normalizeTxHash('evm', `0x${seed.repeat(32)}`),
-        kind: 'transaction',
-        fromAddressId: funder.id,
-        toAddressId: holder.id,
-        amountRaw: '2000000000000000000',
-        blockNumber: 40,
-        blockTimestamp: FETCHED_AT,
-        fetchedAt: FETCHED_AT,
-      })
-      .returning();
-    return { token, snapshot, map, holder, funder, holderNode, funderNode, transfer };
-  }
+/** Peta kecil: satu holder, satu pendana, dan transfer pendanaan di antaranya. */
+async function mapFixture(seed: string) {
+  const { token, snapshot } = await insertTokenWithSnapshot('0x' + `${seed}0c`.repeat(10), 50);
+  const [map] = await db
+    .insert(schema.walletMaps)
+    .values({
+      chainId: 'robinhood',
+      tokenId: token.id,
+      snapshotId: snapshot.id,
+      blockNumber: 50,
+      holderLimit: 50,
+      fundingDepth: 2,
+      status: 'complete',
+      builtAt: FETCHED_AT,
+    })
+    .returning();
+  const holder = await insertAddress('robinhood', '0x' + `${seed}a1`.repeat(10));
+  const funder = await insertAddress('robinhood', '0x' + `${seed}f2`.repeat(10));
+  const [holderNode, funderNode] = await db
+    .insert(schema.mapNodes)
+    .values([
+      { mapId: map.id, chainId: 'robinhood', addressId: holder.id, role: 'holder', sharePct: '12.500000' },
+      { mapId: map.id, chainId: 'robinhood', addressId: funder.id, role: 'funder' },
+    ])
+    .returning();
+  const [transfer] = await db
+    .insert(schema.nativeTransfers)
+    .values({
+      chainId: 'robinhood',
+      txHash: normalizeTxHash('evm', `0x${seed.repeat(32)}`),
+      kind: 'transaction',
+      fromAddressId: funder.id,
+      toAddressId: holder.id,
+      amountRaw: '2000000000000000000',
+      blockNumber: 40,
+      blockTimestamp: FETCHED_AT,
+      fetchedAt: FETCHED_AT,
+    })
+    .returning();
+  return { token, snapshot, map, holder, funder, holderNode, funderNode, transfer };
+}
 
+describe('peta hubungan: node, edge, dan bukti transaksi', () => {
   it('menyimpan peta dengan garis yang menunjuk transfer sebagai buktinya, dan menghapusnya bersama-sama', async () => {
     const { map, holderNode, funderNode, transfer } = await mapFixture('81');
     const [edge] = await db
@@ -853,6 +861,151 @@ describe('peta hubungan: node, edge, dan bukti transaksi', () => {
     await expectConstraintViolation(
       db.insert(schema.walletMaps).values({ ...base, status: 'complete', fundingDepth: 9 }),
       'wallet_maps_funding_depth_range',
+    );
+  });
+});
+
+describe('peta hubungan: kelompok wallet dan koordinasi', () => {
+  const clusterBase = {
+    key: 'pendana-bersama',
+    name: 'Kelompok A',
+    reason: 'Didanai wallet yang sama dalam 10 menit',
+    labels: ['common_funding' as const],
+    confidence: 'medium' as const,
+    heuristicName: 'common-funding-v1',
+  };
+
+  it('menyimpan kelompok dengan anggota, sinyal, dan bukti transfernya, lalu ikut terhapus bersama peta', async () => {
+    const { map, holderNode, funderNode, transfer } = await mapFixture('91');
+    const [cluster] = await db
+      .insert(schema.mapClusters)
+      .values({ ...clusterBase, mapId: map.id, caveats: ['Pendana bisa saja exchange'] })
+      .returning();
+    expect(cluster.classification).toBe('heuristic');
+    await db.insert(schema.mapClusterMembers).values([
+      { mapId: map.id, clusterId: cluster.id, nodeId: holderNode.id },
+      { mapId: map.id, clusterId: cluster.id, nodeId: funderNode.id },
+    ]);
+    const [signal] = await db
+      .insert(schema.mapClusterSignals)
+      .values({ clusterId: cluster.id, key: 'pendana-sama', label: 'Pendana langsung yang sama', detail: '2 wallet', matched: true })
+      .returning();
+    await db.insert(schema.mapClusterSignalEvidence).values({ signalId: signal.id, nativeTransferId: transfer.id });
+    const [event] = await db
+      .insert(schema.coordinationEvents)
+      .values({
+        mapId: map.id,
+        key: 'dana-serempak',
+        kind: 'funding_burst',
+        detail: '2 wallet didanai dalam 1 blok',
+        confidence: 'low',
+        heuristicName: 'funding-burst-v1',
+        startedAt: FETCHED_AT,
+        windowSeconds: 0,
+        blockNumber: 40,
+      })
+      .returning();
+    await db.insert(schema.coordinationEventMembers).values({ mapId: map.id, eventId: event.id, nodeId: holderNode.id });
+    await db.insert(schema.coordinationTxs).values({ eventId: event.id, action: 'funding', nativeTransferId: transfer.id });
+
+    await db.delete(schema.walletMaps).where(eq(schema.walletMaps.id, map.id));
+    expect(await db.select().from(schema.mapClusters).where(eq(schema.mapClusters.mapId, map.id))).toEqual([]);
+    expect(await db.select().from(schema.mapClusterMembers).where(eq(schema.mapClusterMembers.mapId, map.id))).toEqual([]);
+    expect(await db.select().from(schema.mapClusterSignals).where(eq(schema.mapClusterSignals.id, signal.id))).toEqual([]);
+    expect(await db.select().from(schema.coordinationEvents).where(eq(schema.coordinationEvents.mapId, map.id))).toEqual([]);
+    expect(await db.select().from(schema.coordinationTxs).where(eq(schema.coordinationTxs.eventId, event.id))).toEqual([]);
+    // Transfer yang jadi bukti tetap ada: ia fakta, bukan bagian dari dugaan.
+    expect(await db.select().from(schema.nativeTransfers).where(eq(schema.nativeTransfers.id, transfer.id))).toHaveLength(1);
+  });
+
+  it('kelompok selalu dugaan, wajib punya label, dan label orang dalam butuh bukti langsung', async () => {
+    const { map } = await mapFixture('92');
+    await expectConstraintViolation(
+      db.insert(schema.mapClusters).values({ ...clusterBase, mapId: map.id, classification: 'verified_fact' }),
+      'map_clusters_is_heuristic',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapClusters).values({ ...clusterBase, mapId: map.id, labels: [] }),
+      'map_clusters_has_labels',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapClusters).values({ ...clusterBase, mapId: map.id, labels: ['common_funding', 'insider_or_team'] }),
+      'map_clusters_insider_needs_direct_evidence',
+    );
+    const [insider] = await db
+      .insert(schema.mapClusters)
+      .values({ ...clusterBase, mapId: map.id, labels: ['insider_or_team'], hasDirectEvidence: true })
+      .returning();
+    expect(insider.labels).toEqual(['insider_or_team']);
+  });
+
+  it('satu wallet hanya masuk satu kelompok per peta, dan anggota wajib dari peta yang sama', async () => {
+    const first = await mapFixture('93');
+    const second = await mapFixture('94');
+    const [a, b] = await db
+      .insert(schema.mapClusters)
+      .values([
+        { ...clusterBase, mapId: first.map.id, key: 'a' },
+        { ...clusterBase, mapId: first.map.id, key: 'b' },
+      ])
+      .returning();
+    await db.insert(schema.mapClusterMembers).values({ mapId: first.map.id, clusterId: a.id, nodeId: first.holderNode.id });
+    await expectConstraintViolation(
+      db.insert(schema.mapClusterMembers).values({ mapId: first.map.id, clusterId: b.id, nodeId: first.holderNode.id }),
+      'map_cluster_members_one_cluster_per_node',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapClusterMembers).values({ mapId: first.map.id, clusterId: a.id, nodeId: second.holderNode.id }),
+      'map_cluster_members_node_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapClusterMembers).values({ mapId: second.map.id, clusterId: a.id, nodeId: second.holderNode.id }),
+      'map_cluster_members_cluster_fk',
+    );
+  });
+
+  it('bukti sinyal dan transaksi koordinasi wajib menunjuk tepat satu transfer', async () => {
+    const { map, transfer } = await mapFixture('95');
+    const [cluster] = await db.insert(schema.mapClusters).values({ ...clusterBase, mapId: map.id }).returning();
+    const [signal] = await db
+      .insert(schema.mapClusterSignals)
+      .values({ clusterId: cluster.id, key: 'pendana-sama', label: 'Pendana sama', detail: 'tidak cocok', matched: false })
+      .returning();
+    await expectConstraintViolation(
+      db.insert(schema.mapClusterSignalEvidence).values({ signalId: signal.id }),
+      'map_cluster_signal_evidence_one_transfer',
+    );
+    await db.insert(schema.mapClusterSignalEvidence).values({ signalId: signal.id, nativeTransferId: transfer.id });
+    await expectConstraintViolation(
+      db.insert(schema.mapClusterSignalEvidence).values({ signalId: signal.id, nativeTransferId: transfer.id }),
+      'map_cluster_signal_evidence_native_unique',
+    );
+    const [event] = await db
+      .insert(schema.coordinationEvents)
+      .values({ mapId: map.id, key: 'k', kind: 'same_block_buy', detail: 'beli di blok sama', confidence: 'low', heuristicName: 'h', startedAt: FETCHED_AT, windowSeconds: 0 })
+      .returning();
+    await expectConstraintViolation(
+      db.insert(schema.coordinationTxs).values({ eventId: event.id, action: 'buy' }),
+      'coordination_txs_one_transfer',
+    );
+  });
+
+  it('kejadian koordinasi selalu dugaan, rentang waktunya tidak negatif, dan anggotanya dari peta yang sama', async () => {
+    const first = await mapFixture('96');
+    const second = await mapFixture('97');
+    const base = { mapId: first.map.id, key: 'k', kind: 'similar_amount' as const, detail: 'jumlah mirip', confidence: 'low' as const, heuristicName: 'h', startedAt: FETCHED_AT };
+    await expectConstraintViolation(
+      db.insert(schema.coordinationEvents).values({ ...base, windowSeconds: 0, classification: 'verified_fact' }),
+      'coordination_events_is_heuristic',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.coordinationEvents).values({ ...base, windowSeconds: -1 }),
+      'coordination_events_window_non_negative',
+    );
+    const [event] = await db.insert(schema.coordinationEvents).values({ ...base, windowSeconds: 120 }).returning();
+    await expectConstraintViolation(
+      db.insert(schema.coordinationEventMembers).values({ mapId: first.map.id, eventId: event.id, nodeId: second.holderNode.id }),
+      'coordination_event_members_node_fk',
     );
   });
 });

@@ -143,6 +143,31 @@ export const mapEdgeKind = pgEnum('map_edge_kind', ['funding', 'token_transfer']
 /** Peran wallet di peta. `connector` = bukan holder, muncul karena menghubungkan holder. */
 export const mapNodeRole = pgEnum('map_node_role', ['holder', 'funder', 'connector']);
 
+/**
+ * Label kelompok wallet sesuai PRD. Semuanya hasil heuristic; insider/team
+ * hanya boleh dipakai bila ada bukti transaksi langsung.
+ */
+export const clusterLabel = pgEnum('cluster_label', [
+  'visual_cluster',
+  'common_funding',
+  'coordinated_execution',
+  'bundled_or_sniper_activity',
+  'market_maker_possible',
+  'likely_linked',
+  'insider_or_team',
+  'false_positive_possible',
+  'inconclusive',
+]);
+
+/** Tingkat keyakinan dugaan dalam bahasa sederhana. */
+export const confidenceLevel = pgEnum('confidence_level', ['low', 'medium', 'high']);
+
+/** Jenis gerak serempak yang dideteksi di antara wallet peta. */
+export const coordinationKind = pgEnum('coordination_kind', ['funding_burst', 'same_block_buy', 'similar_amount', 'coordinated_sell']);
+
+/** Aksi transaksi pendukung temuan koordinasi. */
+export const coordinationAction = pgEnum('coordination_action', ['funding', 'buy', 'sell', 'add_liquidity', 'transfer']);
+
 export type ChainFamily = (typeof chainFamily.enumValues)[number];
 export type DataStatus = (typeof dataStatus.enumValues)[number];
 export type InfoClassification = (typeof infoClassification.enumValues)[number];
@@ -154,3 +179,7 @@ export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];
 export type MapNodeRole = (typeof mapNodeRole.enumValues)[number];
+export type ClusterLabel = (typeof clusterLabel.enumValues)[number];
+export type ConfidenceLevel = (typeof confidenceLevel.enumValues)[number];
+export type CoordinationKind = (typeof coordinationKind.enumValues)[number];
+export type CoordinationAction = (typeof coordinationAction.enumValues)[number];
