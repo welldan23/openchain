@@ -4,8 +4,11 @@ import { CircleDot } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EvidenceProvider } from "@/components/evidence/evidence-dialog";
 import { reportBlockAnchor, reportIssues } from "@/lib/report";
+import { shortenHash } from "@/lib/format";
+import { embedEvidence, type ReportEvidenceEntry } from "@/lib/report-evidence";
 import { addPickedItems } from "@/lib/report-picker";
 import type { InvestigationCase, InvestigationReport } from "@/lib/types";
+import { ReportEvidencePanel } from "./report-evidence-panel";
 import { ReportFindingsIndex } from "./report-findings-index";
 import { ReportPicker, type PickerSelection } from "./report-picker";
 import { ReportDocument, ReportHeader, ReportOutline, ReportReadinessPanel, ReportSnapshotPanel } from "./report-workspace";
@@ -55,6 +58,14 @@ export function ReportEditor({
     setMessage(parts.length > 0 ? `${parts.join(" dan ")} ditambahkan ke laporan.` : "Semua pilihan sudah ada di laporan.");
   }
 
+  function embed(entry: ReportEvidenceEntry) {
+    const result = embedEvidence(report, entry, new Date().toISOString());
+    if (!result.blockId || result.report === report) return;
+    setReport(result.report);
+    setHighlighted(new Set([result.blockId]));
+    setMessage(`Bukti ${shortenHash(entry.txHash)} disematkan ke bagian Bukti utama.`);
+  }
+
   const toolbar = (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -88,6 +99,9 @@ export function ReportEditor({
           <ReportOutline report={report} issues={issues} />
           <div className="min-w-0">
             <ReportDocument report={report} issues={issues} highlighted={highlighted} toolbar={toolbar} />
+            <div className="mt-5">
+              <ReportEvidencePanel report={report} onEmbed={embed} />
+            </div>
           </div>
           <div className="min-w-0 space-y-5">
             <ReportReadinessPanel issues={issues} />
