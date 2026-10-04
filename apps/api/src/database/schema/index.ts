@@ -13,3 +13,4 @@ export * from './activity.js';
 export * from './evidence.js';
 export * from './transfers.js';
 export * from './maps.js';
+export * from './multichain.js';

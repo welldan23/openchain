@@ -25,6 +25,7 @@ const MIGRATION_COUNT = (
 const EXPECTED_TABLES = [
   'address_flow_scans',
   'addresses',
+  'bridge_transfers',
   'chain_capabilities',
   'chain_smoke_checks',
   'chains',
@@ -45,6 +46,8 @@ const EXPECTED_TABLES = [
   'map_edges',
   'map_nodes',
   'movement_classifications',
+  'multichain_chain_activity',
+  'multichain_scans',
   'native_transfers',
   'provider_runs',
   'risk_finding_evidence',
@@ -1056,5 +1059,142 @@ describe('peta hubungan: kelompok wallet dan koordinasi', () => {
       db.insert(schema.coordinationEventMembers).values({ mapId: first.map.id, eventId: event.id, nodeId: second.holderNode.id }),
       'coordination_event_members_node_fk',
     );
+  });
+});
+
+describe('aktivitas lintas chain', () => {
+  async function scanFixture() {
+    const [scan] = await db
+      .insert(schema.multichainScans)
+      .values({
+        family: 'evm',
+        address: '0x' + 'Ab'.repeat(20),
+        addressNormalized: '0x' + 'ab'.repeat(20),
+        windowFrom: FETCHED_AT,
+        windowTo: FETCHED_AT,
+        status: 'partial',
+        statusReason: 'BNB Chain belum punya indexer',
+        scannedAt: FETCHED_AT,
+      })
+      .returning();
+    return scan;
+  }
+
+  it('ringkasan per chain: satu baris per chain, kosong bila tidak terbaca, dan ikut terhapus bersama pemindaian', async () => {
+    const scan = await scanFixture();
+    const onBase = await insertAddress('base', '0x' + 'a9'.repeat(20));
+    await db.insert(schema.multichainChainActivity).values([
+      { scanId: scan.id, chainId: 'base', addressId: onBase.id, status: 'complete', txCount: 4, inUsd: '120.50', outUsd: '0', counterpartyCount: 3 },
+      { scanId: scan.id, chainId: 'bsc', status: 'unavailable', statusReason: 'Belum ada indexer' },
+    ]);
+    await expectConstraintViolation(
+      db.insert(schema.multichainChainActivity).values({ scanId: scan.id, chainId: 'base', status: 'complete' }),
+      'multichain_chain_activity_scan_chain_unique',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.multichainChainActivity).values({ scanId: scan.id, chainId: 'ethereum', status: 'unavailable' }),
+      'multichain_chain_activity_unavailable_has_reason',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.multichainChainActivity).values({ scanId: scan.id, chainId: 'ethereum', status: 'unavailable', statusReason: 'RPC gagal', txCount: 0 }),
+      'multichain_chain_activity_unavailable_has_no_numbers',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.multichainChainActivity).values({ scanId: scan.id, chainId: 'ethereum', addressId: onBase.id, status: 'complete' }),
+      'multichain_chain_activity_chain_address_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.multichainScans).values({
+        family: 'evm',
+        address: 'x',
+        addressNormalized: 'x',
+        windowFrom: FETCHED_AT,
+        windowTo: FETCHED_AT,
+        status: 'unavailable',
+        scannedAt: FETCHED_AT,
+      }),
+      'multichain_scans_unavailable_has_reason',
+    );
+    await db.delete(schema.multichainScans).where(eq(schema.multichainScans.id, scan.id));
+    expect(await db.select().from(schema.multichainChainActivity).where(eq(schema.multichainChainActivity.scanId, scan.id))).toEqual([]);
+  });
+
+  it('transfer bridge: kaki kirim fakta di chain asal, pencocokan kaki terima selalu dugaan beralasan', async () => {
+    const sender = await insertAddress('ethereum', '0x' + 'b8'.repeat(20));
+    const bridge = await insertAddress('ethereum', '0x' + 'b9'.repeat(20));
+    const recipient = await insertAddress('base', '0x' + 'b8'.repeat(20));
+    const relayer = await insertAddress('base', '0x' + 'ba'.repeat(20));
+    const native = async (chainId: string, from: number, to: number, seed: string) =>
+      (
+        await db
+          .insert(schema.nativeTransfers)
+          .values({
+            chainId,
+            txHash: normalizeTxHash('evm', `0x${seed.repeat(32)}`),
+            kind: 'transaction',
+            fromAddressId: from,
+            toAddressId: to,
+            amountRaw: '1000',
+            blockNumber: 10,
+            blockTimestamp: FETCHED_AT,
+            fetchedAt: FETCHED_AT,
+          })
+          .returning()
+      )[0];
+    const sent = await native('ethereum', sender.id, bridge.id, 'c1');
+    const received = await native('base', relayer.id, recipient.id, 'c2');
+    const pending = {
+      sourceChainId: 'ethereum',
+      destChainId: 'base',
+      bridgeAddressId: bridge.id,
+      senderAddressId: sender.id,
+      sentNativeTransferId: sent.id,
+      amountSentRaw: '1000',
+      status: 'pending' as const,
+      sentAt: FETCHED_AT,
+      updatedAt: FETCHED_AT,
+    };
+    const matched = {
+      ...pending,
+      status: 'matched' as const,
+      recipientAddressId: recipient.id,
+      receivedNativeTransferId: received.id,
+      amountReceivedRaw: '998',
+      receivedAt: new Date(FETCHED_AT.getTime() + 60_000),
+      matchHeuristic: 'bridge-amount-time-v1',
+      matchConfidence: 'medium' as const,
+      matchReason: 'Jumlah selisih 0,2% dan diterima 1 menit kemudian',
+    };
+
+    await expectConstraintViolation(db.insert(schema.bridgeTransfers).values({ ...pending, status: 'matched' }), 'bridge_transfers_matched_has_evidence');
+    await expectConstraintViolation(
+      db.insert(schema.bridgeTransfers).values({ ...pending, receivedNativeTransferId: received.id }),
+      'bridge_transfers_matched_has_evidence',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.bridgeTransfers).values({ ...matched, matchConfidence: null }),
+      'bridge_transfers_matched_is_explained',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.bridgeTransfers).values({ ...matched, matchClassification: 'verified_fact' }),
+      'bridge_transfers_match_is_heuristic',
+    );
+    await expectConstraintViolation(db.insert(schema.bridgeTransfers).values({ ...pending, destChainId: 'ethereum' }), 'bridge_transfers_distinct_chains');
+    // Kaki kirim wajib transfer di chain asal, kaki terima di chain tujuan.
+    await expectConstraintViolation(
+      db.insert(schema.bridgeTransfers).values({ ...pending, sentNativeTransferId: received.id }),
+      'bridge_transfers_sent_native_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.bridgeTransfers).values({ ...matched, receivedNativeTransferId: sent.id }),
+      'bridge_transfers_received_native_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.bridgeTransfers).values({ ...matched, receivedAt: new Date(FETCHED_AT.getTime() - 1) }),
+      'bridge_transfers_received_after_sent',
+    );
+    const [row] = await db.insert(schema.bridgeTransfers).values(matched).returning();
+    expect(row).toMatchObject({ status: 'matched', matchClassification: 'heuristic', matchConfidence: 'medium' });
+    await expectConstraintViolation(db.insert(schema.bridgeTransfers).values(pending), 'bridge_transfers_sent_native_unique');
   });
 });

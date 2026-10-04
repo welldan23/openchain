@@ -66,6 +66,8 @@ export const nativeTransfers = pgTable(
       t.kind,
       t.tracePath,
     ),
+    // Dipakai foreign key komposit agar transfer bridge menunjuk transfer di chain yang benar.
+    unique('native_transfers_chain_id_unique').on(t.chainId, t.id),
     index('native_transfers_from_time_idx').on(t.fromAddressId, t.blockTimestamp),
     index('native_transfers_to_time_idx').on(t.toAddressId, t.blockTimestamp),
     index('native_transfers_chain_block_idx').on(t.chainId, t.blockNumber),

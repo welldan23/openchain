@@ -722,6 +722,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
 | Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
+| Lintas chain | `multichain_scans`, `multichain_chain_activity`, `bridge_transfers` |
 | Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges`, `map_clusters` (+ `map_cluster_members`, `map_cluster_signals`, `map_cluster_signal_evidence`), `coordination_events` (+ `coordination_event_members`, `coordination_txs`) |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
@@ -779,5 +780,18 @@ Aturan PRD yang dijaga langsung oleh database:
   sinyal dan transaksi koordinasi menunjuk tepat satu transfer tersimpan, jadi
   pihak, jumlah, dan waktunya tetap fakta on-chain. Semuanya ikut terhapus
   bersama peta, transfernya tidak.
+
+- Aktivitas lintas chain disimpan per pemindaian (`multichain_scans`: address
+  per keluarga chain, rentang waktu, status gabungan) dengan satu ringkasan per
+  chain (`multichain_chain_activity`) yang menunjuk pemindaian aliran dana
+  dasarnya. Chain yang tidak terbaca wajib punya alasan dan tidak boleh punya
+  angka; angka yang belum diketahui kosong, bukan nol. Address wajib dari chain
+  baris itu.
+- `bridge_transfers` menyimpan perpindahan lewat bridge. Kaki kirim adalah
+  transfer tersimpan di chain asal; kaki terima transfer di chain tujuan
+  (dijaga foreign key komposit, jadi tidak bisa tertukar chain). `matched`
+  wajib menunjuk kaki terima, penerima, jumlah, waktu, nama heuristic, dan
+  keyakinan; `pending`/`unmatched` tidak boleh punya kaki terima. Pencocokan
+  selalu `heuristic` dan penerimaan tidak boleh sebelum pengiriman.
 
 Tabel `investigations` menyusul di task fitur yang memakainya.

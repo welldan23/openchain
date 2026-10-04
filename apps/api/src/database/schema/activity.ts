@@ -93,6 +93,8 @@ export const tokenTransfers = pgTable(
       t.txHash,
       t.logIndex,
     ),
+    // Dipakai foreign key komposit agar transfer bridge menunjuk transfer di chain yang benar.
+    unique('token_transfers_chain_id_unique').on(t.chainId, t.id),
     index('token_transfers_token_block_idx').on(t.tokenId, t.blockNumber),
     // Aliran dana dibaca per address: transfer keluar dan masuk, terbaru dulu.
     index('token_transfers_from_time_idx').on(t.fromAddressId, t.blockTimestamp),

@@ -78,6 +78,13 @@
       "when": 1791112448482,
       "tag": "0010_chain_support_and_classification",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791112759471,
+      "tag": "0011_multichain_activity",
+      "breakpoints": true
     }
   ]
 }

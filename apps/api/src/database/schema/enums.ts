@@ -52,6 +52,13 @@ export const chainCapability = pgEnum('chain_capability', [
   'multichain_profile',
 ]);
 
+/**
+ * Pencocokan kiriman bridge di chain asal dengan penerimaan di chain tujuan:
+ * `matched` = penerimaan ditemukan (dugaan), `pending` = masih dalam batas waktu
+ * wajar, `unmatched` = lewat batas waktu tanpa penerimaan yang cocok.
+ */
+export const bridgeMatchStatus = pgEnum('bridge_match_status', ['matched', 'pending', 'unmatched']);
+
 /** Klasifikasi informasi: dari fakta terverifikasi sampai data yang tidak tersedia. */
 export const infoClassification = pgEnum('info_classification', [
   'verified_fact',
@@ -191,6 +198,7 @@ export type EntityLabelType = (typeof entityLabelType.enumValues)[number];
 export type CheckStatus = (typeof checkStatus.enumValues)[number];
 export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];
 export type ChainCapability = (typeof chainCapability.enumValues)[number];
+export type BridgeMatchStatus = (typeof bridgeMatchStatus.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];
