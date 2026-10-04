@@ -95,7 +95,7 @@ const funderRisk: ObjectRisk = {
   chain: funderFlow.chain,
   address: funderFlow.address,
   title: funderFlow.label?.name ?? "Wallet",
-  score: 55,
+  score: 45,
   level: "medium",
   reasons: [
     {
@@ -105,7 +105,7 @@ const funderRisk: ObjectRisk = {
         "Kelima wallet menerima ETH dengan nominal mirip (1,95–2,2 ETH), lalu membeli NBLA di blok yang sama dengan penambahan likuiditas. Polanya mirip bundler, tapi belum pasti dioperasikan pihak yang sama.",
       severity: "high",
       classification: "heuristic",
-      points: 25,
+      points: 20,
       evidenceTxHashes: [tx("nbla:fund-bundler-1"), tx("nbla:fund-bundler-2"), tx("flow:nbla-fund-bundler-3")],
     },
     {
@@ -114,7 +114,7 @@ const funderRisk: ObjectRisk = {
       description: "Dua wallet mengembalikan ETH dan satu wallet mengirim 4,2 juta NBLA ke address ini setelah peluncuran.",
       severity: "medium",
       classification: "fact",
-      points: 15,
+      points: 12,
       evidenceTxHashes: [tx("flow:funder-back-from-bundler-1"), tx("flow:funder-nbla-from-bundler-3")],
     },
     {
@@ -132,7 +132,7 @@ const funderRisk: ObjectRisk = {
       description: "1,5 ETH dikirim ke kontrak bridge, lalu 1,4985 ETH diterima address yang sama di Base.",
       severity: "low",
       classification: "calculation",
-      points: 10,
+      points: 8,
       evidenceTxHashes: [tx("flow:funder-to-bridge"), tx("flow:base-funder-from-bridge")],
     },
   ],

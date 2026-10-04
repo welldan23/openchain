@@ -1,12 +1,12 @@
 import { ShieldAlert, ShieldQuestion } from "lucide-react";
 import { RiskLevelBadge, SeverityBadge } from "@/components/badges";
 import { ClassificationBadge } from "@/components/classification-badge";
+import { RiskScoreSummary } from "@/components/risk/risk-score";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
 import { explorerTxUrl } from "@/lib/chains";
 import { findingAnchorId } from "@/lib/anchors";
-import { RISK_LEVEL_META } from "@/lib/labels";
 import type { ChainId, RiskSummary } from "@/lib/types";
 
 interface RiskPanelProps {
@@ -15,7 +15,6 @@ interface RiskPanelProps {
 }
 
 export function RiskPanel({ chain, risk }: RiskPanelProps) {
-  const level = RISK_LEVEL_META[risk.level];
   const unrated = risk.level === "unknown";
   return (
     <Panel
@@ -25,35 +24,17 @@ export function RiskPanel({ chain, risk }: RiskPanelProps) {
       icon={ShieldAlert}
       action={<RiskLevelBadge level={risk.level} />}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
-        <p className="shrink-0">
-          <span className="text-3xl font-semibold tracking-tight">{unrated ? "–" : risk.score}</span>
-          <span className="text-sm text-muted">/100</span>
-        </p>
-        <div className="flex-1">
-          <div
-            role="meter"
-            aria-label="Skor risiko"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={unrated ? 0 : risk.score}
-            aria-valuetext={unrated ? "Belum dinilai" : undefined}
-            className="h-2 overflow-hidden rounded-full bg-surface-raised"
-          >
-            <div
-              className={`h-full rounded-full ${level.barClass}`}
-              style={{ width: `${unrated ? 0 : risk.score}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted">
-            {unrated
-              ? "Skor belum bisa dihitung karena data token belum cukup."
-              : risk.findings.length > 0
-                ? `Skor gabungan dari ${risk.findings.length} temuan. Skor ini estimasi, jadi cek bukti tiap temuan sebelum mengambil kesimpulan.`
-                : "Skor ini belum didukung temuan apa pun, jadi anggap sebagai perkiraan awal."}
-          </p>
-        </div>
-      </div>
+      <RiskScoreSummary
+        score={unrated ? null : risk.score}
+        level={risk.level}
+        note={
+          unrated
+            ? "Skor belum bisa dihitung karena data token belum cukup."
+            : risk.findings.length > 0
+              ? `Skor gabungan dari ${risk.findings.length} temuan. Skor ini estimasi, jadi cek bukti tiap temuan sebelum mengambil kesimpulan.`
+              : "Skor ini belum didukung temuan apa pun, jadi anggap sebagai perkiraan awal."
+        }
+      />
 
       {risk.findings.length === 0 ? (
         <EmptyState

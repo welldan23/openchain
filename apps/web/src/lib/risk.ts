@@ -4,7 +4,7 @@
  * didukung poin alasan tidak disamarkan; selisihnya ditampilkan apa adanya.
  */
 import { CLASSIFICATION_ORDER } from "./labels";
-import type { FindingClassification, ObjectRisk, RiskLabel, RiskReason, RiskSeverity, RiskWarning } from "./types";
+import type { FindingClassification, ObjectRisk, RiskLabel, RiskLevel, RiskReason, RiskSeverity, RiskWarning } from "./types";
 
 export const SEVERITY_ORDER: RiskSeverity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -78,4 +78,26 @@ export function sortLabels(labels: RiskLabel[]): RiskLabel[] {
 /** Peringatan dengan tingkat tinggi atau kritis, untuk penanda di kepala halaman. */
 export function urgentWarnings(warnings: RiskWarning[]): RiskWarning[] {
   return warnings.filter((warning) => severityRank(warning.severity) <= severityRank("high"));
+}
+
+export type RatedRiskLevel = Exclude<RiskLevel, "unknown">;
+
+/** Rentang skor tiap tingkat risiko; sama dengan batas di backend (`riskLevelFromScore`). */
+export const RISK_BANDS: Array<{ level: RatedRiskLevel; label: string; min: number; max: number }> = [
+  { level: "low", label: "Rendah", min: 0, max: 24 },
+  { level: "medium", label: "Sedang", min: 25, max: 49 },
+  { level: "high", label: "Tinggi", min: 50, max: 74 },
+  { level: "critical", label: "Kritis", min: 75, max: 100 },
+];
+
+/** Tingkat risiko dari skor 0–100; tanpa skor berarti belum dinilai, bukan rendah. */
+export function riskLevelForScore(score: number | null): RiskLevel {
+  if (score === null || !Number.isFinite(score)) return "unknown";
+  const clamped = scorePosition(score);
+  return RISK_BANDS.findLast((band) => clamped >= band.min)!.level;
+}
+
+/** Posisi skor di skala, dalam persen lebar; dibatasi 0–100. */
+export function scorePosition(score: number): number {
+  return Math.min(100, Math.max(0, score));
 }

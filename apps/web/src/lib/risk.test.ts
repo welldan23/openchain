@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { labelSourceSummary, scoreBreakdown, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "./risk";
+import { MOCK_RISKS } from "./mock/risk";
+import { MOCK_TOKENS } from "./mock/tokens";
+import { labelSourceSummary, RISK_BANDS, riskLevelForScore, scoreBreakdown, scorePosition, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "./risk";
 import type { RiskLabel, RiskReason, RiskWarning } from "./types";
 
 const reason = (id: string, severity: RiskReason["severity"], classification: RiskReason["classification"], points: number | null): RiskReason => ({
@@ -84,5 +86,26 @@ describe("halaman risiko objek", () => {
     const labels = [label("dugaan-rendah", "heuristic", "OpenChain heuristic", 0.4), label("dugaan-tinggi", "heuristic", "OpenChain heuristic", 0.8), label("explorer", "external", "Label publik explorer")];
     expect(sortLabels(labels).map((item) => item.name)).toEqual(["explorer", "dugaan-tinggi", "dugaan-rendah"]);
     expect(labelSourceSummary(labels)).toEqual({ external: 1, heuristic: 2, sourceNames: ["Label publik explorer", "OpenChain heuristic"] });
+  });
+
+  it("tingkat dari skor memakai batas yang sama dengan backend: <25, 25–49, 50–74, ≥75", () => {
+    expect([0, 24, 25, 49, 50, 74, 75, 100].map(riskLevelForScore)).toEqual(["low", "low", "medium", "medium", "high", "high", "critical", "critical"]);
+    expect(riskLevelForScore(24.5)).toBe("low");
+    expect(riskLevelForScore(null)).toBe("unknown");
+    expect(riskLevelForScore(Number.NaN)).toBe("unknown");
+    expect([scorePosition(-5), scorePosition(130), scorePosition(68)]).toEqual([0, 100, 68]);
+  });
+
+  it("rentang skala menutup 0–100 tanpa celah atau tumpang tindih", () => {
+    expect(RISK_BANDS[0].min).toBe(0);
+    expect(RISK_BANDS.at(-1)?.max).toBe(100);
+    RISK_BANDS.slice(1).forEach((band, index) => expect(band.min).toBe(RISK_BANDS[index].max + 1));
+  });
+
+  it("tingkat di data tiruan cocok dengan skornya", () => {
+    for (const risk of MOCK_RISKS) expect(risk.level, risk.title).toBe(riskLevelForScore(risk.score));
+    for (const { token, risk } of MOCK_TOKENS) {
+      expect(risk.level, token.symbol).toBe(risk.level === "unknown" ? "unknown" : riskLevelForScore(risk.score));
+    }
   });
 });

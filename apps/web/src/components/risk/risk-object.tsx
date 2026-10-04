@@ -20,6 +20,7 @@ import { ChainBadge, EntityLabelBadge, RiskLevelBadge, SeverityBadge } from "@/c
 import { CaseDataStatusBadge } from "@/components/case/case-badges";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { EvidenceTrigger } from "@/components/evidence/evidence-dialog";
+import { RiskScoreSummary } from "@/components/risk/risk-score";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { HashLink } from "@/components/ui/hash-link";
@@ -27,7 +28,7 @@ import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
 import { explorerAddressUrl, explorerTxUrl, getChain } from "@/lib/chains";
 import { formatDateTime, formatNumber, formatPct, formatRelativeTime, shortenHash } from "@/lib/format";
-import { CASE_DATA_STATUS_META, CLASSIFICATION_META, RISK_LEVEL_META, RISK_OBJECT_KIND_META } from "@/lib/labels";
+import { CASE_DATA_STATUS_META, CLASSIFICATION_META, RISK_OBJECT_KIND_META } from "@/lib/labels";
 import { labelSourceSummary, scoreBreakdown, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "@/lib/risk";
 import type { ChainId, ObjectRisk, RiskObjectLink } from "@/lib/types";
 
@@ -130,35 +131,19 @@ export function RiskDataStatusNotice({ risk }: { risk: ObjectRisk }) {
 
 /** Skor gabungan beserta rincian poin per jenis informasi. */
 export function RiskScorePanel({ risk }: { risk: ObjectRisk }) {
-  const level = RISK_LEVEL_META[risk.level];
   const breakdown = scoreBreakdown(risk);
   const unrated = risk.score === null;
   return (
     <Panel id="skor" title="Skor risiko" description="Jumlah poin dari alasan penilaian di bawah." icon={ShieldAlert} action={<RiskLevelBadge level={risk.level} />}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
-        <p className="shrink-0">
-          <span className="text-3xl font-semibold tracking-tight">{unrated ? "–" : risk.score}</span>
-          <span className="text-sm text-muted">/100</span>
-        </p>
-        <div className="flex-1">
-          <div
-            role="meter"
-            aria-label="Skor risiko"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={risk.score ?? 0}
-            aria-valuetext={unrated ? "Belum dinilai" : undefined}
-            className="h-2 overflow-hidden rounded-full bg-surface-raised"
-          >
-            <div className={`h-full rounded-full ${level.barClass}`} style={{ width: `${risk.score ?? 0}%` }} />
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted">
-            {unrated
-              ? `${risk.snapshot.statusReason ?? "Belum dinilai karena datanya belum cukup."} Ini bukan berarti aman.`
-              : "Skor ini estimasi. Cek bukti tiap alasan sebelum mengambil kesimpulan."}
-          </p>
-        </div>
-      </div>
+      <RiskScoreSummary
+        score={risk.score}
+        level={risk.level}
+        note={
+          unrated
+            ? `${risk.snapshot.statusReason ?? "Belum dinilai karena datanya belum cukup."} Ini bukan berarti aman.`
+            : "Skor ini estimasi. Cek bukti tiap alasan sebelum mengambil kesimpulan."
+        }
+      />
 
       {breakdown.parts.length > 0 ? (
         <div className="mt-5">

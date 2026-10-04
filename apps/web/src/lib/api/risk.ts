@@ -36,11 +36,12 @@ export async function getObjectRisk(chain: ChainId, address: string): Promise<Ob
 
 /** Objek contoh untuk dibuka dari beranda. */
 export async function listSampleRisks(): Promise<ObjectRiskSummary[]> {
-  return MOCK_RISKS.map(({ kind, chain, address, title, level, warnings }) => ({
+  return MOCK_RISKS.map(({ kind, chain, address, title, score, level, warnings }) => ({
     kind,
     chain,
     address,
     title,
+    score,
     level,
     warningCount: warnings.length,
   }));

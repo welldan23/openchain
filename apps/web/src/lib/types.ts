@@ -773,6 +773,7 @@ export interface ObjectRiskSummary {
   chain: ChainId;
   address: string;
   title: string;
+  score: number | null;
   level: RiskLevel;
   warningCount: number;
 }

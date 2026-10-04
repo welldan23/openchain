@@ -1,6 +1,7 @@
 import { BellRing, ChevronRight, FolderOpen, Footprints, Globe2, Network, Search, ShieldAlert, TriangleAlert, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { ChainBadge, EntityLabelBadge, RiskLevelBadge } from "@/components/badges";
+import { RiskScoreBadge } from "@/components/risk/risk-score";
 import { flowFailureDemoPath, flowPath, listSampleFlows } from "@/lib/api/flows";
 import { listSampleMaps, mapFailureDemoPath, mapPath } from "@/lib/api/maps";
 import { listSampleMultichain, multichainFailureDemoPath, multichainPath } from "@/lib/api/multichain";
@@ -289,7 +290,7 @@ export default async function Home() {
                   <span className="mt-1 flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] text-muted">{RISK_OBJECT_KIND_META[risk.kind].label}</span>
                     <ChainBadge chain={risk.chain} />
-                    <RiskLevelBadge level={risk.level} />
+                    <RiskScoreBadge score={risk.score} level={risk.level} />
                     {risk.warningCount > 0 ? (
                       <span className="inline-flex items-center gap-1 text-[11px] text-orange-300">
                         <BellRing className="size-3" aria-hidden />
