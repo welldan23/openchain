@@ -29,7 +29,11 @@ describe("pemilih entitas dan temuan laporan", () => {
     expect(result.addedBlockIds).toEqual([entityBlockId(firstSubject), `klaim-${newFinding.id}`]);
     expect(result.report.sections.map((section) => section.id).slice(0, 3)).toEqual(["ringkasan", ENTITY_SECTION.id, "temuan"]);
     const added = result.report.sections.find((section) => section.id === "temuan")!.blocks.find((block) => block.id === `klaim-${newFinding.id}`);
-    expect(added).toMatchObject({ kind: "claim", claim: { provider: source.snapshot.sources.join(", "), observedAt: source.snapshot.fetchedAt } });
+    expect(added).toMatchObject({ kind: "claim", claim: { observedAt: source.snapshot.fetchedAt } });
+    const provider = added?.kind === "claim" ? added.claim.provider : null;
+    expect(provider).toBe(
+      newFinding.classification === "heuristic" ? `OpenChain heuristic (data: ${source.snapshot.sources.join(", ")})` : source.snapshot.sources.join(", "),
+    );
     const stored = new Set(result.report.evidence.map((item) => item.txHash.toLowerCase()));
     const expected = new Set(source.evidence.map((item) => item.txHash.toLowerCase()));
     for (const hash of newFinding.evidenceTxHashes) expect(stored.has(hash.toLowerCase())).toBe(expected.has(hash.toLowerCase()));

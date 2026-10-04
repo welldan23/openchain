@@ -84,7 +84,10 @@ export function addPickedItems(
   const subjects = items.subjects.filter((item) => !item.inReport && selection.subjectKeys.includes(item.key));
   const findings = items.findings.filter((item) => !item.inReport && selection.findingIds.includes(item.key));
   const entityBlocks: ReportBlock[] = subjects.map(({ subject }) => ({ kind: "entity", id: entityBlockId(subject), subject }));
-  const provider = source.snapshot.sources.length > 0 ? source.snapshot.sources.join(", ") : null;
+  const dataSources = source.snapshot.sources.length > 0 ? source.snapshot.sources.join(", ") : null;
+  // Dugaan dibuat heuristic OpenChain dari data provider; klaim lain langsung dari provider datanya.
+  const providerFor = (finding: CaseFinding) =>
+    finding.classification === "heuristic" ? `OpenChain heuristic${dataSources ? ` (data: ${dataSources})` : ""}` : dataSources;
   const claimBlocks: ReportBlock[] = findings.map(({ finding }) => ({
     kind: "claim",
     id: findingBlockId(finding),
@@ -93,7 +96,7 @@ export function addPickedItems(
       title: finding.title,
       detail: finding.detail,
       classification: finding.classification,
-      provider,
+      provider: providerFor(finding),
       observedAt: source.snapshot.fetchedAt,
       evidenceTxHashes: finding.evidenceTxHashes,
     },

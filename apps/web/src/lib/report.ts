@@ -4,7 +4,8 @@
  * transaksi bila tersedia. Kekurangan ditampilkan sebagai masalah, tidak
  * diisi tebakan.
  */
-import type { InvestigationReport, ReportBlock, ReportClaim, ReportSection } from "./types";
+import { CLASSIFICATION_ORDER } from "./labels";
+import type { FindingClassification, InvestigationReport, ReportBlock, ReportClaim, ReportSection } from "./types";
 
 export type ReportIssueKind =
   | "claim_without_provider"
@@ -124,4 +125,56 @@ export function reportOutline(report: InvestigationReport, issues: ReportIssue[]
     blockers: issues.filter((issue) => issue.sectionId === section.id && issue.level === "blocker").length,
     warnings: issues.filter((issue) => issue.sectionId === section.id && issue.level === "warning").length,
   }));
+}
+
+export interface ReportClaimEntry {
+  blockId: string;
+  sectionId: string;
+  sectionTitle: string;
+  claim: ReportClaim;
+  /** Provider dan waktu data sudah dicantumkan. */
+  hasProvenance: boolean;
+  evidenceCount: number;
+}
+
+export type ClaimOrder = "document" | "strength";
+
+/** Semua klaim di laporan, urut sesuai letaknya. */
+export function reportClaims(report: Pick<InvestigationReport, "sections">): ReportClaimEntry[] {
+  return report.sections.flatMap((section) =>
+    section.blocks.flatMap((block) =>
+      block.kind === "claim"
+        ? [
+            {
+              blockId: block.id,
+              sectionId: section.id,
+              sectionTitle: section.title,
+              claim: block.claim,
+              hasProvenance: Boolean(block.claim.provider && block.claim.observedAt),
+              evidenceCount: new Set(block.claim.evidenceTxHashes.map((hash) => hash.toLowerCase())).size,
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
+/** Jumlah klaim per jenis informasi, urut dari bukti terkuat; jenis tanpa klaim tidak ikut. */
+export function claimClassificationCounts(entries: ReportClaimEntry[]): Array<{ classification: FindingClassification; count: number }> {
+  return CLASSIFICATION_ORDER.map((classification) => ({
+    classification,
+    count: entries.filter((entry) => entry.claim.classification === classification).length,
+  })).filter((item) => item.count > 0);
+}
+
+/** Saring per jenis (`null` = semua) lalu urutkan; urutan "kekuatan" tetap stabil per letak. */
+export function filterClaims(entries: ReportClaimEntry[], classification: FindingClassification | null, order: ClaimOrder): ReportClaimEntry[] {
+  const filtered = classification ? entries.filter((entry) => entry.claim.classification === classification) : [...entries];
+  if (order === "document") return filtered;
+  const position = new Map(entries.map((entry, index) => [entry.blockId, index]));
+  return filtered.sort(
+    (a, b) =>
+      CLASSIFICATION_ORDER.indexOf(a.claim.classification) - CLASSIFICATION_ORDER.indexOf(b.claim.classification) ||
+      position.get(a.blockId)! - position.get(b.blockId)!,
+  );
 }

@@ -9,7 +9,7 @@ import { Panel } from "@/components/ui/panel";
 import { explorerTxUrl, getChain } from "@/lib/chains";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber, formatRelativeTime, shortenHash } from "@/lib/format";
-import { CASE_DATA_STATUS_META, RISK_TONES } from "@/lib/labels";
+import { CASE_DATA_STATUS_META, CLASSIFICATION_STRIPE, RISK_TONES } from "@/lib/labels";
 import { reportBlockAnchor, reportOutline, reportSectionAnchor, reportStats, type ReportIssue } from "@/lib/report";
 import type { InvestigationReport, ReportBlock } from "@/lib/types";
 import { ReportReadinessBadge, ReportStatusBadge } from "./report-badges";
@@ -142,8 +142,9 @@ function Block({ block, report, flagged, highlighted }: { block: ReportBlock; re
       <div
         id={anchor}
         className={cn(
-          "scroll-mt-20 rounded-lg border p-3 transition sm:p-4",
+          "scroll-mt-20 rounded-lg border border-l-4 p-3 transition sm:p-4",
           flagged ? "border-rose-400/40" : highlighted ? "border-accent/60 bg-accent/5" : "border-line",
+          CLASSIFICATION_STRIPE[claim.classification],
         )}
       >
         <div className="flex flex-wrap items-start justify-between gap-2">

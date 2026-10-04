@@ -6,6 +6,7 @@ import { EvidenceProvider } from "@/components/evidence/evidence-dialog";
 import { reportBlockAnchor, reportIssues } from "@/lib/report";
 import { addPickedItems } from "@/lib/report-picker";
 import type { InvestigationCase, InvestigationReport } from "@/lib/types";
+import { ReportFindingsIndex } from "./report-findings-index";
 import { ReportPicker, type PickerSelection } from "./report-picker";
 import { ReportDocument, ReportHeader, ReportOutline, ReportReadinessPanel, ReportSnapshotPanel } from "./report-workspace";
 
@@ -90,6 +91,7 @@ export function ReportEditor({
           </div>
           <div className="min-w-0 space-y-5">
             <ReportReadinessPanel issues={issues} />
+            <ReportFindingsIndex report={report} />
             <ReportSnapshotPanel report={report} />
           </div>
         </div>

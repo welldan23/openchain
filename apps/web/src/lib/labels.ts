@@ -81,6 +81,16 @@ export const CLASSIFICATION_META: Record<
   },
 };
 
+/** Garis tepi kiri sebagai penanda jenis informasi pada kartu klaim; warnanya sama dengan badge. */
+export const CLASSIFICATION_STRIPE: Record<InfoClassification, string> = {
+  fact: "border-l-emerald-400",
+  calculation: "border-l-sky-400",
+  heuristic: "border-l-amber-400",
+  external_label: "border-l-violet-400",
+  assumption: "border-l-slate-400",
+  unavailable: "border-l-rose-400",
+};
+
 /**
  * Nada risiko: satu set warna untuk tingkat risiko objek dan keparahan
  * temuan, supaya "tinggi" selalu tampil sama di mana pun. Ikonnya ada di

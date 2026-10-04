@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_REPORTS } from "./mock/reports";
-import { reportIssues, reportOutline, reportStats } from "./report";
+import { claimClassificationCounts, filterClaims, reportClaims, reportIssues, reportOutline, reportStats } from "./report";
 import type { InvestigationReport, ReportClaim } from "./types";
 
 const claim = (id: string, overrides: Partial<ReportClaim> = {}): ReportClaim => ({
@@ -115,5 +115,36 @@ describe("kesiapan laporan", () => {
     };
     expect(detail("bukti-1").movements[0].fromLabel?.type).toBe("exchange");
     expect(detail("bukti-2").movements[0].toLabel?.type).toBe("bot");
+  });
+
+  it("daftar temuan: urut sesuai laporan, jumlah per jenis, saringan, dan urutan kekuatan bukti", () => {
+    const sample = report({
+      sections: [
+        {
+          id: "a",
+          title: "Temuan",
+          blocks: [
+            { kind: "claim", id: "h", claim: claim("h", { classification: "heuristic" }) },
+            { kind: "paragraph", id: "p", text: "x" },
+            { kind: "claim", id: "asumsi", claim: claim("asumsi", { classification: "assumption", provider: null, evidenceTxHashes: [] }) },
+          ],
+        },
+        { id: "b", title: "Lain", blocks: [{ kind: "claim", id: "f", claim: claim("f", { evidenceTxHashes: ["0xAA", "0xaa", "0xbb"] }) }] },
+      ],
+    });
+    const entries = reportClaims(sample);
+    expect(entries.map((entry) => [entry.blockId, entry.sectionTitle, entry.hasProvenance, entry.evidenceCount])).toEqual([
+      ["h", "Temuan", true, 1],
+      ["asumsi", "Temuan", false, 0],
+      ["f", "Lain", true, 2],
+    ]);
+    expect(claimClassificationCounts(entries)).toEqual([
+      { classification: "fact", count: 1 },
+      { classification: "heuristic", count: 1 },
+      { classification: "assumption", count: 1 },
+    ]);
+    expect(filterClaims(entries, "heuristic", "document").map((entry) => entry.blockId)).toEqual(["h"]);
+    expect(filterClaims(entries, null, "strength").map((entry) => entry.blockId)).toEqual(["f", "h", "asumsi"]);
+    expect(filterClaims(entries, null, "document").map((entry) => entry.blockId)).toEqual(["h", "asumsi", "f"]);
   });
 });
