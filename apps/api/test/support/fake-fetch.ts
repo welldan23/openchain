@@ -35,6 +35,7 @@ export function fakeFetch(replies: Reply[] = [], fallback?: (request: RecordedRe
   });
   return {
     http,
+    fetchImpl,
     requests,
     sleeps,
     push: (...more: Reply[]) => queue.push(...more),

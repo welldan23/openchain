@@ -9,6 +9,7 @@
  * di log URL.
  */
 import type { EntityLabelType } from '../database/schema/enums.js';
+import { CACHE_TTL_MS } from './cache-policy.js';
 import { HttpStatusError, type HttpClient } from './http-client.js';
 import {
   ProviderError,
@@ -313,11 +314,14 @@ export class BlockscoutProvider implements ExplorerProvider, IndexedDataProvider
   private async get(path: string): Promise<RawRecord | null> {
     let raw: unknown;
     try {
+      const url = `${this.config.baseUrl.replace(/\/+$/, '')}/api/v2${path}`;
       raw = await this.http.requestJson<unknown>({
         provider: this.name,
-        url: `${this.config.baseUrl.replace(/\/+$/, '')}/api/v2${path}`,
+        url,
         headers: this.config.apiKey ? { authorization: `Bearer ${this.config.apiKey}` } : undefined,
         timeoutMs: this.config.timeoutMs,
+        cacheTtlMs: CACHE_TTL_MS.indexer,
+        cacheKey: url,
       });
     } catch (error) {
       if (error instanceof HttpStatusError && error.status === 404) return null;

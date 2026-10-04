@@ -4,6 +4,7 @@
  * error, karena URL RPC atau header bisa berisi API key.
  */
 import { ProviderError } from './provider.types.js';
+import type { ResponseCache } from './response-cache.js';
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 export type Sleep = (ms: number) => Promise<void>;
@@ -19,6 +20,15 @@ export interface JsonRequest {
   timeoutMs?: number;
   /** Percobaan ulang untuk HTTP 429, 5xx, timeout, dan gangguan koneksi. */
   retries?: number;
+  /**
+   * Simpan respons berhasil selama ini (ms) bila klien punya cache. Hanya untuk
+   * permintaan yang aman diulang; kosong atau 0 berarti tidak di-cache.
+   */
+  cacheTtlMs?: number;
+  /** Kunci cache; wajib bila `cacheTtlMs` diisi (mis. tanpa id JSON-RPC yang berubah). */
+  cacheKey?: string;
+  /** Respons yang boleh disimpan; default semua respons berhasil. */
+  cacheable?: (value: unknown) => boolean;
 }
 
 /** Provider membalas dengan status HTTP gagal. */
@@ -47,13 +57,22 @@ export class HttpClient {
   constructor(
     private readonly fetchImpl: FetchLike = (url, init) => fetch(url, init),
     private readonly sleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    readonly cache: ResponseCache | null = null,
   ) {}
 
   async requestJson<T>(request: JsonRequest): Promise<T> {
+    const cacheKey = this.cache && request.cacheTtlMs && request.cacheKey ? `${request.provider}|${request.cacheKey}` : null;
+    if (cacheKey) {
+      const cached = this.cache!.get<T>(cacheKey);
+      if (cached !== undefined) return cached;
+    }
     const retries = request.retries ?? DEFAULT_RETRIES;
     for (let attempt = 0; ; attempt++) {
       const outcome = await this.attempt(request);
-      if (outcome.ok) return outcome.value as T;
+      if (outcome.ok) {
+        if (cacheKey && (request.cacheable?.(outcome.value) ?? true)) this.cache!.set(cacheKey, outcome.value, request.cacheTtlMs!);
+        return outcome.value as T;
+      }
       if (!outcome.retryable || attempt >= retries) throw outcome.error;
       await this.sleep(outcome.retryAfterMs ?? Math.min(BASE_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS));
     }

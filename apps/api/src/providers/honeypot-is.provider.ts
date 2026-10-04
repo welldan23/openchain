@@ -6,6 +6,7 @@
  * Syarat pakai honeypot.is: API tidak boleh dijual ulang atau dibuka ke pihak
  * ketiga, dan tidak boleh dipakai untuk produk yang bersaing langsung.
  */
+import { CACHE_TTL_MS } from './cache-policy.js';
 import { HttpStatusError, type HttpClient } from './http-client.js';
 import { ProviderError, type SecurityProvider, type TokenSecurityReport } from './provider.types.js';
 
@@ -39,6 +40,8 @@ export class HoneypotIsProvider implements SecurityProvider {
       raw = await this.http.requestJson<unknown>({
         provider: this.name,
         url: `${this.baseUrl}/v2/IsHoneypot?address=${address}&chainID=${this.chainId}`,
+        cacheTtlMs: CACHE_TTL_MS.security,
+        cacheKey: `${this.baseUrl}/v2/IsHoneypot?address=${address}&chainID=${this.chainId}`,
       });
     } catch (error) {
       // 404: honeypot.is belum mengenal token ini atau tidak menemukan pair-nya.

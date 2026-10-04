@@ -6,6 +6,7 @@
  * sebelum ada request jaringan, jadi tidak ada jalur signing atau pengiriman
  * transaksi di aplikasi ini.
  */
+import { cacheableRpcResponse, rpcCacheTtl } from './cache-policy.js';
 import { sanitizeProviderText, type HttpClient } from './http-client.js';
 import {
   ProviderError,
@@ -89,6 +90,10 @@ export class EvmJsonRpcProvider implements RpcProvider {
       body: { jsonrpc: '2.0', id: this.nextId++, method, params },
       timeoutMs: this.options.timeoutMs,
       retries: this.options.retries,
+      // Id JSON-RPC selalu berubah, jadi kunci cache hanya endpoint, method, dan parameter.
+      cacheTtlMs: rpcCacheTtl(method, params),
+      cacheKey: `${this.url} ${method} ${JSON.stringify(params)}`,
+      cacheable: cacheableRpcResponse,
     });
     if (response === null || typeof response !== 'object' || Array.isArray(response)) {
       throw new ProviderError(this.name, `${method}: respons JSON-RPC tidak dikenali`);

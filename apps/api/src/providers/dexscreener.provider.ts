@@ -5,6 +5,7 @@
  */
 import { normalizeAddress } from '../database/identifiers.js';
 import type { ChainFamily } from '../database/schema/enums.js';
+import { CACHE_TTL_MS } from './cache-policy.js';
 import type { HttpClient } from './http-client.js';
 import { ProviderError, type MarketDataProvider, type TokenMarketData } from './provider.types.js';
 
@@ -129,6 +130,8 @@ export class DexscreenerProvider implements MarketDataProvider {
     const raw = await this.http.requestJson<unknown>({
       provider: this.name,
       url: `${this.baseUrl}/token-pairs/v1/${this.chainSlug}/${address}`,
+      cacheTtlMs: CACHE_TTL_MS.market,
+      cacheKey: `${this.baseUrl}/token-pairs/v1/${this.chainSlug}/${address}`,
     });
     if (!Array.isArray(raw)) throw new ProviderError(this.name, 'Format daftar pair tidak dikenali');
     return summarizePairs(raw, (candidate) => {

@@ -7,7 +7,10 @@ import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import type { SmokeCheck, SmokeTestReport } from '../src/chains/chain-adapter.types.js';
 import { recordSmokeTest } from '../src/chains/chain-support-recorder.js';
+import { CLOCK } from '../src/common/clock.js';
+import { insertProviderRuns } from '../src/database/address-store.js';
 import { DATABASE, type Database } from '../src/database/database.module.js';
+import type { ProviderRunRecord } from '../src/providers/provider.types.js';
 import { createTestDatabase, type TestDatabase } from './support/database.js';
 
 const check = (code: string, provider: string, ok: boolean, level: SmokeCheck['level'] = 'data'): SmokeCheck => ({
@@ -18,6 +21,22 @@ const check = (code: string, provider: string, ok: boolean, level: SmokeCheck['l
   detail: ok ? 'OK' : 'Belum ada indexer untuk chain ini',
 });
 const rpc = (provider: string) => ['rpc.chain_id', 'rpc.head', 'rpc.transaction', 'rpc.logs', 'rpc.call'].map((code) => check(code, provider, true, 'rpc'));
+const NOW = new Date('2026-10-04T06:00:00Z');
+const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 60 * 60 * 1000);
+const run = (provider: string, kind: ProviderRunRecord['kind'], failed: boolean, startedAt: Date, errorReason: string | null = null): ProviderRunRecord => ({
+  key: `${provider}-${startedAt.toISOString()}`,
+  provider,
+  kind,
+  operation: 'token.holders',
+  subject: null,
+  status: failed ? 'unavailable' : 'complete',
+  errorReason: failed ? errorReason : null,
+  missingFields: [],
+  blockFrom: null,
+  blockTo: null,
+  startedAt,
+  fetchedAt: failed ? null : startedAt,
+});
 const report = (chainId: string, status: SmokeTestReport['status'], checks: SmokeCheck[], testedAt: string): SmokeTestReport => ({
   chainId,
   status,
@@ -50,7 +69,27 @@ describe('GET /api/chains', () => {
     );
     await recordSmokeTest(database, report('bsc', 'experimental', [...rpc('bsc-rpc'), check('indexer.holders', 'none', false)], '2026-10-03T04:05:00Z'));
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(DATABASE).useValue(db).compile();
+    // Base: RPC sehat, indexer gagal terakhir kali (terganggu). Robinhood: indexer selalu diblokir.
+    // Ethereum: hanya punya pengambilan lama di luar rentang 24 jam.
+    await insertProviderRuns(database, 'base', [
+      run('base-rpc', 'rpc', false, hoursAgo(3)),
+      run('base-rpc', 'rpc', false, hoursAgo(1)),
+      run('blockscout', 'indexed_data', false, hoursAgo(5)),
+      run('blockscout', 'indexed_data', false, hoursAgo(4)),
+      run('blockscout', 'indexed_data', true, hoursAgo(2), 'HTTP 429: kena batas rate provider'),
+    ]);
+    await insertProviderRuns(database, 'robinhood', [
+      run('blockscout', 'indexed_data', true, hoursAgo(6), 'HTTP 403: diblokir proteksi bot (Cloudflare)'),
+      run('blockscout', 'indexed_data', true, hoursAgo(1), 'HTTP 403: diblokir proteksi bot (Cloudflare)'),
+    ]);
+    await insertProviderRuns(database, 'ethereum', [run('ethereum-rpc', 'rpc', false, hoursAgo(48))]);
+
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(DATABASE)
+      .useValue(db)
+      .overrideProvider(CLOCK)
+      .useValue({ now: () => NOW })
+      .compile();
     app = configureApp(moduleRef.createNestApplication());
     await app.init();
   }, 60_000);
@@ -101,6 +140,29 @@ describe('GET /api/chains', () => {
     await request(server).get('/api/chains?status=didukung').expect(400);
     await request(server).get('/api/chains?capability=nft').expect(400);
     await request(server).get('/api/chains?family=cosmos').expect(400);
+  });
+
+  it('status ketersediaan per chain dan per provider dari riwayat pengambilan', async () => {
+    const { body } = await request(app.getHttpServer()).get('/api/chains/availability').expect(200);
+    expect(body.window).toEqual({ from: hoursAgo(24).toISOString(), to: NOW.toISOString(), hours: 24 });
+    const byId = Object.fromEntries(body.chains.map((item: { chain: { id: string } }) => [item.chain.id, item]));
+    expect(byId.base.status).toBe('degraded');
+    expect(byId.base.providers).toEqual([
+      expect.objectContaining({ provider: 'blockscout', kind: 'indexed_data', status: 'degraded', runs: 3, failures: 1, failureRatePct: 33.33, lastFailureReason: 'HTTP 429: kena batas rate provider' }),
+      expect.objectContaining({ provider: 'base-rpc', kind: 'rpc', status: 'available', runs: 2, failures: 0, lastSuccessAt: hoursAgo(1).toISOString(), lastFailureAt: null }),
+    ]);
+    expect(byId.robinhood).toMatchObject({ status: 'unavailable', providers: [expect.objectContaining({ status: 'unavailable', lastSuccessAt: null })] });
+    expect(byId.ethereum).toMatchObject({ status: 'unknown', providers: [] });
+    expect(byId.solana.status).toBe('unknown');
+    expect(body.caveats[0]).toContain('bukan berarti mati');
+
+    const wider = await request(app.getHttpServer()).get('/api/chains/availability?hours=72').expect(200);
+    expect(wider.body.chains.find((item: { chain: { id: string } }) => item.chain.id === 'ethereum').status).toBe('available');
+    await request(app.getHttpServer()).get('/api/chains/availability?hours=0').expect(400);
+    await request(app.getHttpServer()).get('/api/chains/availability?hours=169').expect(400);
+
+    const detail = await request(app.getHttpServer()).get('/api/chains/base').expect(200);
+    expect(detail.body.availability).toEqual(byId.base);
   });
 
   it('detail chain memuat pemeriksaan terakhir dan riwayatnya', async () => {

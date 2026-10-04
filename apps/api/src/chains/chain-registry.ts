@@ -22,6 +22,7 @@ import { GoPlusProvider } from '../providers/goplus.provider.js';
 import { HoneypotIsProvider } from '../providers/honeypot-is.provider.js';
 import type { SecurityProvider } from '../providers/provider.types.js';
 import { DEFAULT_TIMEOUT_MS, HttpClient } from '../providers/http-client.js';
+import { ResponseCache } from '../providers/response-cache.js';
 import type { ChainAdapter } from './chain-adapter.types.js';
 import {
   blockscoutEnvVar,
@@ -56,10 +57,20 @@ export interface ChainSetup {
   security: string;
 }
 
+/**
+ * Klien HTTP bawaan: dengan cache respons di memori, kecuali dimatikan lewat
+ * `PROVIDER_CACHE_DISABLED=1`. `PROVIDER_CACHE_MAX_ENTRIES` mengatur batasnya.
+ */
+export function defaultHttpClient(env: Env): HttpClient {
+  if (env.PROVIDER_CACHE_DISABLED === '1') return new HttpClient();
+  const max = Number(env.PROVIDER_CACHE_MAX_ENTRIES);
+  return new HttpClient(undefined, undefined, new ResponseCache(Number.isInteger(max) && max > 0 ? max : 1_000));
+}
+
 export class ChainRegistry {
   constructor(
     private readonly env: Env,
-    private readonly http: HttpClient = new HttpClient(),
+    private readonly http: HttpClient = defaultHttpClient(env),
     private readonly definitions: readonly EvmChainDefinition[] = EVM_CHAIN_DEFINITIONS,
     private readonly adapterOptions: EvmAdapterOptions = {},
   ) {}

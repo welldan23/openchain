@@ -4,6 +4,7 @@
  * test tersimpan; kemampuan yang belum pernah diuji selalu `planned`.
  */
 import type { ChainCapability, ChainFamily, ChainSupportStatus } from '../database/schema/enums.js';
+import type { AvailabilityStatus, ProviderAvailability } from './chain-availability.js';
 
 export interface SmokeCheckView {
   code: string;
@@ -57,8 +58,23 @@ export interface ChainCatalogResponse {
   caveats: string[];
 }
 
+export interface ChainAvailabilityItem {
+  chain: { id: string; name: string; supportStatus: ChainSupportStatus };
+  status: AvailabilityStatus;
+  providers: ProviderAvailability[];
+}
+
+/** `GET /api/chains/availability`: kesehatan sumber data per chain dari riwayat pengambilan. */
+export interface ChainAvailabilityResponse {
+  window: { from: string; to: string; hours: number };
+  chains: ChainAvailabilityItem[];
+  caveats: string[];
+}
+
 export interface ChainDetailResponse {
   chain: ChainCatalogItem;
+  /** Kesehatan sumber data chain ini dalam 24 jam terakhir. */
+  availability: ChainAvailabilityItem;
   /** Pemeriksaan smoke test terakhir; kosong bila belum pernah diuji. */
   checks: SmokeCheckView[];
   /** Riwayat smoke test terbaru dulu, paling banyak 10. */

@@ -151,6 +151,26 @@ Kemampuan data per chain (`chain_capabilities`):
 Kemampuan yang belum lolos tetap `planned` beserta alasannya; baris yang tidak
 ada juga berarti `planned`.
 
+### Cache respons provider
+
+Klien HTTP provider menyimpan respons yang berhasil di memori supaya batas
+pemakaian API gratis tidak cepat habis saat data yang sama diminta berulang
+(mis. `maps:build --kumpulkan`). Hanya yang aman diulang yang disimpan:
+
+| Data | Lama simpan |
+| --- | --- |
+| RPC `eth_chainId` | 1 jam |
+| RPC pada blok atau hash tertentu (`eth_getBlockByNumber`, `eth_call`, `eth_getCode`, `eth_getStorageAt`, `eth_getLogs` dengan blok angka, transaksi dan receipt per hash) | 10 menit |
+| Blockscout (holder, info token/kontrak, riwayat transfer) | 1 menit |
+| Dexscreener | 30 detik |
+| GoPlus, honeypot.is | 5 menit |
+
+Panggilan dengan `latest` (mis. `eth_blockNumber`) tidak pernah di-cache,
+begitu juga respons gagal dan hasil RPC kosong. Kunci cache bisa memuat URL
+ber-API key, jadi hanya disimpan di memori proses dan tidak pernah dicetak.
+`PROVIDER_CACHE_DISABLED=1` mematikan cache; `PROVIDER_CACHE_MAX_ENTRIES`
+(default 1000) membatasi jumlah entrinya.
+
 ### Environment variable provider
 
 Semuanya opsional dan tidak pernah dicetak. Daftar lengkapnya ada di
@@ -395,9 +415,26 @@ yang kemampuan itu minimal `experimental`).
   jumlah lulus, gagal wajib, dan gagal opsional), dan delapan kemampuan data
   dengan sumber, alasan, dan waktu pengujiannya. Kemampuan yang belum pernah
   diuji tetap `planned` dengan alasan itu.
-- `GET /api/chains/:chain` menambah daftar pemeriksaan smoke test terakhir dan
-  riwayat 10 smoke test terbaru. Chain tak dikenal dijawab `404`; nilai filter
-  yang salah `400`.
+- `GET /api/chains/:chain` menambah daftar pemeriksaan smoke test terakhir,
+  riwayat 10 smoke test terbaru, dan status ketersediaan 24 jam terakhir. Chain
+  tak dikenal dijawab `404`; nilai filter yang salah `400`.
+
+### `GET /api/chains/availability`
+
+Kesehatan sumber data tiap chain dari `provider_runs` (ingest, pemindaian
+aliran dana) dalam `hours` jam terakhir (1–168, default 24). Per provider:
+jumlah percobaan dan yang gagal, persen gagal, terakhir berhasil/gagal, dan
+alasan kegagalan terakhir (tanpa URL atau API key).
+
+| Status | Arti |
+| --- | --- |
+| `available` | Percobaan terakhir berhasil dan kurang dari separuh gagal |
+| `degraded` | Masih ada yang berhasil, tapi yang terakhir gagal atau setidaknya separuh gagal |
+| `unavailable` | Ada percobaan, tapi tidak satu pun berhasil |
+| `unknown` | Belum ada percobaan dalam rentang itu (bukan berarti mati) |
+
+Status chain: `available` bila semua provider tersedia, `unavailable` bila
+semua tidak tersedia, selain itu `degraded`.
 
 ### `GET /api/multichain/:address`
 

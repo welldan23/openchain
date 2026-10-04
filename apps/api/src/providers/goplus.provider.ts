@@ -6,6 +6,7 @@
  * data GoPlus tidak boleh langsung dipakai untuk kegiatan komersial yang
  * menghasilkan uang tanpa izin tertulis dari GoPlus.
  */
+import { CACHE_TTL_MS } from './cache-policy.js';
 import type { HttpClient } from './http-client.js';
 import { ProviderError, type SecurityProvider, type TokenSecurityReport } from './provider.types.js';
 
@@ -69,6 +70,8 @@ export class GoPlusProvider implements SecurityProvider {
     const raw = await this.http.requestJson<unknown>({
       provider: this.name,
       url: `${this.baseUrl}/api/v1/token_security/${this.chainId}?contract_addresses=${address}`,
+      cacheTtlMs: CACHE_TTL_MS.security,
+      cacheKey: `${this.baseUrl}/api/v1/token_security/${this.chainId}?contract_addresses=${address}`,
     });
     if (!isRecord(raw)) throw new ProviderError(this.name, 'Format respons tidak dikenali');
     if (raw.code !== 1) {
