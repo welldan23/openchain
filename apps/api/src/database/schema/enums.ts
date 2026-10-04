@@ -137,6 +137,12 @@ export const movementType = pgEnum('movement_type', [
   'dex_interaction',
 ]);
 
+/** Jenis hubungan di peta: pendanaan (native atau stablecoin) atau transfer token yang dipetakan. */
+export const mapEdgeKind = pgEnum('map_edge_kind', ['funding', 'token_transfer']);
+
+/** Peran wallet di peta. `connector` = bukan holder, muncul karena menghubungkan holder. */
+export const mapNodeRole = pgEnum('map_node_role', ['holder', 'funder', 'connector']);
+
 export type ChainFamily = (typeof chainFamily.enumValues)[number];
 export type DataStatus = (typeof dataStatus.enumValues)[number];
 export type InfoClassification = (typeof infoClassification.enumValues)[number];
@@ -146,3 +152,5 @@ export type CheckStatus = (typeof checkStatus.enumValues)[number];
 export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
+export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];
+export type MapNodeRole = (typeof mapNodeRole.enumValues)[number];

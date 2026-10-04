@@ -32,6 +32,8 @@ const EXPECTED_TABLES = [
   'holders',
   'label_evidence',
   'labels',
+  'map_edges',
+  'map_nodes',
   'movement_classifications',
   'native_transfers',
   'provider_runs',
@@ -43,6 +45,7 @@ const EXPECTED_TABLES = [
   'tokens',
   'trading_events',
   'transactions',
+  'wallet_maps',
 ];
 
 const TX_HASH = normalizeTxHash('evm', `0x${'ab'.repeat(32)}`);
@@ -724,6 +727,132 @@ describe('aliran dana: klasifikasi jenis perpindahan', () => {
         classifiedAt: FETCHED_AT,
       }),
       'movement_classifications_heuristic_has_confidence',
+    );
+  });
+});
+
+describe('peta hubungan: node, edge, dan bukti transaksi', () => {
+  async function mapFixture(seed: string) {
+    const { token, snapshot } = await insertTokenWithSnapshot('0x' + `${seed}0c`.repeat(10), 50);
+    const [map] = await db
+      .insert(schema.walletMaps)
+      .values({
+        chainId: 'robinhood',
+        tokenId: token.id,
+        snapshotId: snapshot.id,
+        blockNumber: 50,
+        holderLimit: 50,
+        fundingDepth: 2,
+        status: 'complete',
+        builtAt: FETCHED_AT,
+      })
+      .returning();
+    const holder = await insertAddress('robinhood', '0x' + `${seed}a1`.repeat(10));
+    const funder = await insertAddress('robinhood', '0x' + `${seed}f2`.repeat(10));
+    const [holderNode, funderNode] = await db
+      .insert(schema.mapNodes)
+      .values([
+        { mapId: map.id, chainId: 'robinhood', addressId: holder.id, role: 'holder', sharePct: '12.500000' },
+        { mapId: map.id, chainId: 'robinhood', addressId: funder.id, role: 'funder' },
+      ])
+      .returning();
+    const [transfer] = await db
+      .insert(schema.nativeTransfers)
+      .values({
+        chainId: 'robinhood',
+        txHash: normalizeTxHash('evm', `0x${seed.repeat(32)}`),
+        kind: 'transaction',
+        fromAddressId: funder.id,
+        toAddressId: holder.id,
+        amountRaw: '2000000000000000000',
+        blockNumber: 40,
+        blockTimestamp: FETCHED_AT,
+        fetchedAt: FETCHED_AT,
+      })
+      .returning();
+    return { token, snapshot, map, holder, funder, holderNode, funderNode, transfer };
+  }
+
+  it('menyimpan peta dengan garis yang menunjuk transfer sebagai buktinya, dan menghapusnya bersama-sama', async () => {
+    const { map, holderNode, funderNode, transfer } = await mapFixture('81');
+    const [edge] = await db
+      .insert(schema.mapEdges)
+      .values({ mapId: map.id, fromNodeId: funderNode.id, toNodeId: holderNode.id, kind: 'funding', nativeTransferId: transfer.id })
+      .returning();
+    expect(edge.nativeTransferId).toBe(transfer.id);
+    await expectConstraintViolation(
+      db.insert(schema.mapEdges).values({ mapId: map.id, fromNodeId: funderNode.id, toNodeId: holderNode.id, kind: 'funding', nativeTransferId: transfer.id }),
+      'map_edges_map_native_unique',
+    );
+    await db.delete(schema.walletMaps).where(eq(schema.walletMaps.id, map.id));
+    expect(await db.select().from(schema.mapEdges).where(eq(schema.mapEdges.mapId, map.id))).toEqual([]);
+    expect(await db.select().from(schema.mapNodes).where(eq(schema.mapNodes.mapId, map.id))).toEqual([]);
+    // Transfernya sendiri (fakta) tidak ikut terhapus.
+    expect(await db.select().from(schema.nativeTransfers).where(eq(schema.nativeTransfers.id, transfer.id))).toHaveLength(1);
+  });
+
+  it('garis wajib punya tepat satu bukti transfer, dan transfer token harus dari tabel token', async () => {
+    const { map, holderNode, funderNode, transfer } = await mapFixture('82');
+    await expectConstraintViolation(
+      db.insert(schema.mapEdges).values({ mapId: map.id, fromNodeId: funderNode.id, toNodeId: holderNode.id, kind: 'funding' }),
+      'map_edges_one_transfer',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapEdges).values({ mapId: map.id, fromNodeId: funderNode.id, toNodeId: holderNode.id, kind: 'token_transfer', nativeTransferId: transfer.id }),
+      'map_edges_token_kind_has_token_transfer',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapEdges).values({ mapId: map.id, fromNodeId: holderNode.id, toNodeId: holderNode.id, kind: 'funding', nativeTransferId: transfer.id }),
+      'map_edges_distinct_nodes',
+    );
+  });
+
+  it('garis hanya boleh menghubungkan node dari peta yang sama', async () => {
+    const first = await mapFixture('83');
+    const second = await mapFixture('84');
+    await expectConstraintViolation(
+      db.insert(schema.mapEdges).values({
+        mapId: first.map.id,
+        fromNodeId: first.funderNode.id,
+        toNodeId: second.holderNode.id,
+        kind: 'funding',
+        nativeTransferId: first.transfer.id,
+      }),
+      'map_edges_to_node_fk',
+    );
+  });
+
+  it('wallet penghubung tidak punya porsi supply, dan node wajib dari chain peta', async () => {
+    const { map } = await mapFixture('85');
+    const connector = await insertAddress('robinhood', '0x' + '85c3'.repeat(10));
+    await expectConstraintViolation(
+      db.insert(schema.mapNodes).values({ mapId: map.id, chainId: 'robinhood', addressId: connector.id, role: 'connector', sharePct: '0.100000' }),
+      'map_nodes_non_holder_has_no_share',
+    );
+    const elsewhere = await insertAddress('ethereum', '0x' + '85e4'.repeat(10));
+    await expectConstraintViolation(
+      db.insert(schema.mapNodes).values({ mapId: map.id, chainId: 'robinhood', addressId: elsewhere.id, role: 'connector' }),
+      'map_nodes_chain_address_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.mapNodes).values({ mapId: map.id, chainId: 'ethereum', addressId: elsewhere.id, role: 'connector' }),
+      'map_nodes_map_fk',
+    );
+  });
+
+  it('peta tidak boleh memakai snapshot token lain, dan status tidak lengkap wajib dijelaskan', async () => {
+    const first = await mapFixture('86');
+    const other = await insertTokenWithSnapshot('0x' + '87dd'.repeat(10), 60);
+    const base = { chainId: 'robinhood', tokenId: first.token.id, blockNumber: 60, holderLimit: 50, fundingDepth: 1, builtAt: FETCHED_AT };
+    await expectConstraintViolation(
+      db.insert(schema.walletMaps).values({ ...base, snapshotId: other.snapshot.id, status: 'complete' }),
+      'wallet_maps_token_snapshot_fk',
+    );
+    await expectConstraintViolation(db.insert(schema.walletMaps).values({ ...base, status: 'unavailable' }), 'wallet_maps_unavailable_has_reason');
+    await expectConstraintViolation(db.insert(schema.walletMaps).values({ ...base, status: 'partial' }), 'wallet_maps_partial_is_explained');
+    await expectConstraintViolation(
+      db.insert(schema.walletMaps).values({ ...base, status: 'complete', fundingDepth: 9 }),
+      'wallet_maps_funding_depth_range',
     );
   });
 });

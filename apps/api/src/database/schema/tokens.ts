@@ -52,6 +52,8 @@ export const tokens = pgTable(
   },
   (t) => [
     unique('tokens_address_unique').on(t.addressId),
+    // Dipakai foreign key komposit agar peta tidak menunjuk token chain lain.
+    unique('tokens_chain_id_id_unique').on(t.chainId, t.id),
     // Address token wajib berada di chain yang sama dengan token.
     foreignKey({
       name: 'tokens_chain_address_fk',
@@ -107,6 +109,8 @@ export const tokenSnapshots = pgTable(
   },
   (t) => [
     unique('token_snapshots_token_block_unique').on(t.tokenId, t.blockNumber),
+    // Dipakai foreign key komposit agar peta tidak memakai snapshot token lain.
+    unique('token_snapshots_token_id_id_unique').on(t.tokenId, t.id),
     check(
       'token_snapshots_pct_range',
       sql`(${t.top10Pct} is null or ${t.top10Pct} between 0 and 100)

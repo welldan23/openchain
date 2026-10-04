@@ -522,6 +522,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
 | Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
+| Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges` |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
 Aturan PRD yang dijaga langsung oleh database:
@@ -556,5 +557,13 @@ Aturan PRD yang dijaga langsung oleh database:
   label user), dan database menolak jenis berbasis label yang disebut fakta.
   Disimpan terpisah dari transfer supaya bisa dihitung ulang saat label berubah.
 
-Tabel `funding_edges`, `clusters`, `cluster_members`, dan `investigations`
-menyusul di task fitur yang memakainya.
+- Peta hubungan disimpan per pembangunan (`wallet_maps`: token, snapshot
+  holder dasar, blok, parameter, status data) supaya bisa dibuka ulang dengan
+  hasil sama. Node (`map_nodes`) wajib address di chain peta; porsi supply
+  hanya untuk holder, wallet pendana/penghubung selalu 0. Setiap garis
+  (`map_edges`) wajib menunjuk tepat satu transfer tersimpan sebagai bukti
+  transaksinya dan hanya boleh menghubungkan node dari peta yang sama.
+  Menghapus peta menghapus node dan garisnya, tidak transfernya.
+
+Tabel `clusters`, `cluster_members`, dan `investigations` menyusul di task
+fitur yang memakainya.

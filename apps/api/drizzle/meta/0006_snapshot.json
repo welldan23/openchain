@@ -1,0 +1,3660 @@
+{
+  "id": "d87b17c9-f5b5-43a3-afe8-26b5a0c47fc8",
+  "prevId": "68d39b48-ca48-46b7-b95b-6b6fafb3713a",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.addresses": {
+      "name": "addresses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "addresses_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_normalized": {
+          "name": "address_normalized",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_contract": {
+          "name": "is_contract",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "addresses_chain_id_chains_id_fk": {
+          "name": "addresses_chain_id_chains_id_fk",
+          "tableFrom": "addresses",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "addresses_chain_address_unique": {
+          "name": "addresses_chain_address_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "chain_id",
+            "address_normalized"
+          ]
+        },
+        "addresses_chain_id_id_unique": {
+          "name": "addresses_chain_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "chain_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chains": {
+      "name": "chains",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "family": {
+          "name": "family",
+          "type": "chain_family",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evm_chain_id": {
+          "name": "evm_chain_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "native_symbol": {
+          "name": "native_symbol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "explorer_url": {
+          "name": "explorer_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "support_status": {
+          "name": "support_status",
+          "type": "chain_support_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'planned'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "chains_evm_chain_id_unique": {
+          "name": "chains_evm_chain_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "evm_chain_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "chains_id_is_slug": {
+          "name": "chains_id_is_slug",
+          "value": "\"chains\".\"id\" ~ '^[a-z0-9-]+$'"
+        },
+        "chains_evm_chain_id_matches_family": {
+          "name": "chains_evm_chain_id_matches_family",
+          "value": "(\"chains\".\"family\" = 'evm') = (\"chains\".\"evm_chain_id\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.labels": {
+      "name": "labels",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "labels_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "address_id": {
+          "name": "address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label_type": {
+          "name": "label_type",
+          "type": "entity_label_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "label_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_name": {
+          "name": "source_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "classification": {
+          "name": "classification",
+          "type": "info_classification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "numeric(4, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "labels_address_id_addresses_id_fk": {
+          "name": "labels_address_id_addresses_id_fk",
+          "tableFrom": "labels",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "labels_provider_run_id_provider_runs_id_fk": {
+          "name": "labels_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "labels",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "labels_address_type_source_unique": {
+          "name": "labels_address_type_source_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "address_id",
+            "label_type",
+            "source_name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "labels_confidence_range": {
+          "name": "labels_confidence_range",
+          "value": "\"labels\".\"confidence\" is null or (\"labels\".\"confidence\" >= 0 and \"labels\".\"confidence\" <= 1)"
+        },
+        "labels_classification_matches_source": {
+          "name": "labels_classification_matches_source",
+          "value": "(\"labels\".\"source\" = 'external' and \"labels\".\"classification\" = 'external_label')\n        or (\"labels\".\"source\" = 'heuristic' and \"labels\".\"classification\" = 'heuristic')\n        or (\"labels\".\"source\" = 'user' and \"labels\".\"classification\" = 'assumption')"
+        },
+        "labels_heuristic_has_confidence": {
+          "name": "labels_heuristic_has_confidence",
+          "value": "\"labels\".\"source\" <> 'heuristic' or \"labels\".\"confidence\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.provider_runs": {
+      "name": "provider_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "provider_runs_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "provider_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "data_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_reason": {
+          "name": "error_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_from": {
+          "name": "block_from",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_to": {
+          "name": "block_to",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "missing_fields": {
+          "name": "missing_fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "provider_runs_subject_idx": {
+          "name": "provider_runs_subject_idx",
+          "columns": [
+            {
+              "expression": "chain_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "subject",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "provider_runs_chain_id_chains_id_fk": {
+          "name": "provider_runs_chain_id_chains_id_fk",
+          "tableFrom": "provider_runs",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "provider_runs_unavailable_has_reason": {
+          "name": "provider_runs_unavailable_has_reason",
+          "value": "\"provider_runs\".\"status\" <> 'unavailable' or \"provider_runs\".\"error_reason\" is not null"
+        },
+        "provider_runs_partial_is_explained": {
+          "name": "provider_runs_partial_is_explained",
+          "value": "\"provider_runs\".\"status\" <> 'partial' or \"provider_runs\".\"error_reason\" is not null or cardinality(\"provider_runs\".\"missing_fields\") > 0"
+        },
+        "provider_runs_block_range": {
+          "name": "provider_runs_block_range",
+          "value": "\"provider_runs\".\"block_from\" is null or \"provider_runs\".\"block_to\" is null or \"provider_runs\".\"block_from\" <= \"provider_runs\".\"block_to\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.holders": {
+      "name": "holders",
+      "schema": "",
+      "columns": {
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_id": {
+          "name": "address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rank": {
+          "name": "rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance_raw": {
+          "name": "balance_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "share_pct": {
+          "name": "share_pct",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "holders_snapshot_id_token_snapshots_id_fk": {
+          "name": "holders_snapshot_id_token_snapshots_id_fk",
+          "tableFrom": "holders",
+          "tableTo": "token_snapshots",
+          "columnsFrom": [
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "holders_address_id_addresses_id_fk": {
+          "name": "holders_address_id_addresses_id_fk",
+          "tableFrom": "holders",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "holders_snapshot_id_address_id_pk": {
+          "name": "holders_snapshot_id_address_id_pk",
+          "columns": [
+            "snapshot_id",
+            "address_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "holders_snapshot_rank_unique": {
+          "name": "holders_snapshot_rank_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "snapshot_id",
+            "rank"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "holders_rank_positive": {
+          "name": "holders_rank_positive",
+          "value": "\"holders\".\"rank\" >= 1"
+        },
+        "holders_balance_non_negative": {
+          "name": "holders_balance_non_negative",
+          "value": "\"holders\".\"balance_raw\" >= 0"
+        },
+        "holders_share_range": {
+          "name": "holders_share_range",
+          "value": "\"holders\".\"share_pct\" between 0 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.token_snapshot_sources": {
+      "name": "token_snapshot_sources",
+      "schema": "",
+      "columns": {
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "token_snapshot_sources_snapshot_id_token_snapshots_id_fk": {
+          "name": "token_snapshot_sources_snapshot_id_token_snapshots_id_fk",
+          "tableFrom": "token_snapshot_sources",
+          "tableTo": "token_snapshots",
+          "columnsFrom": [
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "token_snapshot_sources_provider_run_id_provider_runs_id_fk": {
+          "name": "token_snapshot_sources_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "token_snapshot_sources",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "token_snapshot_sources_snapshot_id_provider_run_id_pk": {
+          "name": "token_snapshot_sources_snapshot_id_provider_run_id_pk",
+          "columns": [
+            "snapshot_id",
+            "provider_run_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.token_snapshots": {
+      "name": "token_snapshots",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "token_snapshots_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "token_id": {
+          "name": "token_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data_status": {
+          "name": "data_status",
+          "type": "data_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_supply_raw": {
+          "name": "total_supply_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_usd": {
+          "name": "price_usd",
+          "type": "numeric(38, 18)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_change_24h_pct": {
+          "name": "price_change_24h_pct",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_cap_usd": {
+          "name": "market_cap_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fdv_usd": {
+          "name": "fdv_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "liquidity_usd": {
+          "name": "liquidity_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "volume_24h_usd": {
+          "name": "volume_24h_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "holder_count": {
+          "name": "holder_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tx_count_24h": {
+          "name": "tx_count_24h",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "top10_pct": {
+          "name": "top10_pct",
+          "type": "numeric(7, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "top50_pct": {
+          "name": "top50_pct",
+          "type": "numeric(7, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "risk_score": {
+          "name": "risk_score",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "risk_level": {
+          "name": "risk_level",
+          "type": "risk_level",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "token_snapshots_token_id_tokens_id_fk": {
+          "name": "token_snapshots_token_id_tokens_id_fk",
+          "tableFrom": "token_snapshots",
+          "tableTo": "tokens",
+          "columnsFrom": [
+            "token_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "token_snapshots_token_block_unique": {
+          "name": "token_snapshots_token_block_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_id",
+            "block_number"
+          ]
+        },
+        "token_snapshots_token_id_id_unique": {
+          "name": "token_snapshots_token_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "token_snapshots_pct_range": {
+          "name": "token_snapshots_pct_range",
+          "value": "(\"token_snapshots\".\"top10_pct\" is null or \"token_snapshots\".\"top10_pct\" between 0 and 100)\n        and (\"token_snapshots\".\"top50_pct\" is null or \"token_snapshots\".\"top50_pct\" between 0 and 100)"
+        },
+        "token_snapshots_top10_within_top50": {
+          "name": "token_snapshots_top10_within_top50",
+          "value": "\"token_snapshots\".\"top10_pct\" is null or \"token_snapshots\".\"top50_pct\" is null or \"token_snapshots\".\"top10_pct\" <= \"token_snapshots\".\"top50_pct\""
+        },
+        "token_snapshots_total_supply_non_negative": {
+          "name": "token_snapshots_total_supply_non_negative",
+          "value": "\"token_snapshots\".\"total_supply_raw\" is null or \"token_snapshots\".\"total_supply_raw\" >= 0"
+        },
+        "token_snapshots_risk_score_range": {
+          "name": "token_snapshots_risk_score_range",
+          "value": "\"token_snapshots\".\"risk_score\" is null or \"token_snapshots\".\"risk_score\" between 0 and 100"
+        },
+        "token_snapshots_unknown_risk_has_no_score": {
+          "name": "token_snapshots_unknown_risk_has_no_score",
+          "value": "(\"token_snapshots\".\"risk_level\" = 'unknown') = (\"token_snapshots\".\"risk_score\" is null)"
+        },
+        "token_snapshots_counts_non_negative": {
+          "name": "token_snapshots_counts_non_negative",
+          "value": "(\"token_snapshots\".\"holder_count\" is null or \"token_snapshots\".\"holder_count\" >= 0)\n        and (\"token_snapshots\".\"tx_count_24h\" is null or \"token_snapshots\".\"tx_count_24h\" >= 0)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.tokens": {
+      "name": "tokens",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "tokens_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_id": {
+          "name": "address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "standard": {
+          "name": "standard",
+          "type": "token_standard",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "symbol": {
+          "name": "symbol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decimals": {
+          "name": "decimals",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_supply_raw": {
+          "name": "total_supply_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deployer_address_id": {
+          "name": "deployer_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deploy_tx_hash": {
+          "name": "deploy_tx_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deployed_at": {
+          "name": "deployed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_verified": {
+          "name": "source_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "tokens_chain_id_chains_id_fk": {
+          "name": "tokens_chain_id_chains_id_fk",
+          "tableFrom": "tokens",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tokens_deployer_address_id_addresses_id_fk": {
+          "name": "tokens_deployer_address_id_addresses_id_fk",
+          "tableFrom": "tokens",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "deployer_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tokens_chain_address_fk": {
+          "name": "tokens_chain_address_fk",
+          "tableFrom": "tokens",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tokens_address_unique": {
+          "name": "tokens_address_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "address_id"
+          ]
+        },
+        "tokens_chain_id_id_unique": {
+          "name": "tokens_chain_id_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "chain_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "tokens_decimals_range": {
+          "name": "tokens_decimals_range",
+          "value": "\"tokens\".\"decimals\" is null or (\"tokens\".\"decimals\" >= 0 and \"tokens\".\"decimals\" <= 255)"
+        },
+        "tokens_total_supply_non_negative": {
+          "name": "tokens_total_supply_non_negative",
+          "value": "\"tokens\".\"total_supply_raw\" is null or \"tokens\".\"total_supply_raw\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.token_transfers": {
+      "name": "token_transfers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "token_transfers_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tx_hash": {
+          "name": "tx_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "log_index": {
+          "name": "log_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_id": {
+          "name": "token_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_address_id": {
+          "name": "from_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_address_id": {
+          "name": "to_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_raw": {
+          "name": "amount_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_usd": {
+          "name": "amount_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_timestamp": {
+          "name": "block_timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "token_transfers_token_block_idx": {
+          "name": "token_transfers_token_block_idx",
+          "columns": [
+            {
+              "expression": "token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "token_transfers_from_time_idx": {
+          "name": "token_transfers_from_time_idx",
+          "columns": [
+            {
+              "expression": "from_address_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_timestamp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "token_transfers_to_time_idx": {
+          "name": "token_transfers_to_time_idx",
+          "columns": [
+            {
+              "expression": "to_address_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_timestamp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "token_transfers_chain_id_chains_id_fk": {
+          "name": "token_transfers_chain_id_chains_id_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "token_transfers_token_id_tokens_id_fk": {
+          "name": "token_transfers_token_id_tokens_id_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "tokens",
+          "columnsFrom": [
+            "token_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "token_transfers_from_address_id_addresses_id_fk": {
+          "name": "token_transfers_from_address_id_addresses_id_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "from_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "token_transfers_to_address_id_addresses_id_fk": {
+          "name": "token_transfers_to_address_id_addresses_id_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "to_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "token_transfers_provider_run_id_provider_runs_id_fk": {
+          "name": "token_transfers_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "token_transfers_chain_from_fk": {
+          "name": "token_transfers_chain_from_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "from_address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "token_transfers_chain_to_fk": {
+          "name": "token_transfers_chain_to_fk",
+          "tableFrom": "token_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "to_address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "token_transfers_chain_tx_log_unique": {
+          "name": "token_transfers_chain_tx_log_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "chain_id",
+            "tx_hash",
+            "log_index"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "token_transfers_log_index_non_negative": {
+          "name": "token_transfers_log_index_non_negative",
+          "value": "\"token_transfers\".\"log_index\" >= 0"
+        },
+        "token_transfers_amount_non_negative": {
+          "name": "token_transfers_amount_non_negative",
+          "value": "\"token_transfers\".\"amount_raw\" >= 0"
+        },
+        "token_transfers_usd_non_negative": {
+          "name": "token_transfers_usd_non_negative",
+          "value": "\"token_transfers\".\"amount_usd\" is null or \"token_transfers\".\"amount_usd\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.trading_events": {
+      "name": "trading_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "trading_events_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tx_hash": {
+          "name": "tx_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "log_index": {
+          "name": "log_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "trading_event_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_id": {
+          "name": "token_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_address_id": {
+          "name": "from_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_address_id": {
+          "name": "to_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_raw": {
+          "name": "amount_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_usd": {
+          "name": "amount_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dex": {
+          "name": "dex",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pair_address_id": {
+          "name": "pair_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_timestamp": {
+          "name": "block_timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "trading_events_token_time_idx": {
+          "name": "trading_events_token_time_idx",
+          "columns": [
+            {
+              "expression": "token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_timestamp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "trading_events_chain_id_chains_id_fk": {
+          "name": "trading_events_chain_id_chains_id_fk",
+          "tableFrom": "trading_events",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trading_events_token_id_tokens_id_fk": {
+          "name": "trading_events_token_id_tokens_id_fk",
+          "tableFrom": "trading_events",
+          "tableTo": "tokens",
+          "columnsFrom": [
+            "token_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trading_events_from_address_id_addresses_id_fk": {
+          "name": "trading_events_from_address_id_addresses_id_fk",
+          "tableFrom": "trading_events",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "from_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trading_events_to_address_id_addresses_id_fk": {
+          "name": "trading_events_to_address_id_addresses_id_fk",
+          "tableFrom": "trading_events",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "to_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trading_events_pair_address_id_addresses_id_fk": {
+          "name": "trading_events_pair_address_id_addresses_id_fk",
+          "tableFrom": "trading_events",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "pair_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "trading_events_provider_run_id_provider_runs_id_fk": {
+          "name": "trading_events_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "trading_events",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "trading_events_identity_unique": {
+          "name": "trading_events_identity_unique",
+          "nullsNotDistinct": true,
+          "columns": [
+            "chain_id",
+            "tx_hash",
+            "log_index",
+            "type"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "trading_events_amount_non_negative": {
+          "name": "trading_events_amount_non_negative",
+          "value": "\"trading_events\".\"amount_raw\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.transactions": {
+      "name": "transactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "transactions_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_timestamp": {
+          "name": "block_timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_address_id": {
+          "name": "from_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_address_id": {
+          "name": "to_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_raw": {
+          "name": "value_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "success": {
+          "name": "success",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "transactions_chain_block_idx": {
+          "name": "transactions_chain_block_idx",
+          "columns": [
+            {
+              "expression": "chain_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "transactions_chain_id_chains_id_fk": {
+          "name": "transactions_chain_id_chains_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_from_address_id_addresses_id_fk": {
+          "name": "transactions_from_address_id_addresses_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "from_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_to_address_id_addresses_id_fk": {
+          "name": "transactions_to_address_id_addresses_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "to_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_provider_run_id_provider_runs_id_fk": {
+          "name": "transactions_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "transactions_chain_hash_unique": {
+          "name": "transactions_chain_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "chain_id",
+            "hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "transactions_value_non_negative": {
+          "name": "transactions_value_non_negative",
+          "value": "\"transactions\".\"value_raw\" is null or \"transactions\".\"value_raw\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.contract_check_evidence": {
+      "name": "contract_check_evidence",
+      "schema": "",
+      "columns": {
+        "check_id": {
+          "name": "check_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "contract_check_evidence_check_id_contract_checks_id_fk": {
+          "name": "contract_check_evidence_check_id_contract_checks_id_fk",
+          "tableFrom": "contract_check_evidence",
+          "tableTo": "contract_checks",
+          "columnsFrom": [
+            "check_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "contract_check_evidence_evidence_id_evidence_id_fk": {
+          "name": "contract_check_evidence_evidence_id_evidence_id_fk",
+          "tableFrom": "contract_check_evidence",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "contract_check_evidence_check_id_evidence_id_pk": {
+          "name": "contract_check_evidence_check_id_evidence_id_pk",
+          "columns": [
+            "check_id",
+            "evidence_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.contract_checks": {
+      "name": "contract_checks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "contract_checks_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "check_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "classification": {
+          "name": "classification",
+          "type": "info_classification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "contract_checks_snapshot_id_token_snapshots_id_fk": {
+          "name": "contract_checks_snapshot_id_token_snapshots_id_fk",
+          "tableFrom": "contract_checks",
+          "tableTo": "token_snapshots",
+          "columnsFrom": [
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "contract_checks_snapshot_code_unique": {
+          "name": "contract_checks_snapshot_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "snapshot_id",
+            "code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "contract_checks_unknown_has_no_classification": {
+          "name": "contract_checks_unknown_has_no_classification",
+          "value": "(\"contract_checks\".\"status\" = 'unknown') = (\"contract_checks\".\"classification\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.evidence": {
+      "name": "evidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "evidence_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "evidence_key": {
+          "name": "evidence_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "classification": {
+          "name": "classification",
+          "type": "info_classification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "explanation": {
+          "name": "explanation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tx_hash": {
+          "name": "tx_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_timestamp": {
+          "name": "block_timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "log_index": {
+          "name": "log_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_address_id": {
+          "name": "source_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "destination_address_id": {
+          "name": "destination_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "asset": {
+          "name": "asset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_raw": {
+          "name": "amount_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contract_address_id": {
+          "name": "contract_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heuristic_name": {
+          "name": "heuristic_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "numeric(4, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "evidence_chain_tx_idx": {
+          "name": "evidence_chain_tx_idx",
+          "columns": [
+            {
+              "expression": "chain_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tx_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "evidence_chain_id_chains_id_fk": {
+          "name": "evidence_chain_id_chains_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidence_source_address_id_addresses_id_fk": {
+          "name": "evidence_source_address_id_addresses_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "source_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidence_destination_address_id_addresses_id_fk": {
+          "name": "evidence_destination_address_id_addresses_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "destination_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidence_contract_address_id_addresses_id_fk": {
+          "name": "evidence_contract_address_id_addresses_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "contract_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evidence_provider_run_id_provider_runs_id_fk": {
+          "name": "evidence_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "evidence",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evidence_evidence_key_unique": {
+          "name": "evidence_evidence_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "evidence_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "evidence_confidence_range": {
+          "name": "evidence_confidence_range",
+          "value": "\"evidence\".\"confidence\" is null or (\"evidence\".\"confidence\" >= 0 and \"evidence\".\"confidence\" <= 1)"
+        },
+        "evidence_fact_is_anchored": {
+          "name": "evidence_fact_is_anchored",
+          "value": "\"evidence\".\"classification\" <> 'verified_fact' or \"evidence\".\"tx_hash\" is not null or \"evidence\".\"block_number\" is not null"
+        },
+        "evidence_heuristic_is_explained": {
+          "name": "evidence_heuristic_is_explained",
+          "value": "\"evidence\".\"classification\" <> 'heuristic' or (\"evidence\".\"heuristic_name\" is not null and \"evidence\".\"confidence\" is not null)"
+        },
+        "evidence_external_label_has_provider": {
+          "name": "evidence_external_label_has_provider",
+          "value": "\"evidence\".\"classification\" <> 'external_label' or \"evidence\".\"provider_run_id\" is not null"
+        },
+        "evidence_amount_non_negative": {
+          "name": "evidence_amount_non_negative",
+          "value": "\"evidence\".\"amount_raw\" is null or \"evidence\".\"amount_raw\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.label_evidence": {
+      "name": "label_evidence",
+      "schema": "",
+      "columns": {
+        "label_id": {
+          "name": "label_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "label_evidence_label_id_labels_id_fk": {
+          "name": "label_evidence_label_id_labels_id_fk",
+          "tableFrom": "label_evidence",
+          "tableTo": "labels",
+          "columnsFrom": [
+            "label_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "label_evidence_evidence_id_evidence_id_fk": {
+          "name": "label_evidence_evidence_id_evidence_id_fk",
+          "tableFrom": "label_evidence",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "label_evidence_label_id_evidence_id_pk": {
+          "name": "label_evidence_label_id_evidence_id_pk",
+          "columns": [
+            "label_id",
+            "evidence_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.risk_finding_evidence": {
+      "name": "risk_finding_evidence",
+      "schema": "",
+      "columns": {
+        "finding_id": {
+          "name": "finding_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence_id": {
+          "name": "evidence_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "risk_finding_evidence_finding_id_risk_findings_id_fk": {
+          "name": "risk_finding_evidence_finding_id_risk_findings_id_fk",
+          "tableFrom": "risk_finding_evidence",
+          "tableTo": "risk_findings",
+          "columnsFrom": [
+            "finding_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "risk_finding_evidence_evidence_id_evidence_id_fk": {
+          "name": "risk_finding_evidence_evidence_id_evidence_id_fk",
+          "tableFrom": "risk_finding_evidence",
+          "tableTo": "evidence",
+          "columnsFrom": [
+            "evidence_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "risk_finding_evidence_finding_id_evidence_id_pk": {
+          "name": "risk_finding_evidence_finding_id_evidence_id_pk",
+          "columns": [
+            "finding_id",
+            "evidence_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.risk_findings": {
+      "name": "risk_findings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "risk_findings_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "risk_severity",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "classification": {
+          "name": "classification",
+          "type": "info_classification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "risk_findings_snapshot_id_token_snapshots_id_fk": {
+          "name": "risk_findings_snapshot_id_token_snapshots_id_fk",
+          "tableFrom": "risk_findings",
+          "tableTo": "token_snapshots",
+          "columnsFrom": [
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "risk_findings_snapshot_code_unique": {
+          "name": "risk_findings_snapshot_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "snapshot_id",
+            "code"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.address_flow_scans": {
+      "name": "address_flow_scans",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "address_flow_scans_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_id": {
+          "name": "address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_from": {
+          "name": "block_from",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_to": {
+          "name": "block_to",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "window_from": {
+          "name": "window_from",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "window_to": {
+          "name": "window_to",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "native_scanned": {
+          "name": "native_scanned",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tokens_scanned": {
+          "name": "tokens_scanned",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "internal_scanned": {
+          "name": "internal_scanned",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "data_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status_reason": {
+          "name": "status_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "missing_fields": {
+          "name": "missing_fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scanned_at": {
+          "name": "scanned_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "address_flow_scans_address_time_idx": {
+          "name": "address_flow_scans_address_time_idx",
+          "columns": [
+            {
+              "expression": "address_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "chain_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scanned_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "address_flow_scans_chain_id_chains_id_fk": {
+          "name": "address_flow_scans_chain_id_chains_id_fk",
+          "tableFrom": "address_flow_scans",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "address_flow_scans_address_id_addresses_id_fk": {
+          "name": "address_flow_scans_address_id_addresses_id_fk",
+          "tableFrom": "address_flow_scans",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "address_flow_scans_provider_run_id_provider_runs_id_fk": {
+          "name": "address_flow_scans_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "address_flow_scans",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "address_flow_scans_chain_address_fk": {
+          "name": "address_flow_scans_chain_address_fk",
+          "tableFrom": "address_flow_scans",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "address_flow_scans_block_range": {
+          "name": "address_flow_scans_block_range",
+          "value": "\"address_flow_scans\".\"block_from\" <= \"address_flow_scans\".\"block_to\""
+        },
+        "address_flow_scans_window": {
+          "name": "address_flow_scans_window",
+          "value": "\"address_flow_scans\".\"window_from\" <= \"address_flow_scans\".\"window_to\""
+        },
+        "address_flow_scans_complete_covers_all": {
+          "name": "address_flow_scans_complete_covers_all",
+          "value": "\"address_flow_scans\".\"status\" <> 'complete' or (\"address_flow_scans\".\"native_scanned\" and \"address_flow_scans\".\"tokens_scanned\" and \"address_flow_scans\".\"internal_scanned\")"
+        },
+        "address_flow_scans_unavailable_has_reason": {
+          "name": "address_flow_scans_unavailable_has_reason",
+          "value": "\"address_flow_scans\".\"status\" <> 'unavailable' or \"address_flow_scans\".\"status_reason\" is not null"
+        },
+        "address_flow_scans_partial_is_explained": {
+          "name": "address_flow_scans_partial_is_explained",
+          "value": "\"address_flow_scans\".\"status\" <> 'partial' or \"address_flow_scans\".\"status_reason\" is not null or cardinality(\"address_flow_scans\".\"missing_fields\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.movement_classifications": {
+      "name": "movement_classifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "movement_classifications_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "native_transfer_id": {
+          "name": "native_transfer_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_transfer_id": {
+          "name": "token_transfer_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "movement_type": {
+          "name": "movement_type",
+          "type": "movement_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "classification": {
+          "name": "classification",
+          "type": "info_classification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "basis": {
+          "name": "basis",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label_id": {
+          "name": "label_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "numeric(4, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "classified_at": {
+          "name": "classified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "movement_classifications_native_transfer_id_native_transfers_id_fk": {
+          "name": "movement_classifications_native_transfer_id_native_transfers_id_fk",
+          "tableFrom": "movement_classifications",
+          "tableTo": "native_transfers",
+          "columnsFrom": [
+            "native_transfer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "movement_classifications_token_transfer_id_token_transfers_id_fk": {
+          "name": "movement_classifications_token_transfer_id_token_transfers_id_fk",
+          "tableFrom": "movement_classifications",
+          "tableTo": "token_transfers",
+          "columnsFrom": [
+            "token_transfer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "movement_classifications_label_id_labels_id_fk": {
+          "name": "movement_classifications_label_id_labels_id_fk",
+          "tableFrom": "movement_classifications",
+          "tableTo": "labels",
+          "columnsFrom": [
+            "label_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "movement_classifications_native_unique": {
+          "name": "movement_classifications_native_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "native_transfer_id"
+          ]
+        },
+        "movement_classifications_token_unique": {
+          "name": "movement_classifications_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_transfer_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "movement_classifications_one_transfer": {
+          "name": "movement_classifications_one_transfer",
+          "value": "(\"movement_classifications\".\"native_transfer_id\" is null) <> (\"movement_classifications\".\"token_transfer_id\" is null)"
+        },
+        "movement_classifications_allowed_classification": {
+          "name": "movement_classifications_allowed_classification",
+          "value": "\"movement_classifications\".\"classification\" in ('verified_fact', 'external_label', 'heuristic', 'assumption')"
+        },
+        "movement_classifications_fact_types": {
+          "name": "movement_classifications_fact_types",
+          "value": "(\"movement_classifications\".\"movement_type\" in ('transfer', 'mint', 'burn')) = (\"movement_classifications\".\"classification\" = 'verified_fact')"
+        },
+        "movement_classifications_heuristic_has_confidence": {
+          "name": "movement_classifications_heuristic_has_confidence",
+          "value": "\"movement_classifications\".\"classification\" <> 'heuristic' or \"movement_classifications\".\"confidence\" is not null"
+        },
+        "movement_classifications_confidence_range": {
+          "name": "movement_classifications_confidence_range",
+          "value": "\"movement_classifications\".\"confidence\" is null or (\"movement_classifications\".\"confidence\" >= 0 and \"movement_classifications\".\"confidence\" <= 1)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.native_transfers": {
+      "name": "native_transfers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "native_transfers_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tx_hash": {
+          "name": "tx_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "native_transfer_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trace_path": {
+          "name": "trace_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "from_address_id": {
+          "name": "from_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_address_id": {
+          "name": "to_address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_raw": {
+          "name": "amount_raw",
+          "type": "numeric(78, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_usd": {
+          "name": "amount_usd",
+          "type": "numeric(30, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "block_timestamp": {
+          "name": "block_timestamp",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_run_id": {
+          "name": "provider_run_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "native_transfers_from_time_idx": {
+          "name": "native_transfers_from_time_idx",
+          "columns": [
+            {
+              "expression": "from_address_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_timestamp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "native_transfers_to_time_idx": {
+          "name": "native_transfers_to_time_idx",
+          "columns": [
+            {
+              "expression": "to_address_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_timestamp",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "native_transfers_chain_block_idx": {
+          "name": "native_transfers_chain_block_idx",
+          "columns": [
+            {
+              "expression": "chain_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "block_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "native_transfers_chain_id_chains_id_fk": {
+          "name": "native_transfers_chain_id_chains_id_fk",
+          "tableFrom": "native_transfers",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "native_transfers_from_address_id_addresses_id_fk": {
+          "name": "native_transfers_from_address_id_addresses_id_fk",
+          "tableFrom": "native_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "from_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "native_transfers_to_address_id_addresses_id_fk": {
+          "name": "native_transfers_to_address_id_addresses_id_fk",
+          "tableFrom": "native_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "to_address_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "native_transfers_provider_run_id_provider_runs_id_fk": {
+          "name": "native_transfers_provider_run_id_provider_runs_id_fk",
+          "tableFrom": "native_transfers",
+          "tableTo": "provider_runs",
+          "columnsFrom": [
+            "provider_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "native_transfers_chain_from_fk": {
+          "name": "native_transfers_chain_from_fk",
+          "tableFrom": "native_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "from_address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "native_transfers_chain_to_fk": {
+          "name": "native_transfers_chain_to_fk",
+          "tableFrom": "native_transfers",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "to_address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "native_transfers_identity_unique": {
+          "name": "native_transfers_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "chain_id",
+            "tx_hash",
+            "kind",
+            "trace_path"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "native_transfers_amount_positive": {
+          "name": "native_transfers_amount_positive",
+          "value": "\"native_transfers\".\"amount_raw\" > 0"
+        },
+        "native_transfers_usd_non_negative": {
+          "name": "native_transfers_usd_non_negative",
+          "value": "\"native_transfers\".\"amount_usd\" is null or \"native_transfers\".\"amount_usd\" >= 0"
+        },
+        "native_transfers_trace_path_matches_kind": {
+          "name": "native_transfers_trace_path_matches_kind",
+          "value": "(\"native_transfers\".\"kind\" = 'transaction') = (\"native_transfers\".\"trace_path\" = '')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.map_edges": {
+      "name": "map_edges",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "map_edges_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_node_id": {
+          "name": "from_node_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_node_id": {
+          "name": "to_node_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "map_edge_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "native_transfer_id": {
+          "name": "native_transfer_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_transfer_id": {
+          "name": "token_transfer_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "map_edges_map_idx": {
+          "name": "map_edges_map_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "map_edges_native_transfer_id_native_transfers_id_fk": {
+          "name": "map_edges_native_transfer_id_native_transfers_id_fk",
+          "tableFrom": "map_edges",
+          "tableTo": "native_transfers",
+          "columnsFrom": [
+            "native_transfer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "map_edges_token_transfer_id_token_transfers_id_fk": {
+          "name": "map_edges_token_transfer_id_token_transfers_id_fk",
+          "tableFrom": "map_edges",
+          "tableTo": "token_transfers",
+          "columnsFrom": [
+            "token_transfer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "map_edges_from_node_fk": {
+          "name": "map_edges_from_node_fk",
+          "tableFrom": "map_edges",
+          "tableTo": "map_nodes",
+          "columnsFrom": [
+            "map_id",
+            "from_node_id"
+          ],
+          "columnsTo": [
+            "map_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "map_edges_to_node_fk": {
+          "name": "map_edges_to_node_fk",
+          "tableFrom": "map_edges",
+          "tableTo": "map_nodes",
+          "columnsFrom": [
+            "map_id",
+            "to_node_id"
+          ],
+          "columnsTo": [
+            "map_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "map_edges_map_native_unique": {
+          "name": "map_edges_map_native_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "map_id",
+            "native_transfer_id"
+          ]
+        },
+        "map_edges_map_token_unique": {
+          "name": "map_edges_map_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "map_id",
+            "token_transfer_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "map_edges_distinct_nodes": {
+          "name": "map_edges_distinct_nodes",
+          "value": "\"map_edges\".\"from_node_id\" <> \"map_edges\".\"to_node_id\""
+        },
+        "map_edges_one_transfer": {
+          "name": "map_edges_one_transfer",
+          "value": "(\"map_edges\".\"native_transfer_id\" is null) <> (\"map_edges\".\"token_transfer_id\" is null)"
+        },
+        "map_edges_token_kind_has_token_transfer": {
+          "name": "map_edges_token_kind_has_token_transfer",
+          "value": "\"map_edges\".\"kind\" <> 'token_transfer' or \"map_edges\".\"token_transfer_id\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.map_nodes": {
+      "name": "map_nodes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "map_nodes_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_id": {
+          "name": "address_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "map_node_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "share_pct": {
+          "name": "share_pct",
+          "type": "numeric(9, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "is_contract": {
+          "name": "is_contract",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "map_nodes_map_fk": {
+          "name": "map_nodes_map_fk",
+          "tableFrom": "map_nodes",
+          "tableTo": "wallet_maps",
+          "columnsFrom": [
+            "map_id",
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id",
+            "chain_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "map_nodes_chain_address_fk": {
+          "name": "map_nodes_chain_address_fk",
+          "tableFrom": "map_nodes",
+          "tableTo": "addresses",
+          "columnsFrom": [
+            "chain_id",
+            "address_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "map_nodes_map_address_unique": {
+          "name": "map_nodes_map_address_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "map_id",
+            "address_id"
+          ]
+        },
+        "map_nodes_map_id_unique": {
+          "name": "map_nodes_map_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "map_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "map_nodes_share_range": {
+          "name": "map_nodes_share_range",
+          "value": "\"map_nodes\".\"share_pct\" >= 0 and \"map_nodes\".\"share_pct\" <= 100"
+        },
+        "map_nodes_non_holder_has_no_share": {
+          "name": "map_nodes_non_holder_has_no_share",
+          "value": "\"map_nodes\".\"role\" = 'holder' or \"map_nodes\".\"share_pct\" = 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.wallet_maps": {
+      "name": "wallet_maps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "wallet_maps_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "chain_id": {
+          "name": "chain_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_id": {
+          "name": "token_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "block_number": {
+          "name": "block_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "holder_limit": {
+          "name": "holder_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "funding_depth": {
+          "name": "funding_depth",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "data_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status_reason": {
+          "name": "status_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "missing_fields": {
+          "name": "missing_fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "built_at": {
+          "name": "built_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "wallet_maps_token_built_idx": {
+          "name": "wallet_maps_token_built_idx",
+          "columns": [
+            {
+              "expression": "token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "built_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wallet_maps_chain_id_chains_id_fk": {
+          "name": "wallet_maps_chain_id_chains_id_fk",
+          "tableFrom": "wallet_maps",
+          "tableTo": "chains",
+          "columnsFrom": [
+            "chain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallet_maps_chain_token_fk": {
+          "name": "wallet_maps_chain_token_fk",
+          "tableFrom": "wallet_maps",
+          "tableTo": "tokens",
+          "columnsFrom": [
+            "chain_id",
+            "token_id"
+          ],
+          "columnsTo": [
+            "chain_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "wallet_maps_token_snapshot_fk": {
+          "name": "wallet_maps_token_snapshot_fk",
+          "tableFrom": "wallet_maps",
+          "tableTo": "token_snapshots",
+          "columnsFrom": [
+            "token_id",
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "token_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "wallet_maps_id_chain_unique": {
+          "name": "wallet_maps_id_chain_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "chain_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "wallet_maps_holder_limit_range": {
+          "name": "wallet_maps_holder_limit_range",
+          "value": "\"wallet_maps\".\"holder_limit\" between 1 and 1000"
+        },
+        "wallet_maps_funding_depth_range": {
+          "name": "wallet_maps_funding_depth_range",
+          "value": "\"wallet_maps\".\"funding_depth\" between 0 and 5"
+        },
+        "wallet_maps_unavailable_has_reason": {
+          "name": "wallet_maps_unavailable_has_reason",
+          "value": "\"wallet_maps\".\"status\" <> 'unavailable' or \"wallet_maps\".\"status_reason\" is not null"
+        },
+        "wallet_maps_partial_is_explained": {
+          "name": "wallet_maps_partial_is_explained",
+          "value": "\"wallet_maps\".\"status\" <> 'partial' or \"wallet_maps\".\"status_reason\" is not null or cardinality(\"wallet_maps\".\"missing_fields\") > 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.chain_family": {
+      "name": "chain_family",
+      "schema": "public",
+      "values": [
+        "evm",
+        "solana",
+        "bitcoin",
+        "tron",
+        "ton"
+      ]
+    },
+    "public.chain_support_status": {
+      "name": "chain_support_status",
+      "schema": "public",
+      "values": [
+        "planned",
+        "experimental",
+        "validated"
+      ]
+    },
+    "public.check_status": {
+      "name": "check_status",
+      "schema": "public",
+      "values": [
+        "fail",
+        "warn",
+        "unknown",
+        "pass"
+      ]
+    },
+    "public.data_status": {
+      "name": "data_status",
+      "schema": "public",
+      "values": [
+        "complete",
+        "partial",
+        "unavailable",
+        "stale"
+      ]
+    },
+    "public.entity_label_type": {
+      "name": "entity_label_type",
+      "schema": "public",
+      "values": [
+        "exchange",
+        "router",
+        "bridge",
+        "market_maker",
+        "treasury",
+        "bot",
+        "whale",
+        "deployer",
+        "liquidity_pool",
+        "launchpad",
+        "faucet",
+        "infrastructure",
+        "burn",
+        "unknown"
+      ]
+    },
+    "public.info_classification": {
+      "name": "info_classification",
+      "schema": "public",
+      "values": [
+        "verified_fact",
+        "derived_metric",
+        "heuristic",
+        "external_label",
+        "assumption",
+        "unavailable"
+      ]
+    },
+    "public.label_source": {
+      "name": "label_source",
+      "schema": "public",
+      "values": [
+        "external",
+        "heuristic",
+        "user"
+      ]
+    },
+    "public.map_edge_kind": {
+      "name": "map_edge_kind",
+      "schema": "public",
+      "values": [
+        "funding",
+        "token_transfer"
+      ]
+    },
+    "public.map_node_role": {
+      "name": "map_node_role",
+      "schema": "public",
+      "values": [
+        "holder",
+        "funder",
+        "connector"
+      ]
+    },
+    "public.movement_type": {
+      "name": "movement_type",
+      "schema": "public",
+      "values": [
+        "transfer",
+        "mint",
+        "burn",
+        "exchange_deposit",
+        "exchange_withdrawal",
+        "bridge_out",
+        "bridge_in",
+        "dex_interaction"
+      ]
+    },
+    "public.native_transfer_kind": {
+      "name": "native_transfer_kind",
+      "schema": "public",
+      "values": [
+        "transaction",
+        "internal"
+      ]
+    },
+    "public.provider_kind": {
+      "name": "provider_kind",
+      "schema": "public",
+      "values": [
+        "rpc",
+        "explorer",
+        "indexed_data",
+        "market_data",
+        "entity_label",
+        "security"
+      ]
+    },
+    "public.risk_level": {
+      "name": "risk_level",
+      "schema": "public",
+      "values": [
+        "unknown",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "public.risk_severity": {
+      "name": "risk_severity",
+      "schema": "public",
+      "values": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ]
+    },
+    "public.token_standard": {
+      "name": "token_standard",
+      "schema": "public",
+      "values": [
+        "erc20",
+        "spl",
+        "spl_token_2022"
+      ]
+    },
+    "public.trading_event_type": {
+      "name": "trading_event_type",
+      "schema": "public",
+      "values": [
+        "deploy",
+        "mint",
+        "add_liquidity",
+        "remove_liquidity",
+        "buy",
+        "sell",
+        "transfer",
+        "burn"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
