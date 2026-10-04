@@ -1,8 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, gt, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DATABASE, type Database } from '../database/database.module.js';
 import type { EntityLabelType } from '../database/schema/enums.js';
-import { addresses, addressFlowScans, chains, labels, tokens } from '../database/schema/index.js';
+import {
+  addresses,
+  addressFlowScans,
+  chains,
+  evidence,
+  labels,
+  providerRuns,
+  tokens,
+  transactions,
+} from '../database/schema/index.js';
+import type { EvidenceRecord } from '../tokens/evidence.view.js';
 import type { TraceEdge } from './trace-search.js';
 
 export type ScanRow = typeof addressFlowScans.$inferSelect;
@@ -343,6 +354,75 @@ export class FlowsRepository {
       timestamp: new Date(row.block_timestamp as string | Date),
       tokenId: row.token_id === null ? null : Number(row.token_id),
     }));
+  }
+
+  /**
+   * Semua perpindahan dana tersimpan dalam satu transaksi: nilai transaksi,
+   * panggilan internal (urut trace), lalu transfer token (urut log).
+   */
+  async movementsByTx(chainId: string, txHash: string) {
+    // ORDER BY dengan ekspresi tidak boleh langsung di UNION, jadi dibungkus subquery.
+    const rows = await this.rows(sql`
+      select * from (
+      select case when n.kind = 'internal' then 'internal' else 'native' end as source,
+        case when n.kind = 'internal' then 1 else 0 end as source_rank,
+        n.id, n.trace_path as position, null::int as log_index, n.from_address_id, n.to_address_id,
+        n.amount_raw::text as amount_raw, n.amount_usd::text as amount_usd, n.block_number, n.block_timestamp,
+        null::bigint as token_id, n.provider_run_id
+      from native_transfers n where n.chain_id = ${chainId} and n.tx_hash = ${txHash}
+      union all
+      select 'token', 2, t.id, t.log_index::text, t.log_index, t.from_address_id, t.to_address_id,
+        t.amount_raw::text, t.amount_usd::text, t.block_number, t.block_timestamp, t.token_id, t.provider_run_id
+      from token_transfers t where t.chain_id = ${chainId} and t.tx_hash = ${txHash}
+      ) moves
+      order by source_rank, log_index nulls first, length(position), position, id`);
+    return rows.map((row) => ({
+      source: (row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native') as 'native' | 'internal' | 'token',
+      id: Number(row.id),
+      position: String(row.position),
+      fromId: Number(row.from_address_id),
+      toId: Number(row.to_address_id),
+      amountRaw: String(row.amount_raw),
+      amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      blockNumber: Number(row.block_number),
+      timestamp: new Date(row.block_timestamp as string | Date),
+      tokenId: row.token_id === null ? null : Number(row.token_id),
+      providerRunId: row.provider_run_id === null ? null : Number(row.provider_run_id),
+    }));
+  }
+
+  /** Detail transaksi bila sudah diambil (dari ingest token). */
+  async findTransaction(chainId: string, txHash: string) {
+    const from = alias(addresses, 'tx_from');
+    const to = alias(addresses, 'tx_to');
+    const [row] = await this.db
+      .select({ transaction: transactions, from: from.address, to: to.address })
+      .from(transactions)
+      .leftJoin(from, eq(transactions.fromAddressId, from.id))
+      .leftJoin(to, eq(transactions.toAddressId, to.id))
+      .where(and(eq(transactions.chainId, chainId), eq(transactions.hash, txHash)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** Bukti (klaim analisis) yang menunjuk hash transaksi ini. */
+  async evidenceByTx(chainId: string, txHash: string): Promise<EvidenceRecord[]> {
+    const source = alias(addresses, 'source');
+    const destination = alias(addresses, 'destination');
+    const contract = alias(addresses, 'contract');
+    return this.db
+      .select({ evidence, sourceAddress: source.address, destinationAddress: destination.address, contractAddress: contract.address })
+      .from(evidence)
+      .leftJoin(source, eq(evidence.sourceAddressId, source.id))
+      .leftJoin(destination, eq(evidence.destinationAddressId, destination.id))
+      .leftJoin(contract, eq(evidence.contractAddressId, contract.id))
+      .where(and(eq(evidence.chainId, chainId), eq(evidence.txHash, txHash)))
+      .orderBy(asc(evidence.id));
+  }
+
+  async providerRunsByIds(runIds: number[]) {
+    if (runIds.length === 0) return [];
+    return this.db.select().from(providerRuns).where(inArray(providerRuns.id, runIds)).orderBy(asc(providerRuns.id));
   }
 
   /** Id address yang berlabel hub. */

@@ -444,6 +444,23 @@ ditampilkan.
   percobaan gagal sesudahnya, dan jumlah transfer dalam cakupan. Chain yang
   belum dipindai punya `transferCount: null` (belum diketahui), bukan `0`.
 
+### `GET /api/transactions/:chain/:hash`
+
+Bukti satu transaksi untuk modal bukti, dari data yang tersimpan.
+
+- `movements`: semua perpindahan dana dalam transaksi itu (nilai transaksi,
+  panggilan internal urut trace, lalu transfer token urut log), dengan pengirim,
+  penerima, label beserta sumbernya, aset, dan jumlah. Semuanya
+  `verified_fact`.
+- `transaction`: method, status sukses, dan nilai bila detail transaksinya
+  sudah diambil; `null` bila hanya transfernya yang tercatat.
+- `claims`: klaim analisis (mis. temuan risiko) yang memakai transaksi ini
+  sebagai bukti, lengkap dengan klasifikasinya. `sources`: provider yang
+  mencatat perpindahan tersebut. `explorerUrl` menuju halaman transaksi.
+- Hash tidak peka huruf besar-kecil untuk EVM. Transaksi yang belum tercatat
+  di data yang dipindai dijawab `404`, bukan dikarang; format hash yang salah
+  dijawab `400`.
+
 ### `GET /api/traces/:chain/:from/:to`
 
 Jalur dana dari satu wallet ke wallet lain lewat transfer yang tersimpan

@@ -9,9 +9,11 @@ import { FlowsController } from './flows.controller.js';
 import { FlowsRepository } from './flows.repository.js';
 import { TraceService } from './trace.service.js';
 import { TracesController } from './traces.controller.js';
+import { TransactionEvidenceService } from './transaction-evidence.service.js';
+import { TransactionsController } from './transactions.controller.js';
 
 @Module({
-  controllers: [FlowsController, TracesController],
-  providers: [FlowsRepository, FlowLookupService, FlowSummaryService, FlowTransfersService, FlowChainsService, TraceService, SnapshotFreshness, { provide: CLOCK, useValue: systemClock }],
+  controllers: [FlowsController, TracesController, TransactionsController],
+  providers: [FlowsRepository, FlowLookupService, FlowSummaryService, FlowTransfersService, FlowChainsService, TraceService, TransactionEvidenceService, SnapshotFreshness, { provide: CLOCK, useValue: systemClock }],
 })
 export class FlowsModule {}
