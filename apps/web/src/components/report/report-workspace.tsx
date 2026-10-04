@@ -1,6 +1,7 @@
-import { Camera, ClipboardCheck, ExternalLink, FileSearch, FolderOpen, Info, ListTree, NotebookPen, OctagonAlert, TriangleAlert } from "lucide-react";
+import { Camera, ClipboardCheck, ExternalLink, FileSearch, FolderOpen, Info, ListTree, NotebookPen, OctagonAlert, Target, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { ChainBadge } from "@/components/badges";
+import type { ReactNode } from "react";
+import { ChainBadge, EntityLabelBadge } from "@/components/badges";
 import { CaseDataStatusBadge } from "@/components/case/case-badges";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { EvidenceMovements, EvidenceTrigger } from "@/components/evidence/evidence-dialog";
@@ -115,7 +116,7 @@ function MissingValue({ children }: { children: string }) {
   return <span className={cn("italic", RISK_TONES.critical.textClass)}>{children}</span>;
 }
 
-function Block({ block, report, flagged }: { block: ReportBlock; report: InvestigationReport; flagged: boolean }) {
+function Block({ block, report, flagged, highlighted }: { block: ReportBlock; report: InvestigationReport; flagged: boolean; highlighted: boolean }) {
   const anchor = reportBlockAnchor(block.id);
   if (block.kind === "paragraph") {
     return (
@@ -140,7 +141,10 @@ function Block({ block, report, flagged }: { block: ReportBlock; report: Investi
     return (
       <div
         id={anchor}
-        className={cn("scroll-mt-20 rounded-lg border p-3 sm:p-4", flagged ? "border-rose-400/40" : "border-line")}
+        className={cn(
+          "scroll-mt-20 rounded-lg border p-3 transition sm:p-4",
+          flagged ? "border-rose-400/40" : highlighted ? "border-accent/60 bg-accent/5" : "border-line",
+        )}
       >
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h3 className="text-sm font-medium">{claim.title}</h3>
@@ -163,6 +167,25 @@ function Block({ block, report, flagged }: { block: ReportBlock; report: Investi
             )}
           </dd>
         </dl>
+      </div>
+    );
+  }
+  if (block.kind === "entity") {
+    const { subject } = block;
+    return (
+      <div id={anchor} className={cn("scroll-mt-20 rounded-lg border p-3 transition", highlighted ? "border-accent/60 bg-accent/5" : "border-line")}>
+        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+          <Target className="size-3.5" aria-hidden />
+          {subject.kind === "token" ? "Token" : "Address"}
+          {subject.chain ? <ChainBadge chain={subject.chain} /> : <span>· semua chain EVM</span>}
+          {subject.label ? <EntityLabelBadge label={subject.label} /> : null}
+        </p>
+        <p className="mt-1 text-sm font-medium">
+          <Link href={subject.href} className="rounded hover:text-accent focus-visible:outline-2 focus-visible:outline-accent">
+            {subject.title}
+          </Link>
+        </p>
+        <p className="mt-0.5 break-all font-mono text-[11px] text-muted">{subject.address}</p>
       </div>
     );
   }
@@ -206,10 +229,23 @@ function Block({ block, report, flagged }: { block: ReportBlock; report: Investi
 }
 
 /** Isi laporan per bagian, seperti yang akan dibaca penerima laporan. */
-export function ReportDocument({ report, issues }: { report: InvestigationReport; issues: ReportIssue[] }) {
+export function ReportDocument({
+  report,
+  issues,
+  highlighted = new Set(),
+  toolbar,
+}: {
+  report: InvestigationReport;
+  issues: ReportIssue[];
+  /** Blok yang baru ditambahkan, disorot sebentar. */
+  highlighted?: ReadonlySet<string>;
+  /** Tombol aksi di atas isi laporan. */
+  toolbar?: ReactNode;
+}) {
   const flagged = new Set(issues.filter((issue) => issue.level === "blocker" && issue.blockId).map((issue) => issue.blockId));
   return (
     <article aria-label={`Isi laporan ${report.title}`} className="space-y-5">
+      {toolbar}
       {report.sections.map((section, index) => (
         <section
           key={section.id}
@@ -228,7 +264,7 @@ export function ReportDocument({ report, issues }: { report: InvestigationReport
           ) : (
             <div className="mt-3 space-y-3">
               {section.blocks.map((block) => (
-                <Block key={block.id} block={block} report={report} flagged={flagged.has(block.id)} />
+                <Block key={block.id} block={block} report={report} flagged={flagged.has(block.id)} highlighted={highlighted.has(block.id)} />
               ))}
             </div>
           )}

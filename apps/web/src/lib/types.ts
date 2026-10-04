@@ -846,7 +846,9 @@ export type ReportBlock =
   | { kind: "paragraph"; id: string; text: string }
   | { kind: "claim"; id: string; claim: ReportClaim }
   | { kind: "evidence"; id: string; chain: ChainId; txHash: string; caption: string }
-  | { kind: "note"; id: string; body: string; createdAt: string };
+  | { kind: "note"; id: string; body: string; createdAt: string }
+  /** Entitas yang diselidiki, diambil dari subjek kasus. */
+  | { kind: "entity"; id: string; subject: CaseSubject };
 
 export interface ReportSection {
   id: string;

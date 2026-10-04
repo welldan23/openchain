@@ -65,7 +65,8 @@ const nblaReport: InvestigationReport = {
       id: "temuan",
       title: "Temuan",
       blocks: [
-        ...claimBlocks(nblaCase, "OpenChain heuristic"),
+        // Sengaja belum semua temuan kasus dimasukkan; sisanya bisa dipilih dari pemilih temuan.
+        ...claimBlocks(nblaCase, "OpenChain heuristic").slice(0, 2),
         {
           kind: "claim",
           id: "klaim-pajak",
