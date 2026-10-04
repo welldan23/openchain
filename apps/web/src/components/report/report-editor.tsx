@@ -6,11 +6,13 @@ import { EvidenceProvider } from "@/components/evidence/evidence-dialog";
 import { reportBlockAnchor, reportIssues } from "@/lib/report";
 import { shortenHash } from "@/lib/format";
 import { embedEvidence, type ReportEvidenceEntry } from "@/lib/report-evidence";
+import { addNote, NOTES_SECTION, noteClaimOptions, removeNote, updateNote, type NoteResult } from "@/lib/report-notes";
 import { addPickedItems } from "@/lib/report-picker";
 import type { InvestigationCase, InvestigationReport } from "@/lib/types";
 import { ReportEvidencePanel } from "./report-evidence-panel";
 import { ReportExportDialog } from "./report-export-dialog";
 import { ReportFindingsIndex } from "./report-findings-index";
+import { EditableNote, NoteComposer } from "./report-notes-editor";
 import { ReportPicker, type PickerSelection } from "./report-picker";
 import { ReportDocument, ReportHeader, ReportOutline, ReportReadinessPanel, ReportSnapshotPanel } from "./report-workspace";
 
@@ -67,6 +69,19 @@ export function ReportEditor({
     setMessage(`Bukti ${shortenHash(entry.txHash)} disematkan ke bagian Bukti utama.`);
   }
 
+  function applyNote(result: NoteResult, success: string, highlight: boolean): string | null {
+    if (!result.ok) return result.error;
+    setReport(result.report);
+    if (highlight) setHighlighted(new Set([result.blockId]));
+    setMessage(success);
+    return null;
+  }
+
+  const claims = noteClaimOptions(report);
+  const hasNotesSection = report.sections.some((section) => section.id === NOTES_SECTION.id);
+  const addNoteNow = (body: string, claim: string | null) =>
+    applyNote(addNote(report, body, new Date().toISOString(), claim), "Catatan ditambahkan.", true);
+
   const toolbar = (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -100,7 +115,27 @@ export function ReportEditor({
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]">
           <ReportOutline report={report} issues={issues} />
           <div className="min-w-0">
-            <ReportDocument report={report} issues={issues} highlighted={highlighted} toolbar={toolbar} />
+            <ReportDocument
+              report={report}
+              issues={issues}
+              highlighted={highlighted}
+              toolbar={toolbar}
+              renderBlock={(block, view) =>
+                block.kind === "note" ? (
+                  <EditableNote
+                    block={block}
+                    view={view}
+                    claims={claims}
+                    onSave={(body, claim) => applyNote(updateNote(report, block.id, body, new Date().toISOString(), claim), "Catatan diubah.", true)}
+                    onRemove={() => applyNote(removeNote(report, block.id, new Date().toISOString()), "Catatan dihapus.", false)}
+                  />
+                ) : (
+                  view
+                )
+              }
+              sectionFooter={(section) => (section.id === NOTES_SECTION.id ? <NoteComposer claims={claims} onAdd={addNoteNow} /> : null)}
+              afterSections={hasNotesSection ? null : <NoteComposer claims={claims} onAdd={addNoteNow} standalone />}
+            />
             <div className="mt-5">
               <ReportEvidencePanel report={report} onEmbed={embed} />
             </div>

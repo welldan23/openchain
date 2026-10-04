@@ -1,6 +1,6 @@
 import { Camera, ClipboardCheck, ExternalLink, FileSearch, FolderOpen, Info, ListTree, NotebookPen, OctagonAlert, Target, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { ChainBadge, EntityLabelBadge } from "@/components/badges";
 import { CaseDataStatusBadge } from "@/components/case/case-badges";
 import { ClassificationBadge } from "@/components/classification-badge";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { formatDateTime, formatNumber, formatRelativeTime, shortenHash } from "@/lib/format";
 import { CASE_DATA_STATUS_META, CLASSIFICATION_STRIPE, RISK_TONES } from "@/lib/labels";
 import { reportBlockAnchor, reportOutline, reportSectionAnchor, reportStats, type ReportIssue } from "@/lib/report";
-import type { InvestigationReport, ReportBlock } from "@/lib/types";
+import type { InvestigationReport, ReportBlock, ReportSection } from "@/lib/types";
 import { ReportReadinessBadge, ReportStatusBadge } from "./report-badges";
 
 export function ReportHeader({ report, issues, now }: { report: InvestigationReport; issues: ReportIssue[]; now: Date }) {
@@ -126,13 +126,30 @@ function Block({ block, report, flagged, highlighted }: { block: ReportBlock; re
     );
   }
   if (block.kind === "note") {
+    const claim = block.claimBlockId ? report.sections.flatMap((section) => section.blocks).find((item) => item.id === block.claimBlockId) : undefined;
     return (
-      <aside id={anchor} className="scroll-mt-20 rounded-lg border border-line bg-surface-raised/60 px-3 py-2.5">
-        <p className="flex items-center gap-1.5 text-[11px] text-muted">
+      <aside
+        id={anchor}
+        className={cn("scroll-mt-20 rounded-lg border bg-surface-raised/60 px-3 py-2.5 transition", highlighted ? "border-accent/60" : "border-line")}
+      >
+        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
           <NotebookPen className="size-3.5" aria-hidden />
           Catatan investigasi · <time dateTime={block.createdAt}>{formatDateTime(block.createdAt)}</time>
+          {block.editedAt ? (
+            <span title={`Diubah ${formatDateTime(block.editedAt)}`}>
+              · diubah <time dateTime={block.editedAt}>{formatDateTime(block.editedAt)}</time>
+            </span>
+          ) : null}
         </p>
         <p className="mt-1 text-sm leading-relaxed">{block.body}</p>
+        {claim?.kind === "claim" ? (
+          <p className="mt-1.5 text-[11px] text-muted">
+            Terkait klaim:{" "}
+            <a href={`#${reportBlockAnchor(claim.id)}`} className="text-foreground/85 hover:text-accent focus-visible:outline-2 focus-visible:outline-accent">
+              {claim.claim.title}
+            </a>
+          </p>
+        ) : null}
       </aside>
     );
   }
@@ -235,6 +252,9 @@ export function ReportDocument({
   issues,
   highlighted = new Set(),
   toolbar,
+  renderBlock,
+  sectionFooter,
+  afterSections,
 }: {
   report: InvestigationReport;
   issues: ReportIssue[];
@@ -242,6 +262,12 @@ export function ReportDocument({
   highlighted?: ReadonlySet<string>;
   /** Tombol aksi di atas isi laporan. */
   toolbar?: ReactNode;
+  /** Ganti tampilan satu blok (mis. jadi editor); `view` adalah tampilan bawaannya. */
+  renderBlock?: (block: ReportBlock, view: ReactNode) => ReactNode;
+  /** Isi tambahan di akhir sebuah bagian, mis. formulir catatan baru. */
+  sectionFooter?: (section: ReportSection) => ReactNode;
+  /** Isi tambahan setelah semua bagian. */
+  afterSections?: ReactNode;
 }) {
   const flagged = new Set(issues.filter((issue) => issue.level === "blocker" && issue.blockId).map((issue) => issue.blockId));
   return (
@@ -264,13 +290,16 @@ export function ReportDocument({
             </p>
           ) : (
             <div className="mt-3 space-y-3">
-              {section.blocks.map((block) => (
-                <Block key={block.id} block={block} report={report} flagged={flagged.has(block.id)} highlighted={highlighted.has(block.id)} />
-              ))}
+              {section.blocks.map((block) => {
+                const view = <Block block={block} report={report} flagged={flagged.has(block.id)} highlighted={highlighted.has(block.id)} />;
+                return <Fragment key={block.id}>{renderBlock ? renderBlock(block, view) : view}</Fragment>;
+              })}
             </div>
           )}
+          {sectionFooter?.(section)}
         </section>
       ))}
+      {afterSections}
     </article>
   );
 }
