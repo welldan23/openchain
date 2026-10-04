@@ -382,6 +382,22 @@ bisa dibuka ulang dengan hasil yang sama:
 `block` dan `at` tidak boleh dipakai bersamaan. Waktu wajib lengkap dengan zona
 waktu supaya tidak ambigu.
 
+### `GET /api/chains`
+
+Daftar jaringan beserta bukti status dukungannya, urut prioritas adapter di
+PRD. Kontraknya ada di `src/chains/chains-catalog.types.ts`. Query: `family`,
+`status` (`planned`/`experimental`/`validated`), dan `capability` (hanya chain
+yang kemampuan itu minimal `experimental`).
+
+- Tiap chain: status dukungan, `supported` (hanya `true` bila `validated`),
+  `hasAdapter`, ringkasan smoke test yang jadi dasar status (`lastCheck`: waktu,
+  jumlah lulus, gagal wajib, dan gagal opsional), dan delapan kemampuan data
+  dengan sumber, alasan, dan waktu pengujiannya. Kemampuan yang belum pernah
+  diuji tetap `planned` dengan alasan itu.
+- `GET /api/chains/:chain` menambah daftar pemeriksaan smoke test terakhir dan
+  riwayat 10 smoke test terbaru. Chain tak dikenal dijawab `404`; nilai filter
+  yang salah `400`.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,
