@@ -1,8 +1,14 @@
 import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { parseIsoTime, parsePositiveInteger } from '../common/query-params.js';
 import { entityLabelType, mapEdgeKind, type MapEdgeKind } from '../database/schema/enums.js';
+import { CoordinationService } from './coordination.service.js';
 import type { LabelSourceFilter, MapFilter } from './map-filter.js';
-import type { WalletMapClustersResponse, WalletMapEdgeDetailResponse, WalletMapResponse } from './maps.types.js';
+import type {
+  WalletMapClustersResponse,
+  WalletMapCoordinationResponse,
+  WalletMapEdgeDetailResponse,
+  WalletMapResponse,
+} from './maps.types.js';
 import { WalletClusterService } from './wallet-cluster.service.js';
 import { HOLDER_LIMIT_RANGE } from './wallet-map-builder.service.js';
 import { WalletMapEdgeService } from './wallet-map-edge.service.js';
@@ -13,7 +19,7 @@ import { MAX_RADIUS, WalletMapService } from './wallet-map.service.js';
  * langkah dari holder, `?holders=` (1–1000, default 50) jumlah holder
  * teratas, dan `?map=` membuka peta tersimpan tertentu. Detail satu garis
  * beserta bukti transaksinya ada di `edges/:edgeId`, kelompok wallet di
- * `clusters`. Filter: `hide` (jenis label utama, `none` = tanpa label),
+ * `clusters`, dan gerak serempak di `coordination`. Filter: `hide` (jenis label utama, `none` = tanpa label),
  * `labelSource` (external/heuristic), `from`/`to` (waktu transfer), dan
  * `kinds` (funding/token_transfer). Hanya dari data tersimpan; provider tidak
  * dihubungi saat diminta.
@@ -24,6 +30,7 @@ export class MapsController {
     private readonly service: WalletMapService,
     private readonly edges: WalletMapEdgeService,
     private readonly clusters: WalletClusterService,
+    private readonly coordination: CoordinationService,
   ) {}
 
   @Get(':chain/:token')
@@ -50,6 +57,15 @@ export class MapsController {
   @Get(':chain/:token/clusters')
   getClusters(@Param('chain') chain: string, @Param('token') token: string, @Query('map') map?: string): Promise<WalletMapClustersResponse> {
     return this.clusters.getClusters(chain, token, parsePositiveInteger(map, 'map'));
+  }
+
+  @Get(':chain/:token/coordination')
+  getCoordination(
+    @Param('chain') chain: string,
+    @Param('token') token: string,
+    @Query('map') map?: string,
+  ): Promise<WalletMapCoordinationResponse> {
+    return this.coordination.getCoordination(chain, token, parsePositiveInteger(map, 'map'));
   }
 
   @Get(':chain/:token/edges/:edgeId')

@@ -1,6 +1,7 @@
 /**
  * Kontrak respons `GET /api/maps/:chain/:token`,
- * `GET /api/maps/:chain/:token/clusters`, dan
+ * `GET /api/maps/:chain/:token/clusters`,
+ * `GET /api/maps/:chain/:token/coordination`, dan
  * `GET /api/maps/:chain/:token/edges/:edgeId`.
  *
  * Wallet dan garis adalah fakta: holder dari snapshot, garis dari transfer
@@ -8,7 +9,15 @@
  * wallet dimiliki orang yang sama; pengelompokan wallet adalah dugaan dan
  * disajikan terpisah.
  */
-import type { ClusterLabel, ConfidenceLevel, DataStatus, MapEdgeKind, MapNodeRole } from '../database/schema/enums.js';
+import type {
+  ClusterLabel,
+  ConfidenceLevel,
+  CoordinationAction,
+  CoordinationKind,
+  DataStatus,
+  MapEdgeKind,
+  MapNodeRole,
+} from '../database/schema/enums.js';
 import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from '../flows/flow-summary.types.js';
 import type { TransactionEvidenceResponse } from '../flows/transaction-evidence.types.js';
 
@@ -70,7 +79,7 @@ export interface WalletClusterView {
   caveats: string[];
 }
 
-/** Kapan dan dengan heuristic apa kelompok peta ini dihitung. */
+/** Kapan dan dengan heuristic apa analisis peta (kelompok atau koordinasi) dihitung. */
 export interface ClusteringInfo {
   heuristic: string;
   computedAt: string;
@@ -84,6 +93,52 @@ export interface WalletMapClustersResponse {
   clusters: WalletClusterView[];
   /** Holder peta yang tidak masuk kelompok mana pun. */
   unclusteredHolders: number;
+  caveats: string[];
+}
+
+/** Transaksi pendukung kejadian koordinasi; transfernya fakta on-chain. */
+export interface CoordinationTxView {
+  /** Kunci transfer, mis. `native:12` atau `token:5`. */
+  id: string;
+  action: CoordinationAction;
+  txHash: string;
+  blockNumber: number;
+  timestamp: string;
+  from: string;
+  to: string;
+  transferKind: 'native' | 'internal' | 'token';
+  asset: FlowAsset;
+  amountRaw: string;
+  amount: string | null;
+  amountUsd: number | null;
+  classification: 'verified_fact';
+}
+
+/** Beberapa wallet melakukan hal serupa di waktu yang sangat berdekatan; selalu dugaan. */
+export interface CoordinationEventView {
+  id: string;
+  kind: CoordinationKind;
+  /** Penjelasan singkat, mis. "5 wallet didanai 0xabc…1234 dalam 9 menit". */
+  detail: string;
+  /** Address holder yang terlibat. */
+  members: string[];
+  confidence: ConfidenceLevel;
+  classification: 'heuristic';
+  heuristic: string;
+  /** Waktu transaksi pertama. */
+  timestamp: string;
+  /** Rentang waktu kejadian dalam detik; 0 bila di blok yang sama. */
+  windowSeconds: number;
+  blockNumber: number | null;
+  transactions: CoordinationTxView[];
+}
+
+export interface WalletMapCoordinationResponse {
+  chain: FlowChainInfo;
+  token: { address: string; symbol: string | null };
+  map: { id: number; builtAt: string; status: DataStatus };
+  analysis: ClusteringInfo;
+  coordination: CoordinationEventView[];
   caveats: string[];
 }
 
@@ -132,6 +187,9 @@ export interface WalletMapResponse {
   /** Kelompok wallet di seluruh peta (tidak dipotong radius). */
   clusters: WalletClusterView[];
   clustering: ClusteringInfo;
+  /** Kejadian gerak serempak di seluruh peta (tidak dipotong radius atau filter). */
+  coordination: CoordinationEventView[];
+  coordinationAnalysis: ClusteringInfo;
   /**
    * Jumlah wallet per jenis label utama di dalam radius, sebelum filter label;
    * `none` = tanpa label. Dipakai untuk pilihan filter.

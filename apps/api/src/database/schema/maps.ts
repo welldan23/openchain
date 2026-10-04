@@ -51,10 +51,15 @@ export const walletMaps = pgTable(
     clusteredAt: timestampTz('clustered_at'),
     /** Nama dan versi heuristic pengelompokan yang dipakai. */
     clusterHeuristic: text('cluster_heuristic'),
+    /** Waktu kejadian koordinasi dideteksi; kosong berarti belum dianalisis. */
+    coordinatedAt: timestampTz('coordinated_at'),
+    /** Nama dan versi heuristic deteksi koordinasi yang dipakai. */
+    coordinationHeuristic: text('coordination_heuristic'),
   },
   (t) => [
     index('wallet_maps_token_built_idx').on(t.tokenId, t.builtAt),
     check('wallet_maps_clustering_complete', sql`(${t.clusteredAt} is null) = (${t.clusterHeuristic} is null)`),
+    check('wallet_maps_coordination_complete', sql`(${t.coordinatedAt} is null) = (${t.coordinationHeuristic} is null)`),
     // Dipakai foreign key komposit node agar address tidak dari chain lain.
     unique('wallet_maps_id_chain_unique').on(t.id, t.chainId),
     foreignKey({ name: 'wallet_maps_chain_token_fk', columns: [t.chainId, t.tokenId], foreignColumns: [tokens.chainId, tokens.id] }),

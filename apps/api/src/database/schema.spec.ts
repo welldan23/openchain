@@ -867,6 +867,10 @@ describe('peta hubungan: node, edge, dan bukti transaksi', () => {
       db.insert(schema.walletMaps).values({ ...base, status: 'complete', clusteredAt: FETCHED_AT }),
       'wallet_maps_clustering_complete',
     );
+    await expectConstraintViolation(
+      db.insert(schema.walletMaps).values({ ...base, status: 'complete', coordinationHeuristic: 'openchain-coordination-v1' }),
+      'wallet_maps_coordination_complete',
+    );
   });
 });
 

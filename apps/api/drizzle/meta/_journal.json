@@ -64,6 +64,13 @@
       "when": 1791081208622,
       "tag": "0008_map_clustering_marker",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791111704596,
+      "tag": "0009_map_coordination_marker",
+      "breakpoints": true
     }
   ]
 }

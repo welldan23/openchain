@@ -599,6 +599,29 @@ Respons peta (`GET /api/maps/:chain/:token`) juga memuat `clusters`,
 - Respons error: `404` bila token belum punya peta atau peta bukan milik token
   itu; `400` untuk parameter yang salah.
 
+### `GET /api/maps/:chain/:token/coordination`
+
+Gerak serempak di antara holder sebuah peta (`?map=<id>`, atau peta terbaru
+token ini). Respons peta juga memuat `coordination` dan `coordinationAnalysis`.
+
+- Dideteksi sekali per peta dengan heuristic `openchain-coordination-v1`, lalu
+  disimpan di `coordination_events` beserta anggota dan transaksinya;
+  `wallet_maps.coordinated_at` menandai peta yang sudah dianalisis.
+- Jenis kejadian: `funding_burst` (satu pendana mendanai ≥3 holder dalam 10
+  menit, pola Sybil), `similar_amount` (satu pendana mengirim jumlah yang
+  hampir sama, selisih ≤1%, ke ≥3 holder), `same_block_buy` (≥2 holder membeli
+  di blok yang sama, pola bundler), dan `coordinated_sell` (≥2 holder menjual
+  dalam 5 menit). Maksimal 20 kejadian per jenis.
+- Beli = menerima token peta dari pool, router, atau kontrak; jual =
+  mengirimnya ke sana. Holder berupa exchange/hub/kontrak dan pendana
+  exchange/hub tidak dihitung.
+- Tiap transaksi pendukung adalah transfer tersimpan (`verified_fact`) dengan
+  aksi, pihak, aset, dan jumlahnya; kejadiannya sendiri `heuristic`. `caveats`
+  mengingatkan bahwa gerak serempak bisa kebetulan dan beli/jual hanya
+  dikenali bila lawan transaksinya diketahui.
+- Respons error: `404` bila token belum punya peta atau peta bukan milik token
+  itu; `400` untuk parameter yang salah.
+
 ### `GET /api/maps/:chain/:token/edges/:edgeId`
 
 Detail satu garis peta. `edgeId` adalah `id` garis di respons peta

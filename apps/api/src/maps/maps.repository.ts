@@ -1,10 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, gt, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
+import type { CoordinationAction } from '../database/schema/enums.js';
 import {
   addresses,
   addressFlowScans,
   chains,
+  coordinationEventMembers,
+  coordinationEvents,
   holders,
   labels,
   mapClusterMembers,
@@ -45,6 +48,8 @@ function transferFilter(edge: TransferRef): SQL {
 
 /** Batas transfer bukti per pengecekan sinyal, supaya respons tetap kecil. */
 const CLUSTER_EVIDENCE_LIMIT = 200;
+/** Batas transfer token holder yang diperiksa untuk deteksi koordinasi. */
+const HOLDER_TRADE_LIMIT = 5_000;
 
 function toEvidence(row: Raw, table: 'native' | 'token'): EvidenceTransfer {
   return {
@@ -306,6 +311,72 @@ export class MapsRepository {
       signals: signals
         .filter((signal) => signal.clusterId === cluster.id)
         .map((signal) => ({ ...signal, evidence: evidence.filter((item) => item.signalId === signal.id) })),
+    }));
+  }
+
+  /** Transfer token peta yang masuk ke atau keluar dari address ini, sampai blok peta. */
+  async holderTokenTransfers(chainId: string, tokenId: number, blockNumber: number, addressIds: number[]) {
+    if (addressIds.length === 0) return [];
+    const ids = idList(addressIds);
+    const rows = await this.rows(sql`
+      select t.id, t.from_address_id, t.to_address_id, t.block_number, t.block_timestamp
+      from token_transfers t
+      where t.chain_id = ${chainId} and t.token_id = ${tokenId} and t.block_number <= ${blockNumber}
+        and (t.from_address_id in (${ids}) or t.to_address_id in (${ids})) and t.from_address_id <> t.to_address_id
+      order by t.block_number, t.log_index, t.id
+      limit ${HOLDER_TRADE_LIMIT}`);
+    return rows.map((row) => toEvidence(row, 'token'));
+  }
+
+  /** Kejadian koordinasi tersimpan beserta anggota dan transaksi pendukungnya. */
+  async storedCoordination(mapId: number) {
+    const events = await this.db
+      .select()
+      .from(coordinationEvents)
+      .where(eq(coordinationEvents.mapId, mapId))
+      .orderBy(asc(coordinationEvents.id));
+    if (events.length === 0) return [];
+    const eventIds = events.map((item) => item.id);
+    const members = await this.db
+      .select()
+      .from(coordinationEventMembers)
+      .where(inArray(coordinationEventMembers.eventId, eventIds))
+      .orderBy(asc(coordinationEventMembers.nodeId));
+    const txRows = await this.rows(sql`
+      select c.event_id, c.action,
+        case when c.token_transfer_id is not null then 'token' when n.kind = 'internal' then 'internal' else 'native' end as source,
+        coalesce(c.native_transfer_id, c.token_transfer_id) as transfer_id,
+        coalesce(n.tx_hash, t.tx_hash) as tx_hash,
+        coalesce(n.block_number, t.block_number) as block_number,
+        coalesce(n.block_timestamp, t.block_timestamp) as block_timestamp,
+        coalesce(n.amount_raw, t.amount_raw)::text as amount_raw,
+        coalesce(n.amount_usd, t.amount_usd)::text as amount_usd,
+        fa.address as from_address, ta.address as to_address, t.token_id
+      from coordination_txs c
+      left join native_transfers n on n.id = c.native_transfer_id
+      left join token_transfers t on t.id = c.token_transfer_id
+      join addresses fa on fa.id = coalesce(n.from_address_id, t.from_address_id)
+      join addresses ta on ta.id = coalesce(n.to_address_id, t.to_address_id)
+      where c.event_id in (${idList(eventIds)})
+      order by block_number, c.id`);
+    const txs = txRows.map((row) => ({
+      eventId: Number(row.event_id),
+      action: row.action as CoordinationAction,
+      source: (row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native') as 'native' | 'internal' | 'token',
+      transferId: Number(row.transfer_id),
+      txHash: String(row.tx_hash),
+      blockNumber: Number(row.block_number),
+      timestamp: new Date(row.block_timestamp as string | Date),
+      amountRaw: String(row.amount_raw),
+      amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      from: String(row.from_address),
+      to: String(row.to_address),
+      tokenId: row.token_id === null ? null : Number(row.token_id),
+    }));
+    return events.map((item) => ({
+      ...item,
+      nodeIds: members.filter((member) => member.eventId === item.id).map((member) => member.nodeId),
+      txs: txs.filter((tx) => tx.eventId === item.id),
     }));
   }
 

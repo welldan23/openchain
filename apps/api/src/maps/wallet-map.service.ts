@@ -5,6 +5,7 @@ import { HUB_LABEL_TYPES } from '../flows/flows.repository.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
 import { resolveMapToken } from './map-lookup.js';
+import { CoordinationService } from './coordination.service.js';
 import { EntityLabelService } from './entity-label.service.js';
 import { edgeMatches, labelCounts, NO_FILTER, nodeMatches, type MapFilter } from './map-filter.js';
 import { trimToRadius } from './map-radius.js';
@@ -42,6 +43,7 @@ export class WalletMapService {
     private readonly freshness: SnapshotFreshness,
     private readonly clusters: WalletClusterService,
     private readonly entityLabels: EntityLabelService,
+    private readonly coordination: CoordinationService,
   ) {}
 
   async getMap(chainId: string, rawToken: string, query: WalletMapQuery = {}): Promise<WalletMapResponse> {
@@ -91,6 +93,7 @@ export class WalletMapService {
       radius,
     );
     const grouping = await this.clusters.forMap(map, storedNodes);
+    const coordination = await this.coordination.forMap(map, chain, storedNodes);
     const labelsById = await this.entityLabels.labelsFor(map, inRadius, grouping);
     const counts = labelCounts(inRadius.map((node) => ({ labels: labelsById.get(node.id) ?? [] })));
     const nodes = inRadius.filter((node) => nodeMatches(labelsById.get(node.id) ?? [], filter));
@@ -150,6 +153,8 @@ export class WalletMapService {
       edges: edgeViews,
       clusters: grouping.clusters,
       clustering: grouping.clustering,
+      coordination: coordination.events,
+      coordinationAnalysis: coordination.analysis,
       labelCounts: counts,
       filter: {
         hide: [...filter.hide].sort(),
