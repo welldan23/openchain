@@ -32,13 +32,14 @@ environment variable dan tidak pernah dicetak ke log.
 | `npm run ingest -- <chain> <address>` | Ambil data satu token dari chain lalu simpan sebagai snapshot |
 | `npm run smoke:chain -- <chain\|all>` | Smoke test adapter chain; `--record` menyimpan status dukungannya |
 | `npm run flows:collect -- <address> [chain ...]` | Kumpulkan aliran dana satu address (semua chain bila tidak disebut); `--halaman=N`, `--tanpa-simpan`, `--json` |
+| `npm run maps:build -- <chain> <token>` | Bentuk Peta Hubungan Wallet dari data tersimpan; `--holder=N`, `--kedalaman=N`, `--blok=N`, `--kumpulkan`, `--halaman=N`, `--json` |
 | `npm test` | Tes unit, termasuk tes skema di PostgreSQL WebAssembly (PGlite) |
 | `npm run test:e2e` | Tes endpoint lewat HTTP dengan database PGlite |
 | `npm run typecheck` / `npm run lint` | Cek tipe dan lint |
 
 Tes tidak memakai jaringan: RPC, Blockscout, dan Dexscreener diganti versi
 palsu. Uji ke jaringan sungguhan dilakukan lewat `ingest`, `smoke:chain`, dan
-`flows:collect`.
+`flows:collect`, dan `maps:build --kumpulkan`.
 
 ## Mengambil data on-chain
 
@@ -196,6 +197,36 @@ menyimpannya ke `native_transfers`, `token_transfers`, dan `address_flow_scans`.
 - Pengumpulan ulang tidak menggandakan transfer, tapi tetap mencatat
   pemindaian baru. Nilai USD saat transaksi belum diisi (belum ada sumber harga
   historis), jadi kolomnya kosong, bukan nol.
+
+## Membentuk peta hubungan
+
+`WalletMapBuilder` (`src/maps`) membentuk satu Peta Hubungan Wallet dari data
+yang sudah tersimpan, lalu menyimpannya ke `wallet_maps`, `map_nodes`, dan
+`map_edges`. Service ini tidak memanggil provider; `npm run maps:build --
+<chain> <token> --kumpulkan` lebih dulu membaca riwayat holder yang belum
+lengkap lewat `FundFlowCollector`.
+
+- Dasar peta adalah snapshot holder (terbaru, atau `--blok=N`), default 50
+  holder teratas. Semua transfer dibatasi sampai blok snapshot, jadi peta bisa
+  dibentuk ulang dengan hasil sama.
+- Pendanaan ditelusuri ke belakang per lapis (`--kedalaman`, default 2,
+  maksimal 5): tiga kiriman native paling awal ke tiap wallet, dan pendana
+  lapis berikutnya harus mengirim sebelum dana diteruskan. Hub (exchange,
+  router, bridge, pool, market maker), kontrak, dan pengirim kiriman internal
+  tetap tampil sebagai pendana tapi tidak ditelusuri lebih jauh, karena dana di
+  sana tercampur. Address nol/dead diabaikan.
+- Wallet penghubung adalah address bukan holder yang bertransaksi token peta
+  dengan minimal dua holder (bukan hub, kontrak, atau address nol), paling
+  banyak 30. Transfer token di antara wallet peta ikut jadi garis, paling
+  banyak 3 per pasangan arah.
+- Setiap garis menunjuk satu transfer tersimpan. Batas peta: 400 wallet dan
+  2.000 garis.
+- Status `complete` hanya bila riwayat semua holder dan pendana yang ditelusuri
+  terbaca lengkap (native, internal, dan token dari awal sampai blok peta) dan
+  tidak ada batas yang memotong peta. Selain itu `partial`, dengan alasan dan
+  `missing_fields` (`holder_history`, `funder_history`, `node_limit`,
+  `edge_limit`, `connector_limit`). Snapshot tanpa holder disimpan sebagai
+  `unavailable`.
 
 ## Adapter chain
 
