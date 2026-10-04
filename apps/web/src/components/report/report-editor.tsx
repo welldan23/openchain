@@ -9,6 +9,7 @@ import { embedEvidence, type ReportEvidenceEntry } from "@/lib/report-evidence";
 import { addPickedItems } from "@/lib/report-picker";
 import type { InvestigationCase, InvestigationReport } from "@/lib/types";
 import { ReportEvidencePanel } from "./report-evidence-panel";
+import { ReportExportDialog } from "./report-export-dialog";
 import { ReportFindingsIndex } from "./report-findings-index";
 import { ReportPicker, type PickerSelection } from "./report-picker";
 import { ReportDocument, ReportHeader, ReportOutline, ReportReadinessPanel, ReportSnapshotPanel } from "./report-workspace";
@@ -69,6 +70,7 @@ export function ReportEditor({
   const toolbar = (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
+        <ReportExportDialog report={report} />
         {source ? (
           <ReportPicker report={report} source={source} onAdd={add} />
         ) : (
