@@ -1,4 +1,5 @@
 import { BadgeCheck, CircleAlert, Clock, Database, ExternalLink } from "lucide-react";
+import type { ReactNode } from "react";
 import { ChainBadge, RiskLevelBadge } from "@/components/badges";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -12,9 +13,11 @@ interface TokenHeaderProps {
   token: TokenProfile;
   riskLevel: RiskLevel;
   snapshot: DataSnapshot;
+  /** Tombol tambahan di samping tautan explorer, mis. simpan ke kasus. */
+  actions?: ReactNode;
 }
 
-export function TokenHeader({ token, riskLevel, snapshot }: TokenHeaderProps) {
+export function TokenHeader({ token, riskLevel, snapshot, actions }: TokenHeaderProps) {
   const chain = getChain(token.chain);
   const snap = describeSnapshot(snapshot, token.chain);
 
@@ -63,15 +66,18 @@ export function TokenHeader({ token, riskLevel, snapshot }: TokenHeaderProps) {
           </div>
         </div>
 
-        <a
-          href={explorerTokenUrl(token.chain, token.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
-        >
-          Lihat di {chain.explorer.name}
-          <ExternalLink className="size-3.5" aria-hidden />
-        </a>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+          <a
+            href={explorerTokenUrl(token.chain, token.address)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
+          >
+            Lihat di {chain.explorer.name}
+            <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+          {actions}
+        </div>
       </div>
 
       <dl className="mt-4 grid gap-3 border-t border-line pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">

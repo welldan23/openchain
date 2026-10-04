@@ -7,6 +7,7 @@ import { flowPath } from "../api/flows";
 import { multichainPath } from "../api/multichain";
 import { tokenPath } from "../api/tokens";
 import { evidenceFromCoordination, evidenceFromCrossChain, evidenceFromEdges, evidenceFromTransfers, mergeEvidence } from "../evidence";
+import { canSaveFinding, findingsFromClusters } from "../cases";
 import { addressTitle } from "../fund-flow";
 import type { CaseFinding, InvestigationCase, TxEvidence, WalletMap } from "../types";
 import { MOCK_FLOWS } from "./flows";
@@ -22,18 +23,9 @@ function mapEvidence(map: WalletMap): TxEvidence[] {
   return mergeEvidence(evidenceFromEdges(map.chain, map.edges, map.nodes), evidenceFromCoordination(map.chain, map.coordination, map.nodes));
 }
 
-/** Sinyal kelompok yang terpenuhi dan punya bukti, sebagai temuan kasus. */
+/** Sinyal kelompok pertama yang terpenuhi dan punya bukti, sebagai temuan kasus. */
 function clusterFindings(map: WalletMap, clusterIndex: number): CaseFinding[] {
-  const cluster = map.clusters[clusterIndex];
-  return cluster.signals
-    .filter((signal) => signal.matched && signal.evidenceTxHashes.length > 0)
-    .map((signal) => ({
-      id: `${cluster.id}:${signal.id}`,
-      title: signal.label,
-      detail: signal.detail,
-      classification: "heuristic" as const,
-      evidenceTxHashes: signal.evidenceTxHashes,
-    }));
+  return findingsFromClusters([map.clusters[clusterIndex]]).filter(canSaveFinding);
 }
 
 function steps(...ids: string[]) {

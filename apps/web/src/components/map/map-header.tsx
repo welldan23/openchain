@@ -1,12 +1,13 @@
 import { ChevronRight, Clock, Database, Network } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ChainBadge } from "@/components/badges";
 import { CopyButton } from "@/components/ui/copy-button";
 import { tokenPath } from "@/lib/api/tokens";
 import { describeSnapshot } from "@/lib/snapshot";
 import type { WalletMap } from "@/lib/types";
 
-export function MapHeader({ map }: { map: WalletMap }) {
+export function MapHeader({ map, actions }: { map: WalletMap; actions?: ReactNode }) {
   const snap = describeSnapshot(map.snapshot, map.chain);
   return (
     <section aria-labelledby="map-title" className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -32,13 +33,16 @@ export function MapHeader({ map }: { map: WalletMap }) {
             </div>
           </div>
         </div>
-        <Link
-          href={tokenPath(map.chain, map.token.address)}
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
-        >
-          Buka halaman token
-          <ChevronRight className="size-3.5" aria-hidden />
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+          <Link
+            href={tokenPath(map.chain, map.token.address)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
+          >
+            Buka halaman token
+            <ChevronRight className="size-3.5" aria-hidden />
+          </Link>
+          {actions}
+        </div>
       </div>
       <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-raised px-3 py-2 text-[11px] text-muted">
         <span className="inline-flex flex-wrap items-center gap-x-1.5">

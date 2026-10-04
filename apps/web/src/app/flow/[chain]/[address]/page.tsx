@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { SaveToCaseButton } from "@/components/case/save-to-case-dialog";
 import { CounterpartiesPanel } from "@/components/flow/counterparties-panel";
 import { FlowFilterPanel } from "@/components/flow/flow-filter-panel";
 import { FlowHeader } from "@/components/flow/flow-header";
@@ -9,7 +10,7 @@ import { TracesPanel } from "@/components/flow/traces-panel";
 import { TransfersPanel } from "@/components/flow/transfers-panel";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
-import { getAddressFlow, listFlowChains } from "@/lib/api/flows";
+import { flowPath, getAddressFlow, listFlowChains } from "@/lib/api/flows";
 import { listTracesForAddress } from "@/lib/api/traces";
 import { isChainId } from "@/lib/chains";
 import { filterByTime, firstParam, flowEmptyKind, flowFilterHref, resolveTimeFilter } from "@/lib/flow-filter";
@@ -55,7 +56,22 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
-      <FlowHeader flow={flow} />
+      <FlowHeader
+        flow={flow}
+        actions={
+          <SaveToCaseButton
+            subject={{
+              kind: "address",
+              chain: flow.chain,
+              address: flow.address,
+              title: addressTitle(flow.label),
+              label: flow.label,
+              href: flowPath(flow.chain, flow.address),
+            }}
+            suggestedTitle={`Aliran dana ${addressTitle(flow.label)}`}
+          />
+        }
+      />
       <FlowFilterPanel
         chain={flow.chain}
         address={flow.address}

@@ -1,6 +1,9 @@
 import { Sparkles } from "lucide-react";
+import { SaveToCaseButton } from "@/components/case/save-to-case-dialog";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { Panel } from "@/components/ui/panel";
+import { tokenPath } from "@/lib/api/tokens";
+import { findingsFromRisk } from "@/lib/cases";
 import { buildSectionLinks, buildTokenHighlights } from "@/lib/token-summary";
 import type { TokenInvestigation } from "@/lib/types";
 import { MarketStats } from "./market-stats";
@@ -16,7 +19,24 @@ export function TokenSummary({ data }: { data: TokenInvestigation }) {
 
   return (
     <div className="space-y-5">
-      <TokenHeader token={data.token} riskLevel={data.risk.level} snapshot={data.snapshot} />
+      <TokenHeader
+        token={data.token}
+        riskLevel={data.risk.level}
+        snapshot={data.snapshot}
+        actions={
+          <SaveToCaseButton
+            subject={{
+              kind: "token",
+              chain: data.token.chain,
+              address: data.token.address,
+              title: `${data.token.name} (${data.token.symbol})`,
+              href: tokenPath(data.token.chain, data.token.address),
+            }}
+            findings={findingsFromRisk(data.risk.findings)}
+            suggestedTitle={`Investigasi ${data.token.symbol}`}
+          />
+        }
+      />
       <MarketStats market={data.market} />
 
       <Panel

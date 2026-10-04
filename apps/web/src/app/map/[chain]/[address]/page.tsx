@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { SaveToCaseButton } from "@/components/case/save-to-case-dialog";
 import { ClustersPanel, MapLegendPanel } from "@/components/map/clusters-panel";
 import { MapEmptyPanel } from "@/components/map/map-empty-panel";
 import { MapHeader } from "@/components/map/map-header";
@@ -10,6 +11,8 @@ import { WalletMapExplorer, type ExplorerNode } from "@/components/map/wallet-ma
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { getWalletMap } from "@/lib/api/maps";
+import { tokenPath } from "@/lib/api/tokens";
+import { findingsFromClusters } from "@/lib/cases";
 import { isChainId } from "@/lib/chains";
 import { firstParam } from "@/lib/flow-filter";
 import { clusterStyles, edgesOf, layoutWalletMap, nodeColor, parseLayerParam, summarizeMap } from "@/lib/wallet-map";
@@ -49,7 +52,22 @@ export default async function MapPage({ params, searchParams }: PageProps<"/map/
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
-      <MapHeader map={map} />
+      <MapHeader
+        map={map}
+        actions={
+          <SaveToCaseButton
+            subject={{
+              kind: "token",
+              chain: map.chain,
+              address: map.token.address,
+              title: `${map.token.name} (${map.token.symbol})`,
+              href: tokenPath(map.chain, map.token.address),
+            }}
+            findings={findingsFromClusters(map.clusters)}
+            suggestedTitle={`Hubungan holder ${map.token.symbol}`}
+          />
+        }
+      />
       <MapStats summary={summarizeMap(map)} />
       {map.nodes.length === 0 ? (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">

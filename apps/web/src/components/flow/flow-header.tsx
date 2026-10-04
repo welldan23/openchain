@@ -1,4 +1,5 @@
 import { CalendarRange, Clock, Database, ExternalLink, Waypoints } from "lucide-react";
+import type { ReactNode } from "react";
 import { ChainBadge, EntityLabelBadge } from "@/components/badges";
 import { CopyButton } from "@/components/ui/copy-button";
 import { explorerAddressUrl, getChain } from "@/lib/chains";
@@ -7,7 +8,7 @@ import { addressTitle } from "@/lib/fund-flow";
 import { describeSnapshot } from "@/lib/snapshot";
 import type { AddressFlow } from "@/lib/types";
 
-export function FlowHeader({ flow }: { flow: AddressFlow }) {
+export function FlowHeader({ flow, actions }: { flow: AddressFlow; actions?: ReactNode }) {
   const chain = getChain(flow.chain);
   const snap = describeSnapshot(flow.snapshot, flow.chain);
 
@@ -37,15 +38,18 @@ export function FlowHeader({ flow }: { flow: AddressFlow }) {
           </div>
         </div>
 
-        <a
-          href={explorerAddressUrl(flow.chain, flow.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
-        >
-          Lihat di {chain.explorer.name}
-          <ExternalLink className="size-3.5" aria-hidden />
-        </a>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+          <a
+            href={explorerAddressUrl(flow.chain, flow.address)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-foreground transition hover:border-accent/60 hover:text-accent"
+          >
+            Lihat di {chain.explorer.name}
+            <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+          {actions}
+        </div>
       </div>
 
       <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-raised px-3 py-2 text-[11px] text-muted">
