@@ -24,7 +24,8 @@
     "db:migrate": "tsx src/database/migrate.ts",
     "db:migrate:prod": "node dist/database/migrate.js",
     "ingest": "tsx src/cli/ingest-token.ts",
-    "smoke:chain": "tsx src/cli/smoke-chain.ts"
+    "smoke:chain": "tsx src/cli/smoke-chain.ts",
+    "flows:collect": "tsx src/cli/collect-flow.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

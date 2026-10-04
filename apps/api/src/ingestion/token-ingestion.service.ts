@@ -7,29 +7,22 @@
  * blok yang sama diganti isinya. Run provider selalu disimpan, termasuk saat
  * pengambilan gagal, supaya alasan kegagalan bisa ditelusuri.
  */
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { ChainAdapter, TokenCollection } from '../chains/chain-adapter.types.js';
 import { ChainNotSupportedError } from '../chains/chain-registry.js';
 import type { Database } from '../database/database.module.js';
+import { insertProviderRuns, upsertAddresses, type StoredRun } from '../database/address-store.js';
 import { normalizeAddress } from '../database/identifiers.js';
 import type { ChainFamily, CheckStatus, DataStatus } from '../database/schema/enums.js';
-import { addresses, chains, labels, providerRuns, tokens } from '../database/schema/index.js';
+import { chains, labels, tokens } from '../database/schema/index.js';
 import type { RecordSnapshotInput, SnapshotRecorder } from '../snapshots/snapshot-recorder.service.js';
 
 export interface AdapterSource {
   adapter(chainId: string): ChainAdapter;
 }
 
-export interface IngestedRun {
-  id: number;
-  provider: string;
-  kind: string;
-  operation: string;
-  status: DataStatus;
-  errorReason: string | null;
-  missingFields: string[];
-}
+export type IngestedRun = StoredRun;
 
 export interface IngestionResult {
   chainId: string;
@@ -65,7 +58,7 @@ export class TokenIngestionService {
 
   /** Simpan hasil pengumpulan. Dipisah dari `ingest` supaya bisa diuji tanpa jaringan. */
   async persist(collection: TokenCollection, family: ChainFamily): Promise<IngestionResult> {
-    const runs = await this.insertRuns(collection);
+    const runs = await insertProviderRuns(this.db, collection.chainId, collection.runs);
     const runIdByKey = new Map(collection.runs.map((run, index) => [run.key, runs[index].id]));
     const result: IngestionResult = {
       chainId: collection.chainId,
@@ -86,7 +79,7 @@ export class TokenIngestionService {
     }
 
     const normalize = (value: string) => normalizeAddress(family, value);
-    const addressIds = await this.upsertAddresses(collection.chainId, family, [
+    const addressIds = await upsertAddresses(this.db, collection.chainId, family, [
       { address: collection.address, isContract: true },
       ...(token.deployer ? [{ address: token.deployer, isContract: null }] : []),
       ...(collection.holders ?? []).map((holder) => ({ address: holder.address, isContract: holder.isContract })),
@@ -161,76 +154,6 @@ export class TokenIngestionService {
       holdersStored: collection.holders?.length ?? null,
       concentration: collection.concentration,
     };
-  }
-
-  private async insertRuns(collection: TokenCollection): Promise<IngestedRun[]> {
-    const rows = await this.db
-      .insert(providerRuns)
-      .values(
-        collection.runs.map((run) => ({
-          provider: run.provider,
-          kind: run.kind,
-          chainId: collection.chainId,
-          operation: run.operation,
-          subject: run.subject,
-          status: run.status,
-          errorReason: run.errorReason,
-          blockFrom: run.blockFrom,
-          blockTo: run.blockTo,
-          missingFields: run.missingFields,
-          startedAt: run.startedAt,
-          fetchedAt: run.fetchedAt,
-        })),
-      )
-      .returning();
-    return rows.map((row) => ({
-      id: row.id,
-      provider: row.provider,
-      kind: row.kind,
-      operation: row.operation,
-      status: row.status,
-      errorReason: row.errorReason,
-      missingFields: row.missingFields,
-    }));
-  }
-
-  /**
-   * Simpan address tanpa duplikat. Identifier asli yang sudah tersimpan tidak
-   * diubah; status kontrak hanya diisi bila sebelumnya belum diketahui.
-   */
-  private async upsertAddresses(
-    chainId: string,
-    family: ChainFamily,
-    entries: Array<{ address: string; isContract: boolean | null }>,
-  ): Promise<Map<string, number>> {
-    const unique = new Map<string, { address: string; isContract: boolean | null }>();
-    for (const entry of entries) {
-      const normalized = normalizeAddress(family, entry.address);
-      const existing = unique.get(normalized);
-      unique.set(normalized, {
-        address: existing?.address ?? entry.address.trim(),
-        isContract: existing?.isContract ?? entry.isContract,
-      });
-    }
-    await this.db
-      .insert(addresses)
-      .values(
-        [...unique].map(([addressNormalized, entry]) => ({
-          chainId,
-          address: entry.address,
-          addressNormalized,
-          isContract: entry.isContract,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [addresses.chainId, addresses.addressNormalized],
-        set: { isContract: sql`coalesce(${addresses.isContract}, excluded.is_contract)` },
-      });
-    const rows = await this.db
-      .select({ id: addresses.id, normalized: addresses.addressNormalized })
-      .from(addresses)
-      .where(and(eq(addresses.chainId, chainId), inArray(addresses.addressNormalized, [...unique.keys()])));
-    return new Map(rows.map((row) => [row.normalized, row.id]));
   }
 
   /** Profil token terbaru; nilai yang kali ini gagal diambil tidak menimpa nilai lama. */

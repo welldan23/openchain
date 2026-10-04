@@ -124,3 +124,145 @@ describe('labelsFromBlockscoutTags', () => {
     expect(labelsFromBlockscoutTags(null)).toEqual([]);
   });
 });
+
+describe('BlockscoutProvider: riwayat transfer address', () => {
+  const ADDRESS = '0x00000000219ab540356cBB839Cbe05303d7705Fa';
+  const party = (hash: string) => ({ hash, is_contract: false, metadata: null });
+  const tx = (overrides: Record<string, unknown>) => ({
+    hash: '0x' + '11'.repeat(32),
+    block_number: 26115688,
+    timestamp: '2026-10-04T01:25:47.000000Z',
+    status: 'ok',
+    result: 'success',
+    value: '32000000000000000000',
+    from: party('0x' + 'aa'.repeat(20)),
+    to: party(ADDRESS),
+    created_contract: null,
+    ...overrides,
+  });
+
+  it('mengambil nilai transaksi final dan melewati yang pending, gagal, atau tanpa nilai', async () => {
+    const { fake, blockscout } = setup(
+      instance,
+      jsonResponse({
+        items: [
+          tx({ hash: '0x' + '01'.repeat(32), block_number: null, timestamp: null, status: null, result: 'pending' }),
+          tx({ hash: '0x' + '02'.repeat(32) }),
+          tx({ hash: '0x' + '03'.repeat(32), status: 'error', result: 'Reverted' }),
+          tx({ hash: '0x' + '04'.repeat(32), value: '0' }),
+          tx({ hash: '0x' + '05'.repeat(32), to: null, created_contract: party('0x' + 'cc'.repeat(20)), value: '7' }),
+        ],
+        next_page_params: { index: 22, value: '32000000000000000000', block_number: 26114702, fee: null, items_count: 50 },
+      }),
+    );
+    const page = await blockscout.getNativeTransfers(ADDRESS, null);
+    expect(fake.requests[0].url).toBe(`https://eth.blockscout.com/api/v2/addresses/${ADDRESS}/transactions`);
+    expect(page.items.map((item) => [item.txHash.slice(0, 4), item.to, item.amountRaw])).toEqual([
+      ['0x02', ADDRESS, '32000000000000000000'],
+      ['0x05', '0x' + 'cc'.repeat(20), '7'],
+    ]);
+    expect(page.items[0]).toMatchObject({ kind: 'transaction', tracePath: '', blockNumber: 26115688, timestamp: new Date('2026-10-04T01:25:47Z') });
+    expect(page.skipped).toEqual({ pending: 1, failed: 1, zeroValue: 1 });
+    // Transaksi gagal dan tanpa nilai tetap menandai blok yang sudah terbaca; yang pending tidak.
+    expect(page.oldestSeen).toEqual({ blockNumber: 26115688, timestamp: new Date('2026-10-04T01:25:47Z') });
+    // Nilai kosong di next_page_params dibuang, angka dijadikan teks.
+    expect(page.next).toEqual({ index: '22', value: '32000000000000000000', block_number: '26114702', items_count: '50' });
+  });
+
+  it('meneruskan cursor halaman berikutnya sebagai query string', async () => {
+    const { fake, blockscout } = setup(instance, jsonResponse({ items: [], next_page_params: null }));
+    const page = await blockscout.getNativeTransfers(ADDRESS, { block_number: '26114702', index: '22' });
+    expect(fake.requests[0].url).toBe(`https://eth.blockscout.com/api/v2/addresses/${ADDRESS}/transactions?block_number=26114702&index=22`);
+    expect(page).toEqual({ items: [], next: null, skipped: { pending: 0, failed: 0, zeroValue: 0 }, oldestSeen: null });
+  });
+
+  it('mengambil panggilan internal yang memindahkan nilai, dengan posisi trace-nya', async () => {
+    const internal = (overrides: Record<string, unknown>) => ({
+      block_number: 26115684,
+      transaction_hash: '0x' + '21'.repeat(32),
+      index: 14,
+      type: 'call',
+      success: true,
+      value: '500',
+      timestamp: '2026-10-04T01:24:59.000000Z',
+      from: party(ADDRESS),
+      to: party('0x' + 'bb'.repeat(20)),
+      created_contract: null,
+      ...overrides,
+    });
+    const { fake, blockscout } = setup(
+      instance,
+      jsonResponse({
+        items: [internal({}), internal({ index: 15, type: 'staticcall', value: '0' }), internal({ index: 16, success: false })],
+        next_page_params: null,
+      }),
+    );
+    const page = await blockscout.getInternalTransfers(ADDRESS, null);
+    expect(fake.requests[0].url).toBe(`https://eth.blockscout.com/api/v2/addresses/${ADDRESS}/internal-transactions`);
+    expect(page.items).toEqual([
+      {
+        txHash: '0x' + '21'.repeat(32),
+        kind: 'internal',
+        tracePath: '14',
+        from: ADDRESS,
+        to: '0x' + 'bb'.repeat(20),
+        amountRaw: '500',
+        blockNumber: 26115684,
+        timestamp: new Date('2026-10-04T01:24:59Z'),
+      },
+    ]);
+    expect(page.skipped).toEqual({ pending: 0, failed: 1, zeroValue: 1 });
+  });
+
+  it('mengambil transfer token ERC-20 beserta metadata token', async () => {
+    const { fake, blockscout } = setup(
+      instance,
+      jsonResponse({
+        items: [
+          {
+            block_number: 26115683,
+            log_index: 543,
+            timestamp: '2026-10-04T01:24:47.000000Z',
+            transaction_hash: '0x' + '31'.repeat(32),
+            token: { address_hash: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', name: 'Wrapped Ether', decimals: '18', type: 'ERC-20' },
+            total: { decimals: '18', value: '1794503010620100' },
+            from: party('0x' + 'aa'.repeat(20)),
+            to: party(ADDRESS),
+            type: 'token_transfer',
+          },
+        ],
+        next_page_params: { index: 1039, block_number: 26115589 },
+      }),
+    );
+    const page = await blockscout.getTokenTransfers(ADDRESS, { index: '1', block_number: '2' });
+    expect(fake.requests[0].url).toBe(
+      `https://eth.blockscout.com/api/v2/addresses/${ADDRESS}/token-transfers?index=1&block_number=2&type=ERC-20`,
+    );
+    expect(page.items[0]).toEqual({
+      txHash: '0x' + '31'.repeat(32),
+      logIndex: 543,
+      token: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', name: 'Wrapped Ether', decimals: 18 },
+      from: '0x' + 'aa'.repeat(20),
+      to: ADDRESS,
+      amountRaw: '1794503010620100',
+      blockNumber: 26115683,
+      timestamp: new Date('2026-10-04T01:24:47Z'),
+    });
+    expect(page.next).toEqual({ index: '1039', block_number: '26115589' });
+  });
+
+  it('address yang belum dikenal indexer berarti riwayat kosong, bukan error', async () => {
+    const { blockscout } = setup(instance, new Response('{"message":"Not found"}', { status: 404 }));
+    await expect(blockscout.getTokenTransfers(ADDRESS, null)).resolves.toEqual({ items: [], next: null });
+  });
+
+  it('format yang tidak dikenali ditolak, tidak ditebak', async () => {
+    const { blockscout } = setup(
+      instance,
+      jsonResponse({ items: [tx({ value: 'abc' })], next_page_params: null }),
+      jsonResponse({ items: 'bukan daftar' }),
+    );
+    await expect(blockscout.getNativeTransfers(ADDRESS, null)).rejects.toThrow(ProviderError);
+    await expect(blockscout.getInternalTransfers(ADDRESS, null)).rejects.toThrow(/Format daftar transaksi internal/);
+  });
+});

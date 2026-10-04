@@ -31,12 +31,14 @@ environment variable dan tidak pernah dicetak ke log.
 | `npm run db:migrate` | Menerapkan migrasi ke database di `DATABASE_URL` |
 | `npm run ingest -- <chain> <address>` | Ambil data satu token dari chain lalu simpan sebagai snapshot |
 | `npm run smoke:chain -- <chain\|all>` | Smoke test adapter chain; `--record` menyimpan status dukungannya |
+| `npm run flows:collect -- <address> [chain ...]` | Kumpulkan aliran dana satu address (semua chain bila tidak disebut); `--halaman=N`, `--tanpa-simpan`, `--json` |
 | `npm test` | Tes unit, termasuk tes skema di PostgreSQL WebAssembly (PGlite) |
 | `npm run test:e2e` | Tes endpoint lewat HTTP dengan database PGlite |
 | `npm run typecheck` / `npm run lint` | Cek tipe dan lint |
 
 Tes tidak memakai jaringan: RPC, Blockscout, dan Dexscreener diganti versi
-palsu. Uji ke jaringan sungguhan dilakukan lewat `ingest` dan `smoke:chain`.
+palsu. Uji ke jaringan sungguhan dilakukan lewat `ingest`, `smoke:chain`, dan
+`flows:collect`.
 
 ## Mengambil data on-chain
 
@@ -164,6 +166,29 @@ langsung ketahuan. Default saat ini:
 
 Di jaringan yang wajib lewat proxy HTTP, jalankan Node dengan
 `NODE_USE_ENV_PROXY=1` supaya `fetch` memakai `HTTPS_PROXY`.
+
+## Mengumpulkan aliran dana
+
+`FundFlowCollector` (`src/flows`) membaca riwayat transfer satu address dari
+indexer (Blockscout) di satu atau beberapa chain, lalu `FundFlowIngestionService`
+menyimpannya ke `native_transfers`, `token_transfers`, dan `address_flow_scans`.
+
+- Tiga jenis transfer dibaca terpisah: nilai transaksi, panggilan internal
+  kontrak, dan transfer token ERC-20. Satu jenis gagal tidak menghapus jenis
+  lain; NFT tidak dihitung sebagai aliran dana.
+- Transaksi pending, gagal, atau tanpa nilai dilewati (jumlahnya dilaporkan),
+  tapi bloknya tetap menandai sampai mana riwayat sudah terbaca.
+- Riwayat dibaca dari yang terbaru, paling banyak `--halaman` halaman per jenis
+  (default 5, ±50 item per halaman). Bila riwayat belum habis, cakupan hanya
+  dari blok setelah item tertua yang terbaca sampai blok terbaru, karena
+  halaman bisa terpotong di tengah blok. Transfer di luar cakupan tidak boleh
+  dianggap tidak ada.
+- Status `complete` hanya bila ketiga jenis terbaca dan blok terbaru chain
+  diketahui. Chain tanpa indexer (mis. BSC, HyperEVM) tercatat `unavailable`
+  dengan alasannya. Address salah format ditolak sebelum ada request.
+- Pengumpulan ulang tidak menggandakan transfer, tapi tetap mencatat
+  pemindaian baru. Nilai USD saat transaksi belum diisi (belum ada sumber harga
+  historis), jadi kolomnya kosong, bukan nol.
 
 ## Adapter chain
 

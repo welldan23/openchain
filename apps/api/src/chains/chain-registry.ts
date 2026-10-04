@@ -13,6 +13,7 @@
  *
  * URL dan API key tidak pernah dicetak; `describe` hanya menyebut asalnya.
  */
+import type { FundFlowSources } from '../flows/fund-flow-collector.js';
 import { BLOCKSCOUT_PRO_API_URL, BlockscoutProvider } from '../providers/blockscout.provider.js';
 import { DexscreenerProvider } from '../providers/dexscreener.provider.js';
 import { EvmJsonRpcProvider } from '../providers/evm-rpc.provider.js';
@@ -95,6 +96,22 @@ export class ChainRegistry {
       },
       this.adapterOptions,
     );
+  }
+
+  /**
+   * Sumber data aliran dana sebuah chain: indexer riwayat address (Blockscout)
+   * dan RPC untuk blok terbaru. Chain tanpa Blockscout mendapat `activity: null`
+   * dan pemindaiannya tercatat tidak tersedia, bukan dikarang.
+   */
+  flowSources(chainId: string): FundFlowSources {
+    const definition = this.definition(chainId);
+    const timeoutMs = this.timeoutMs();
+    const blockscout = this.blockscoutConfig(definition);
+    return {
+      family: definition.family,
+      activity: blockscout ? new BlockscoutProvider({ ...blockscout, timeoutMs }, this.http) : null,
+      rpc: this.rpcProvider(definition, timeoutMs),
+    };
   }
 
   /** Ringkasan asal konfigurasi, aman untuk dicetak. */

@@ -166,6 +166,74 @@ export interface IndexedDataProvider {
 }
 
 // ---------------------------------------------------------------------------
+// AddressActivityProvider: riwayat transfer sebuah address dari indexer, untuk
+// Lacak Aliran Dana. Indexer mengurutkan terbaru dulu dan membagi per halaman.
+// ---------------------------------------------------------------------------
+
+/** Posisi halaman berikutnya; isinya khusus tiap provider. */
+export type PageCursor = Readonly<Record<string, string>>;
+
+export interface ActivityPage<T> {
+  items: T[];
+  /** `null` bila tidak ada halaman lagi, artinya riwayat sudah habis dibaca. */
+  next: PageCursor | null;
+  /**
+   * Item final tertua di halaman ini, termasuk yang dilewati (tanpa nilai,
+   * gagal). Menunjukkan sampai mana riwayat sudah terbaca walau tidak ada
+   * transfer yang disimpan.
+   */
+  oldestSeen?: { blockNumber: number; timestamp: Date } | null;
+}
+
+/** Perpindahan native coin yang sudah final di blok tertentu. */
+export interface IndexedNativeTransfer {
+  txHash: string;
+  kind: 'transaction' | 'internal';
+  /** Kosong untuk nilai transaksi itu sendiri; posisi panggilan untuk `internal`. */
+  tracePath: string;
+  from: string;
+  to: string;
+  /** Satuan terkecil (wei); selalu lebih dari nol. */
+  amountRaw: string;
+  blockNumber: number;
+  timestamp: Date;
+}
+
+export interface IndexedTokenTransfer {
+  txHash: string;
+  logIndex: number;
+  token: { address: string; symbol: string | null; name: string | null; decimals: number | null };
+  from: string;
+  to: string;
+  amountRaw: string;
+  blockNumber: number;
+  timestamp: Date;
+}
+
+/**
+ * Item yang tidak ikut dihitung sebagai aliran dana tetap dilaporkan
+ * jumlahnya, supaya halaman yang tampak "sedikit" bisa dijelaskan.
+ */
+export interface SkippedCounts {
+  /** Transaksi belum masuk blok. */
+  pending: number;
+  /** Transaksi atau panggilan yang gagal/di-revert: nilainya tidak berpindah. */
+  failed: number;
+  /** Tanpa nilai (mis. panggilan kontrak biasa). */
+  zeroValue: number;
+}
+
+export interface AddressActivityProvider {
+  readonly name: string;
+  /** Nilai native yang dikirim transaksi dari/ke address ini. */
+  getNativeTransfers(address: string, cursor: PageCursor | null): Promise<ActivityPage<IndexedNativeTransfer> & { skipped: SkippedCounts }>;
+  /** Panggilan internal kontrak yang memindahkan native coin. */
+  getInternalTransfers(address: string, cursor: PageCursor | null): Promise<ActivityPage<IndexedNativeTransfer> & { skipped: SkippedCounts }>;
+  /** Transfer token fungible (ERC-20); NFT tidak termasuk aliran dana. */
+  getTokenTransfers(address: string, cursor: PageCursor | null): Promise<ActivityPage<IndexedTokenTransfer>>;
+}
+
+// ---------------------------------------------------------------------------
 // MarketDataProvider: harga, likuiditas, dan volume dari pasar DEX.
 // ---------------------------------------------------------------------------
 
