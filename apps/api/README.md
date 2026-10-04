@@ -127,8 +127,29 @@ Smoke test memakai token contoh tiap chain dan memeriksa:
 | `experimental` | RPC lolos, tapi explorer, indexer, atau data pasar belum; data token akan parsial |
 | `planned` | RPC belum lolos; chain belum bisa dipakai |
 
-`--record` menyimpan status ke `chains.support_status`. Status tidak pernah
-dinaikkan lewat migrasi, hanya lewat smoke test di lingkungan yang dipakai.
+`--record` menyimpan smoke test utuh ke `chain_smoke_checks` sebagai bukti,
+lalu memperbarui `chains.support_status` (menunjuk bukti itu lewat
+`support_check_id`) dan status tiap kemampuan data di `chain_capabilities`.
+Status tidak pernah dinaikkan lewat migrasi, hanya lewat smoke test di
+lingkungan yang dipakai. Database menolak status selain `planned` tanpa smoke
+test tersimpan; migrasi 0010 menurunkan status lama yang belum punya bukti ke
+`planned`, jadi jalankan ulang `--record` setelah migrasi.
+
+Kemampuan data per chain (`chain_capabilities`):
+
+| Kemampuan | Dasar status |
+| --- | --- |
+| `token_snapshot` | Semua pemeriksaan RPC wajib lolos |
+| `holders` | `indexer.holders` |
+| `contract_info` | `explorer.contract` |
+| `market_data` | `market.pairs` |
+| `contract_security` | Minimal satu `security.*` lolos |
+| `internal_traces` | `rpc.trace` (opsional) |
+| `fund_flow` | Paling tinggi `experimental`: indexer holder lolos, tapi aliran dana belum punya smoke test sendiri |
+| `multichain_profile` | Mengikuti `fund_flow` |
+
+Kemampuan yang belum lolos tetap `planned` beserta alasannya; baris yang tidak
+ada juga berarti `planned`.
 
 ### Environment variable provider
 
@@ -697,7 +718,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 
 | Kelompok | Tabel |
 | --- | --- |
-| Referensi | `chains`, `addresses`, `labels`, `provider_runs` |
+| Referensi | `chains`, `chain_smoke_checks`, `chain_capabilities`, `info_classification_labels`, `addresses`, `labels`, `provider_runs` |
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
 | Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
@@ -717,7 +738,12 @@ Aturan PRD yang dijaga langsung oleh database:
   termasuk total supply pada blok itu. Bukti punya `evidence_key` deterministik
   supaya penyimpanan idempotent.
 - Semua chain dimulai dengan status `planned`. Chain baru boleh disebut
-  didukung (`validated`) setelah adapter dan smoke test-nya lulus.
+  didukung (`validated`) setelah adapter dan smoke test-nya lulus; status
+  selain `planned` (chain maupun kemampuannya) wajib menunjuk smoke test
+  tersimpan.
+- `info_classification_labels` berisi nama dan penjelasan tiap jenis
+  informasi (fakta on-chain, kalkulasi, label eksternal, dugaan, asumsi, tidak
+  tersedia) supaya semua halaman memakai istilah yang sama.
 - Aliran dana: perpindahan native coin disimpan di `native_transfers`, baik
   nilai transaksi itu sendiri (`transaction`) maupun panggilan internal kontrak
   (`internal`, dengan `trace_path`); transfer bernilai nol ditolak. Pengirim dan

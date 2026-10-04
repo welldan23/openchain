@@ -37,6 +37,21 @@ export const providerKind = pgEnum('provider_kind', [
   'security',
 ]);
 
+/**
+ * Kemampuan data per chain. Status tiap kemampuan dicatat terpisah karena satu
+ * chain bisa punya RPC yang sehat tapi belum punya indexer holder.
+ */
+export const chainCapability = pgEnum('chain_capability', [
+  'token_snapshot',
+  'holders',
+  'contract_info',
+  'market_data',
+  'contract_security',
+  'fund_flow',
+  'internal_traces',
+  'multichain_profile',
+]);
+
 /** Klasifikasi informasi: dari fakta terverifikasi sampai data yang tidak tersedia. */
 export const infoClassification = pgEnum('info_classification', [
   'verified_fact',
@@ -175,6 +190,7 @@ export type ProviderKind = (typeof providerKind.enumValues)[number];
 export type EntityLabelType = (typeof entityLabelType.enumValues)[number];
 export type CheckStatus = (typeof checkStatus.enumValues)[number];
 export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];
+export type ChainCapability = (typeof chainCapability.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];

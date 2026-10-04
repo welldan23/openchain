@@ -11,6 +11,7 @@ const rows: TokenSummaryRows = {
     nativeSymbol: 'ETH',
     explorerUrl: null,
     supportStatus: 'planned',
+  supportCheckId: null,
     createdAt: NOW,
   },
   token: {

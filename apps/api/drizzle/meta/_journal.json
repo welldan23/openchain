@@ -71,6 +71,13 @@
       "when": 1791111704596,
       "tag": "0009_map_coordination_marker",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791112448482,
+      "tag": "0010_chain_support_and_classification",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,7 @@ const chain = {
   nativeSymbol: 'ETH',
   explorerUrl: 'https://etherscan.io/',
   supportStatus: 'planned' as const,
+  supportCheckId: null,
   createdAt: NOW,
 };
 

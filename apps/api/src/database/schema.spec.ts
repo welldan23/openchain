@@ -25,6 +25,8 @@ const MIGRATION_COUNT = (
 const EXPECTED_TABLES = [
   'address_flow_scans',
   'addresses',
+  'chain_capabilities',
+  'chain_smoke_checks',
   'chains',
   'contract_check_evidence',
   'contract_checks',
@@ -33,6 +35,7 @@ const EXPECTED_TABLES = [
   'coordination_txs',
   'evidence',
   'holders',
+  'info_classification_labels',
   'label_evidence',
   'labels',
   'map_cluster_members',
@@ -147,9 +150,13 @@ describe('migrasi', () => {
   });
 
   it('data chain idempotent dan tidak menurunkan status yang sudah naik', async () => {
+    const [smoke] = await db
+      .insert(schema.chainSmokeChecks)
+      .values({ chainId: 'robinhood', status: 'validated', checks: [], testedAt: FETCHED_AT })
+      .returning();
     await db
       .update(schema.chains)
-      .set({ supportStatus: 'validated' })
+      .set({ supportStatus: 'validated', supportCheckId: smoke.id })
       .where(eq(schema.chains.id, 'robinhood'));
     await client.exec(SEED_CHAINS_SQL);
     const [robinhood] = await db
@@ -161,8 +168,41 @@ describe('migrasi', () => {
     expect(total).toBe(12);
     await db
       .update(schema.chains)
-      .set({ supportStatus: 'planned' })
+      .set({ supportStatus: 'planned', supportCheckId: null })
       .where(eq(schema.chains.id, 'robinhood'));
+  });
+
+  it('chain dan kemampuannya tidak boleh disebut didukung tanpa smoke test tersimpan', async () => {
+    await expectConstraintViolation(
+      db.update(schema.chains).set({ supportStatus: 'experimental' }).where(eq(schema.chains.id, 'base')),
+      'chains_support_needs_check',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.chainCapabilities).values({ chainId: 'base', capability: 'holders', status: 'validated', source: 'blockscout' }),
+      'chain_capabilities_needs_check',
+    );
+    const [smoke] = await db
+      .insert(schema.chainSmokeChecks)
+      .values({ chainId: 'base', status: 'validated', checks: [{ code: 'rpc.chain_id', ok: true }], testedAt: FETCHED_AT })
+      .returning();
+    await expectConstraintViolation(
+      db.insert(schema.chainCapabilities).values({ chainId: 'base', capability: 'holders', status: 'validated', checkId: smoke.id }),
+      'chain_capabilities_needs_check',
+    );
+    await db.insert(schema.chainCapabilities).values({ chainId: 'base', capability: 'holders', status: 'validated', source: 'blockscout', checkId: smoke.id });
+    await db.insert(schema.chainCapabilities).values({ chainId: 'base', capability: 'fund_flow', status: 'planned', reason: 'Belum ada smoke test' });
+    await expectConstraintViolation(
+      db.insert(schema.chainSmokeChecks).values({ chainId: 'base', status: 'planned', checks: { ok: true }, testedAt: FETCHED_AT }),
+      'chain_smoke_checks_checks_is_array',
+    );
+    await db.delete(schema.chainCapabilities).where(eq(schema.chainCapabilities.chainId, 'base'));
+  });
+
+  it('mengisi nama dan penjelasan semua jenis informasi', async () => {
+    const rows = await db.select().from(schema.infoClassificationLabels).orderBy(schema.infoClassificationLabels.position);
+    expect(rows.map((row) => row.classification)).toEqual(['verified_fact', 'derived_metric', 'external_label', 'heuristic', 'assumption', 'unavailable']);
+    expect(rows.map((row) => row.classification).sort()).toEqual([...schema.infoClassification.enumValues].sort());
+    expect(rows[0]).toMatchObject({ name: 'Fakta on-chain' });
   });
 
   it('mengisi explorer resmi Robinhood Chain tanpa menimpa URL yang diatur manual', async () => {

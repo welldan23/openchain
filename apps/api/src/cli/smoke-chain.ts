@@ -4,16 +4,18 @@
  *
  *   npm run smoke:chain -- <chain|all> [--record] [--json]
  *
- * `--record` menyimpan hasilnya ke `chains.support_status` (butuh
- * DATABASE_URL). Kode keluar 0 bila semua chain minimal `experimental`.
+ * `--record` menyimpan hasilnya sebagai bukti (`chain_smoke_checks`), lalu
+ * memperbarui `chains.support_status` dan status tiap kemampuan data di
+ * `chain_capabilities` (butuh DATABASE_URL). Kode keluar 0 bila semua chain minimal `experimental`.
  */
-import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import type { SmokeTestReport } from '../chains/chain-adapter.types.js';
 import { ChainNotSupportedError, ChainRegistry, type ChainSetup } from '../chains/chain-registry.js';
+import { recordSmokeTest } from '../chains/chain-support-recorder.js';
 import { loadDotEnv } from '../common/env.js';
-import { chains } from '../database/schema/index.js';
+import type { Database } from '../database/database.module.js';
+import * as schema from '../database/schema/index.js';
 import type { ChainSupportStatus } from '../database/schema/enums.js';
 import { pad, parseArgs } from './cli-format.js';
 
@@ -41,10 +43,11 @@ async function record(reports: SmokeTestReport[]): Promise<void> {
   if (!databaseUrl) throw new Error('DATABASE_URL belum diisi; hasil smoke test tidak bisa disimpan.');
   const pool = new Pool({ connectionString: databaseUrl });
   try {
-    const db = drizzle(pool);
+    const db = drizzle(pool, { schema }) as unknown as Database;
     for (const report of reports) {
-      await db.update(chains).set({ supportStatus: report.status }).where(eq(chains.id, report.chainId));
-      console.log(`Status dukungan disimpan: ${report.chainId} → ${report.status}`);
+      const { checkId, capabilities } = await recordSmokeTest(db, report);
+      console.log(`Status dukungan disimpan: ${report.chainId} → ${report.status} (smoke test #${checkId})`);
+      for (const item of capabilities) console.log(`    ${pad(item.capability, 20)} ${pad(item.status, 12)} ${item.source ?? item.reason ?? ''}`);
     }
   } finally {
     await pool.end();

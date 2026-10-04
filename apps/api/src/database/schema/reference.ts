@@ -4,13 +4,17 @@ import {
   check,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   unique,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { blockNumber, idColumn, refId, timestampTz } from './columns.js';
 import {
+  chainCapability,
   chainFamily,
   chainSupportStatus,
   dataStatus,
@@ -35,10 +39,14 @@ export const chains = pgTable(
     supportStatus: chainSupportStatus('support_status')
       .notNull()
       .default('planned'),
+    /** Smoke test yang menjadi dasar `support_status`; wajib selain `planned`. */
+    supportCheckId: refId('support_check_id').references((): AnyPgColumn => chainSmokeChecks.id),
     createdAt: timestampTz('created_at').notNull().defaultNow(),
   },
   (t) => [
     check('chains_id_is_slug', sql`${t.id} ~ '^[a-z0-9-]+$'`),
+    // Chain tidak boleh disebut didukung tanpa smoke test yang tersimpan.
+    check('chains_support_needs_check', sql`${t.supportStatus} = 'planned' or ${t.supportCheckId} is not null`),
     check(
       'chains_evm_chain_id_matches_family',
       sql`(${t.family} = 'evm') = (${t.evmChainId} is not null)`,
@@ -161,4 +169,68 @@ export const labels = pgTable(
       sql`${t.source} <> 'heuristic' or ${t.confidence} is not null`,
     ),
   ],
+);
+
+/** Satu smoke test chain beserta semua pemeriksaannya, sebagai bukti status dukungan. */
+export const chainSmokeChecks = pgTable(
+  'chain_smoke_checks',
+  {
+    id: idColumn(),
+    chainId: text('chain_id')
+      .notNull()
+      .references((): AnyPgColumn => chains.id),
+    /** Status yang pantas menurut hasil smoke test ini. */
+    status: chainSupportStatus('status').notNull(),
+    /** Daftar pemeriksaan: kode, provider, level, berhasil atau tidak, dan detailnya. */
+    checks: jsonb('checks').notNull(),
+    testedAt: timestampTz('tested_at').notNull(),
+    recordedAt: timestampTz('recorded_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('chain_smoke_checks_chain_tested_idx').on(t.chainId, t.testedAt),
+    check('chain_smoke_checks_checks_is_array', sql`jsonb_typeof(${t.checks}) = 'array'`),
+  ],
+);
+
+/**
+ * Status tiap kemampuan data per chain. Baris yang tidak ada berarti
+ * `planned`. Status selain `planned` wajib menunjuk smoke test dan sumbernya.
+ */
+export const chainCapabilities = pgTable(
+  'chain_capabilities',
+  {
+    chainId: text('chain_id')
+      .notNull()
+      .references(() => chains.id),
+    capability: chainCapability('capability').notNull(),
+    status: chainSupportStatus('status').notNull(),
+    /** Provider yang dipakai, mis. `blockscout`; kosong bila belum ada. */
+    source: text('source'),
+    /** Penjelasan singkat, terutama bila belum `validated`. */
+    reason: text('reason'),
+    checkId: refId('check_id').references(() => chainSmokeChecks.id),
+    updatedAt: timestampTz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'chain_capabilities_pk', columns: [t.chainId, t.capability] }),
+    check('chain_capabilities_needs_check', sql`${t.status} = 'planned' or (${t.checkId} is not null and ${t.source} is not null)`),
+  ],
+);
+
+/**
+ * Nama dan penjelasan tiap jenis informasi (`info_classification`) untuk
+ * ditampilkan, supaya semua halaman memakai istilah yang sama. Isinya ada di
+ * migrasi data.
+ */
+export const infoClassificationLabels = pgTable(
+  'info_classification_labels',
+  {
+    classification: infoClassification('classification').primaryKey(),
+    /** Nama singkat, mis. "Fakta on-chain". */
+    name: text('name').notNull(),
+    /** Penjelasan dalam bahasa sederhana. */
+    description: text('description').notNull(),
+    /** Urutan tampil, dari yang paling pasti. */
+    position: integer('position').notNull().unique(),
+  },
 );
