@@ -1,14 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { formatUnits, numericToNumber } from '../common/units.js';
-import { InvalidIdentifierError, normalizeAddress } from '../database/identifiers.js';
 import type { DataStatus } from '../database/schema/enums.js';
-import { movementKey, nativeAssetOf, toChainInfo } from '../flows/flow-summary.mapper.js';
-import type { FlowAsset } from '../flows/flow-summary.types.js';
+import { toChainInfo } from '../flows/flow-summary.mapper.js';
 import { HUB_LABEL_TYPES } from '../flows/flows.repository.js';
-import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
+import { resolveMapToken } from './map-lookup.js';
 import { trimToRadius } from './map-radius.js';
+import { tokenIdsOf, toEdgeView, toPartyView } from './maps.mapper.js';
 import { MapsRepository } from './maps.repository.js';
 import type { WalletMapEdgeView, WalletMapNodeView, WalletMapResponse } from './maps.types.js';
 import { FUNDING_DEPTH_RANGE, WALLET_MAP_DEFAULTS, WalletMapBuilder } from './wallet-map-builder.service.js';
@@ -40,17 +38,7 @@ export class WalletMapService {
   ) {}
 
   async getMap(chainId: string, rawToken: string, query: WalletMapQuery = {}): Promise<WalletMapResponse> {
-    const chain = await this.repository.findChain(chainId);
-    if (!chain) throw new NotFoundException(`Chain "${chainId}" tidak dikenal.`);
-    let normalized: string;
-    try {
-      normalized = normalizeAddress(chain.family, rawToken);
-    } catch (error) {
-      if (error instanceof InvalidIdentifierError) throw new BadRequestException(error.message);
-      throw error;
-    }
-    const token = await this.repository.findToken(chain.id, normalized);
-    if (!token) throw new NotFoundException(`Token ${rawToken.trim()} belum pernah diambil datanya di ${chain.name}.`);
+    const { chain, token } = await resolveMapToken(this.repository, chainId, rawToken);
 
     let map;
     let radius: number;
@@ -89,44 +77,18 @@ export class WalletMapService {
       map.snapshotId === null ? null : this.repository.findSnapshotById(map.snapshotId),
     ]);
     const { nodes, edges } = trimToRadius(storedNodes, storedEdges, radius);
-    const tokenIds = [...new Set(edges.flatMap((edge) => (edge.tokenId === null ? [] : [edge.tokenId])))];
     const [labelsById, tokensById, sources] = await Promise.all([
       this.repository.labelsByAddressIds(nodes.map((node) => node.addressId)),
-      this.repository.tokensByIds(tokenIds),
+      this.repository.tokensByIds(tokenIdsOf(edges)),
       snapshot ? this.repository.snapshotSources(snapshot.id) : [],
     ]);
 
     const nodeViews: WalletMapNodeView[] = nodes.map((node) => ({
-      address: node.address,
-      role: node.role,
-      sharePct: numericToNumber(node.sharePct) ?? 0,
-      isContract: node.isContract,
-      labels: sortLabels(labelsById.get(node.addressId) ?? []).map(toLabelView),
+      ...toPartyView(node, labelsById.get(node.addressId) ?? []),
       distance: node.distance,
     }));
     const addressOf = new Map(nodes.map((node) => [node.id, node.address]));
-    const nativeAsset = nativeAssetOf(chain);
-    const edgeViews: WalletMapEdgeView[] = edges.map((edge) => {
-      const tokenMeta = edge.tokenId === null ? null : tokensById.get(edge.tokenId);
-      const asset: FlowAsset = tokenMeta
-        ? { type: 'token', address: tokenMeta.address, symbol: tokenMeta.symbol, name: tokenMeta.name, decimals: tokenMeta.decimals }
-        : nativeAsset;
-      return {
-        id: movementKey(edge.source, edge.transferId),
-        kind: edge.kind,
-        from: addressOf.get(edge.fromNodeId) ?? '',
-        to: addressOf.get(edge.toNodeId) ?? '',
-        transferKind: edge.source,
-        asset,
-        amountRaw: edge.amountRaw,
-        amount: asset.decimals === null ? null : formatUnits(edge.amountRaw, asset.decimals),
-        amountUsd: numericToNumber(edge.amountUsd),
-        txHash: edge.txHash,
-        blockNumber: edge.blockNumber,
-        timestamp: edge.timestamp.toISOString(),
-        classification: 'verified_fact',
-      };
-    });
+    const edgeViews: WalletMapEdgeView[] = edges.map((edge) => toEdgeView(edge, chain, addressOf, tokensById));
 
     const caveats = [
       'Setiap garis adalah transfer on-chain. Wallet yang berdekatan atau didanai pihak yang sama belum tentu dimiliki orang yang sama.',

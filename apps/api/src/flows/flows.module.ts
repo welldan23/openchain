@@ -15,5 +15,6 @@ import { TransactionsController } from './transactions.controller.js';
 @Module({
   controllers: [FlowsController, TracesController, TransactionsController],
   providers: [FlowsRepository, FlowLookupService, FlowSummaryService, FlowTransfersService, FlowChainsService, TraceService, TransactionEvidenceService, SnapshotFreshness, { provide: CLOCK, useValue: systemClock }],
+  exports: [FlowsRepository, TransactionEvidenceService],
 })
 export class FlowsModule {}

@@ -29,6 +29,16 @@ function idList(ids: readonly number[]): SQL {
   );
 }
 
+/** Transfer yang menjadi bukti garis: tabel native (termasuk internal) atau token. */
+export interface TransferRef {
+  table: 'native' | 'token';
+  id: number;
+}
+
+function transferFilter(edge: TransferRef): SQL {
+  return edge.table === 'token' ? sql`e.token_transfer_id = ${edge.id}` : sql`e.native_transfer_id = ${edge.id}`;
+}
+
 function toTransfer(row: Raw, source: GraphTransfer['source']): GraphTransfer {
   return {
     source,
@@ -132,7 +142,8 @@ export class MapsRepository {
     return row !== undefined;
   }
 
-  async mapNodes(mapId: number) {
+  /** Node peta, atau hanya node tertentu bila `nodeIds` diisi. */
+  async mapNodes(mapId: number, nodeIds?: number[]) {
     return this.db
       .select({
         id: mapNodes.id,
@@ -144,11 +155,12 @@ export class MapsRepository {
       })
       .from(mapNodes)
       .innerJoin(addresses, eq(mapNodes.addressId, addresses.id))
-      .where(eq(mapNodes.mapId, mapId))
+      .where(nodeIds === undefined ? eq(mapNodes.mapId, mapId) : and(eq(mapNodes.mapId, mapId), inArray(mapNodes.id, nodeIds)))
       .orderBy(asc(mapNodes.id));
   }
 
-  async mapEdges(mapId: number): Promise<MapEdgeRow[]> {
+  /** Garis peta, bisa disaring dengan kondisi tambahan atas alias `e`. */
+  async mapEdges(mapId: number, filter?: SQL): Promise<MapEdgeRow[]> {
     const rows = await this.rows(sql`
       select e.id as edge_id, e.kind, e.from_node_id, e.to_node_id,
         case when e.token_transfer_id is not null then 'token' when n.kind = 'internal' then 'internal' else 'native' end as source,
@@ -162,7 +174,7 @@ export class MapsRepository {
       from map_edges e
       left join native_transfers n on n.id = e.native_transfer_id
       left join token_transfers t on t.id = e.token_transfer_id
-      where e.map_id = ${mapId}
+      where e.map_id = ${mapId} ${filter ? sql`and ${filter}` : sql``}
       order by e.id`);
     return rows.map((row) => ({
       edgeId: Number(row.edge_id),
@@ -178,6 +190,31 @@ export class MapsRepository {
       timestamp: new Date(row.block_timestamp as string | Date),
       tokenId: row.token_id === null ? null : Number(row.token_id),
     }));
+  }
+
+  /** Garis peta untuk satu transfer; `null` bila transfer itu bukan garis di peta ini. */
+  async findMapEdge(mapId: number, edge: TransferRef): Promise<MapEdgeRow | null> {
+    const [row] = await this.mapEdges(mapId, transferFilter(edge));
+    return row ?? null;
+  }
+
+  /** Semua garis di antara dua node, ke dua arah. */
+  async edgesBetween(mapId: number, nodeA: number, nodeB: number): Promise<MapEdgeRow[]> {
+    return this.mapEdges(
+      mapId,
+      sql`((e.from_node_id = ${nodeA} and e.to_node_id = ${nodeB}) or (e.from_node_id = ${nodeB} and e.to_node_id = ${nodeA}))`,
+    );
+  }
+
+  /** Peta terbaru token ini yang memuat transfer tersebut sebagai garis. */
+  async findLatestMapWithEdge(tokenId: number, edge: TransferRef) {
+    const rows = await this.rows(sql`
+      select m.id from wallet_maps m
+      join map_edges e on e.map_id = m.id
+      where m.token_id = ${tokenId} and ${transferFilter(edge)}
+      order by m.built_at desc, m.id desc
+      limit 1`);
+    return rows.length === 0 ? null : this.findMap(Number(rows[0].id));
   }
 
   async labelsByAddressIds(addressIds: number[]) {

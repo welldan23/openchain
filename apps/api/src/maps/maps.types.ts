@@ -1,5 +1,6 @@
 /**
- * Kontrak respons `GET /api/maps/:chain/:token`.
+ * Kontrak respons `GET /api/maps/:chain/:token` dan
+ * `GET /api/maps/:chain/:token/edges/:edgeId`.
  *
  * Wallet dan garis adalah fakta: holder dari snapshot, garis dari transfer
  * on-chain tersimpan (`verified_fact`). Kedekatan di peta bukan bukti bahwa
@@ -7,9 +8,11 @@
  * disajikan terpisah.
  */
 import type { DataStatus, MapEdgeKind, MapNodeRole } from '../database/schema/enums.js';
-import type { FlowAsset, FlowChainInfo, FlowLabelView } from '../flows/flow-summary.types.js';
+import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from '../flows/flow-summary.types.js';
+import type { TransactionEvidenceResponse } from '../flows/transaction-evidence.types.js';
 
-export interface WalletMapNodeView {
+/** Wallet di peta. */
+export interface WalletMapPartyView {
   /** Identifier asli address. */
   address: string;
   role: MapNodeRole;
@@ -18,6 +21,9 @@ export interface WalletMapNodeView {
   /** `null` bila belum diketahui. */
   isContract: boolean | null;
   labels: FlowLabelView[];
+}
+
+export interface WalletMapNodeView extends WalletMapPartyView {
   /** Langkah dari holder terdekat; holder 0. */
   distance: number;
 }
@@ -70,4 +76,22 @@ export interface WalletMapResponse {
   snapshot: { id: number; fetchedAt: string; blockNumber: number; sources: string[] } | null;
   /** Status sekarang; `stale` bila snapshot dasarnya sudah terlalu lama. */
   dataStatus: DataStatus;
+}
+
+/** Detail satu garis peta beserta bukti transaksinya. */
+export interface WalletMapEdgeDetailResponse {
+  chain: FlowChainInfo;
+  token: { address: string; symbol: string | null };
+  map: { id: number; builtAt: string; status: DataStatus };
+  edge: WalletMapEdgeView & {
+    /** Jenis perpindahan dan dasarnya; `null` bila belum diklasifikasikan. */
+    movement: MovementTypeView | null;
+  };
+  from: WalletMapPartyView;
+  to: WalletMapPartyView;
+  /** Garis lain di peta yang sama antara dua wallet ini, ke dua arah. */
+  relatedEdges: WalletMapEdgeView[];
+  /** Semua perpindahan dana di transaksi garis ini, beserta klaim yang memakainya. */
+  transaction: TransactionEvidenceResponse;
+  caveats: string[];
 }

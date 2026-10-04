@@ -554,6 +554,25 @@ default 50), `map` (id peta tersimpan).
   snapshot, atau peta yang bukan milik token itu; `400` untuk format address
   atau parameter yang salah.
 
+### `GET /api/maps/:chain/:token/edges/:edgeId`
+
+Detail satu garis peta. `edgeId` adalah `id` garis di respons peta
+(`native:<id>` atau `token:<id>`); `?map=<id>` memilih petanya, tanpa itu
+dipakai peta terbaru token ini yang memuat garis tersebut.
+
+- `edge`: transfernya (aset, jumlah, hash, blok) dan `movement`, jenis
+  perpindahan beserta dasarnya (`null` bila belum diklasifikasikan).
+- `from`/`to`: kedua wallet beserta peran, porsi supply, status kontrak, dan
+  labelnya. `relatedEdges`: garis lain di peta yang sama di antara dua wallet
+  ini, ke dua arah.
+- `transaction`: bukti transaksi lengkap, sama dengan
+  `GET /api/transactions/:chain/:hash` (semua perpindahan dana di transaksi itu,
+  klaim yang memakainya, dan sumbernya).
+- `caveats` mengingatkan bahwa transfer bukan bukti kepemilikan yang sama, dan
+  menyebut ujung yang berupa exchange, pool, atau kontrak.
+- Respons error: `400` untuk id garis yang salah format; `404` bila garis tidak
+  ada di peta, atau peta bukan milik token itu.
+
 ## Merekam snapshot
 
 `SnapshotRecorder` (`src/snapshots`) adalah sisi tulis data. Service ini dipakai

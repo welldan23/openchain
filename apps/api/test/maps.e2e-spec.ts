@@ -91,9 +91,11 @@ interface NodeBody {
   distance: number;
 }
 interface EdgeBody {
+  id: string;
   kind: string;
   from: string;
   to: string;
+  txHash: string;
 }
 
 describe('GET /api/maps/:chain/:token', () => {
@@ -105,8 +107,11 @@ describe('GET /api/maps/:chain/:token', () => {
   beforeAll(async () => {
     ({ client, db } = await createTestDatabase());
     ingestion = new FundFlowIngestionService(db as unknown as Database);
-    // Pendana F mendanai H1 dan H2; G mendanai F. Pool menjual ke H1; H1 → C → H2.
-    await ingestion.persist(scanOf(H1, [native(FUNDER, H1, 100)], [tokenTransfer(POOL, H1, 300), tokenTransfer(H1, CONNECTOR, 310)]), 'evm');
+    // Pendana F mendanai H1 dan H2; G mendanai F. Pool menjual ke H1; H1 → C → H2, lalu C → H1.
+    await ingestion.persist(
+      scanOf(H1, [native(FUNDER, H1, 100)], [tokenTransfer(POOL, H1, 300), tokenTransfer(H1, CONNECTOR, 310), tokenTransfer(CONNECTOR, H1, 330)]),
+      'evm',
+    );
     await ingestion.persist(scanOf(H2, [native(FUNDER, H2, 110)], [tokenTransfer(CONNECTOR, H2, 320)]), 'evm');
     await ingestion.persist(scanOf(FUNDER, [native(GRAND, FUNDER, 50)]), 'evm');
 
@@ -185,6 +190,7 @@ describe('GET /api/maps/:chain/:token', () => {
       ['token_transfer', POOL, H1],
       ['token_transfer', H1, CONNECTOR],
       ['token_transfer', CONNECTOR, H2],
+      ['token_transfer', CONNECTOR, H1],
     ]);
     expect(body.edges[0]).toMatchObject({
       transferKind: 'native',
@@ -235,6 +241,45 @@ describe('GET /api/maps/:chain/:token', () => {
     await request(app.getHttpServer()).get(url(`?map=${firstMapId}&radius=3`)).expect(400);
     await request(app.getHttpServer()).get(url('?map=99999')).expect(404);
     await request(app.getHttpServer()).get(url(`?map=${firstMapId}`, BARE)).expect(404);
+  });
+
+  it('detail garis: dua ujungnya, garis lain di antara mereka, dan bukti transaksinya', async () => {
+    const map = await request(app.getHttpServer()).get(url(`?map=${firstMapId}`)).expect(200);
+    const edge = map.body.edges.find((item: EdgeBody) => item.from === H1 && item.to === CONNECTOR);
+    const { body } = await request(app.getHttpServer()).get(url(`/edges/${edge.id}?map=${firstMapId}`)).expect(200);
+    expect(body).toMatchObject({
+      chain: { id: 'robinhood' },
+      token: { address: TOKEN, symbol: 'NBLA' },
+      map: { id: firstMapId, status: 'complete' },
+      edge: { id: edge.id, kind: 'token_transfer', from: H1, to: CONNECTOR, amount: '5000', blockNumber: 310, classification: 'verified_fact' },
+      from: { address: H1, role: 'holder', sharePct: 40 },
+      to: { address: CONNECTOR, role: 'connector', sharePct: 0 },
+      transaction: { txHash: edge.txHash, blockNumber: 310 },
+    });
+    expect(body.edge).toHaveProperty('movement');
+    expect(body.relatedEdges.map((item: EdgeBody) => [item.from, item.to])).toEqual([[CONNECTOR, H1]]);
+    expect(body.transaction.movements).toHaveLength(1);
+    expect(body.transaction.movements[0]).toMatchObject({ transferKind: 'token', from: { address: H1 }, to: { address: CONNECTOR } });
+    expect(body.caveats[0]).toContain('tidak membuktikan keduanya dimiliki orang yang sama');
+
+    const pool = map.body.edges.find((item: EdgeBody) => item.from === POOL);
+    const poolEdge = await request(app.getHttpServer()).get(url(`/edges/${pool.id}`)).expect(200);
+    // Tanpa ?map= dipakai peta terbaru yang memuat garis ini.
+    expect(poolEdge.body.map.id).toBeGreaterThanOrEqual(firstMapId);
+    expect(poolEdge.body.from.labels[0]).toMatchObject({ type: 'liquidity_pool', name: 'Pool NBLA/WETH' });
+    expect(poolEdge.body.caveats.join(' ')).toContain('Pool NBLA/WETH adalah exchange, pool, atau kontrak');
+  });
+
+  it('detail garis menolak id yang salah dan garis yang tidak ada di peta', async () => {
+    const server = app.getHttpServer();
+    await request(server).get(url('/edges/abc')).expect(400);
+    await request(server).get(url('/edges/internal:1')).expect(400);
+    await request(server).get(url('/edges/token:0')).expect(400);
+    const missing = await request(server).get(url('/edges/token:999999')).expect(404);
+    expect(missing.body.message).toContain('tidak ada di peta mana pun');
+    await request(server).get(url(`/edges/token:999999?map=${firstMapId}`)).expect(404);
+    await request(server).get(url(`/edges/token:1?map=${firstMapId}`, BARE)).expect(404);
+    await request(server).get(url('/edges/token:1', TOKEN, 'mars')).expect(404);
   });
 
   it('membentuk ulang peta bila ada pemindaian baru sesudah peta dibentuk', async () => {
