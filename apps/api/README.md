@@ -416,6 +416,32 @@ Ringkasan aliran masuk dan keluar satu address dari pemindaian yang tersimpan
   dipindai, atau `scan` yang tidak ada; `400` untuk format address, waktu, id,
   atau `from` setelah `to`.
 
+### `GET /api/traces/:chain/:from/:to`
+
+Jalur dana dari satu wallet ke wallet lain lewat transfer yang tersimpan
+(native dan token), dengan langkah paling sedikit. Tidak menghubungi provider.
+
+| Parameter | Fungsi |
+| --- | --- |
+| `?maxHops=` | batas langkah, 1–6 (default 4) |
+| `?throughHubs=true` | ikut menelusuri lewat exchange, router, bridge, pool, atau market maker |
+
+- Urutan waktu dijaga: langkah berikutnya harus di blok yang sama atau sesudah
+  dana tiba. Di antara jalur sepanjang sama, dipilih yang paling awal sampai.
+- Tiap langkah adalah transfer on-chain (`verified_fact`); anggapan bahwa dana
+  yang sama berpindah sepanjang jalur adalah dugaan (`pathClassification:
+  heuristic`).
+- Hub tidak dilewati secara default karena dana di sana tercampur; hub tetap
+  boleh jadi tujuan. Bila dilewati, `caveats` memperingatkannya.
+- `found: false` berarti tidak ada jalur dalam data yang sudah dipindai, bukan
+  pasti tidak ada. `search` melaporkan address yang dikunjungi, transfer yang
+  diperiksa, address yang belum pernah dipindai, hub yang dilewati, dan apakah
+  pencarian terpotong; `dataStatus` turun ke `partial` bila hal itu bisa
+  menyembunyikan jalur.
+- Respons error: `404` untuk chain tak dikenal atau address asal yang belum
+  pernah dipindai; `400` untuk format address, asal sama dengan tujuan, atau
+  parameter yang salah.
+
 ## Merekam snapshot
 
 `SnapshotRecorder` (`src/snapshots`) adalah sisi tulis data. Service ini dipakai

@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gt, lte, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
-import { addresses, addressFlowScans, chains, labels } from '../database/schema/index.js';
+import type { EntityLabelType } from '../database/schema/enums.js';
+import { addresses, addressFlowScans, chains, labels, tokens } from '../database/schema/index.js';
+import type { TraceEdge } from './trace-search.js';
 
 export type ScanRow = typeof addressFlowScans.$inferSelect;
 
@@ -43,6 +45,21 @@ export interface FlowAggregates {
 }
 
 type Raw = Record<string, unknown>;
+
+/** Transfer keluar sebagai calon langkah jalur, beserta detail untuk respons. */
+export interface TraceEdgeRow extends TraceEdge {
+  source: 'native' | 'internal' | 'token';
+  txHash: string;
+  amountRaw: string;
+  amountUsd: string | null;
+  tokenId: number | null;
+}
+
+/**
+ * Jenis label yang menandai hub: dana dari banyak orang tercampur di sana,
+ * jadi jalur yang lewat hub belum tentu dana yang sama.
+ */
+export const HUB_LABEL_TYPES: readonly EntityLabelType[] = ['exchange', 'router', 'bridge', 'liquidity_pool', 'market_maker'];
 
 /** Query baca untuk aliran dana. Tidak ada operasi tulis di sini. */
 @Injectable()
@@ -185,6 +202,109 @@ export class FlowsRepository {
       },
       selfTransferCount: Number(self?.self_count ?? 0),
     };
+  }
+
+  /**
+   * Transfer keluar (native dan token) dari tiap address frontier, mulai blok
+   * minimumnya, paling awal dulu, paling banyak `perAddress` per address.
+   */
+  async outgoingEdges(
+    chainId: string,
+    frontier: ReadonlyArray<{ addressId: number; minBlock: number }>,
+    perAddress: number,
+  ): Promise<TraceEdgeRow[]> {
+    if (frontier.length === 0) return [];
+    const values = sql.join(
+      frontier.map((item) => sql`(${item.addressId}::bigint, ${item.minBlock}::bigint)`),
+      sql`, `,
+    );
+    const rows = await this.rows(sql`
+      with frontier(address_id, min_block) as (values ${values}),
+      moves as (
+        select case when n.kind = 'internal' then 'internal' else 'native' end as source, n.id, n.tx_hash,
+          n.from_address_id, n.to_address_id, n.amount_raw::text as amount_raw, n.amount_usd::text as amount_usd,
+          n.block_number, n.block_timestamp, null::bigint as token_id
+        from native_transfers n
+        join frontier f on f.address_id = n.from_address_id and n.block_number >= f.min_block
+        where n.chain_id = ${chainId} and n.from_address_id <> n.to_address_id
+        union all
+        select 'token', t.id, t.tx_hash, t.from_address_id, t.to_address_id, t.amount_raw::text, t.amount_usd::text,
+          t.block_number, t.block_timestamp, t.token_id
+        from token_transfers t
+        join frontier f on f.address_id = t.from_address_id and t.block_number >= f.min_block
+        where t.chain_id = ${chainId} and t.from_address_id <> t.to_address_id
+      ),
+      ranked as (
+        select moves.*, row_number() over (partition by from_address_id order by block_number, source, id) as rn
+        from moves
+      )
+      select * from ranked where rn <= ${perAddress} order by block_number, source, id`);
+    return rows.map((row) => ({
+      key: `${String(row.source)}:${String(row.id)}`,
+      source: row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native',
+      fromId: Number(row.from_address_id),
+      toId: Number(row.to_address_id),
+      blockNumber: Number(row.block_number),
+      timestamp: new Date(row.block_timestamp as string | Date),
+      txHash: String(row.tx_hash),
+      amountRaw: String(row.amount_raw),
+      amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      tokenId: row.token_id === null ? null : Number(row.token_id),
+    }));
+  }
+
+  /** Id address yang berlabel hub. */
+  async hubAddressIds(addressIds: number[]): Promise<Set<number>> {
+    if (addressIds.length === 0) return new Set();
+    const rows = await this.db
+      .selectDistinct({ addressId: labels.addressId })
+      .from(labels)
+      .where(and(inArray(labels.addressId, addressIds), inArray(labels.labelType, [...HUB_LABEL_TYPES])));
+    return new Set(rows.map((row) => row.addressId));
+  }
+
+  /** Address yang punya setidaknya satu pemindaian yang bisa dipakai. */
+  async scannedAddressIds(chainId: string, addressIds: number[]): Promise<Set<number>> {
+    if (addressIds.length === 0) return new Set();
+    const rows = await this.db
+      .selectDistinct({ addressId: addressFlowScans.addressId })
+      .from(addressFlowScans)
+      .where(
+        and(
+          eq(addressFlowScans.chainId, chainId),
+          inArray(addressFlowScans.addressId, addressIds),
+          ne(addressFlowScans.status, 'unavailable'),
+        ),
+      );
+    return new Set(rows.map((row) => row.addressId));
+  }
+
+  async addressesByIds(addressIds: number[]) {
+    if (addressIds.length === 0) return new Map<number, string>();
+    const rows = await this.db
+      .select({ id: addresses.id, address: addresses.address })
+      .from(addresses)
+      .where(inArray(addresses.id, addressIds));
+    return new Map(rows.map((row) => [row.id, row.address]));
+  }
+
+  async labelsByAddressIds(addressIds: number[]) {
+    const grouped = new Map<number, (typeof labels.$inferSelect)[]>();
+    if (addressIds.length === 0) return grouped;
+    const rows = await this.db.select().from(labels).where(inArray(labels.addressId, addressIds)).orderBy(asc(labels.id));
+    for (const row of rows) grouped.set(row.addressId, [...(grouped.get(row.addressId) ?? []), row]);
+    return grouped;
+  }
+
+  /** Metadata token beserta address kontraknya. */
+  async tokensByIds(tokenIds: number[]) {
+    if (tokenIds.length === 0) return new Map<number, { address: string; symbol: string | null; name: string | null; decimals: number | null }>();
+    const rows = await this.db
+      .select({ id: tokens.id, address: addresses.address, symbol: tokens.symbol, name: tokens.name, decimals: tokens.decimals })
+      .from(tokens)
+      .innerJoin(addresses, eq(addresses.id, tokens.addressId))
+      .where(inArray(tokens.id, tokenIds));
+    return new Map(rows.map(({ id, ...token }) => [id, token]));
   }
 
   private async rows(query: SQL): Promise<Raw[]> {
