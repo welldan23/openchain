@@ -80,41 +80,87 @@ export const CLASSIFICATION_META: Record<
   },
 };
 
-export const SEVERITY_META: Record<RiskSeverity, Meta> = {
-  critical: { label: "Kritis", className: "bg-rose-500/15 text-rose-300 ring-rose-400/40" },
-  high: { label: "Tinggi", className: "bg-orange-500/15 text-orange-300 ring-orange-400/40" },
-  medium: { label: "Sedang", className: "bg-amber-500/15 text-amber-300 ring-amber-400/40" },
-  low: { label: "Rendah", className: "bg-lime-500/15 text-lime-300 ring-lime-400/40" },
-  info: { label: "Info", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
-};
+/**
+ * Nada risiko: satu set warna untuk tingkat risiko objek dan keparahan
+ * temuan, supaya "tinggi" selalu tampil sama di mana pun. Ikonnya ada di
+ * `components/risk/risk-icons.ts`; tingkatnya selalu ditulis, bukan warna saja.
+ */
+export type RiskTone = "critical" | "high" | "medium" | "low" | "neutral";
 
-export const RISK_LEVEL_META: Record<RiskLevel, Meta & { barClass: string }> = {
-  unknown: {
-    label: "Belum dinilai",
-    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
-    barClass: "bg-slate-400",
-  },
-  low: {
-    label: "Risiko rendah",
-    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/40",
-    barClass: "bg-emerald-400",
-  },
-  medium: {
-    label: "Risiko sedang",
-    className: "bg-amber-500/15 text-amber-300 ring-amber-400/40",
-    barClass: "bg-amber-400",
-  },
-  high: {
-    label: "Risiko tinggi",
-    className: "bg-orange-500/15 text-orange-300 ring-orange-400/40",
-    barClass: "bg-orange-400",
-  },
+export const RISK_TONES: Record<RiskTone, { className: string; barClass: string; textClass: string; calloutClass: string }> = {
   critical: {
-    label: "Risiko kritis",
     className: "bg-rose-500/15 text-rose-300 ring-rose-400/40",
     barClass: "bg-rose-400",
+    textClass: "text-rose-300",
+    calloutClass: "border-rose-400/30 bg-rose-500/10 text-rose-200",
+  },
+  high: {
+    className: "bg-orange-500/15 text-orange-300 ring-orange-400/40",
+    barClass: "bg-orange-400",
+    textClass: "text-orange-300",
+    calloutClass: "border-orange-400/30 bg-orange-500/10 text-orange-200",
+  },
+  medium: {
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/40",
+    barClass: "bg-amber-400",
+    textClass: "text-amber-300",
+    calloutClass: "border-amber-400/30 bg-amber-500/10 text-amber-200",
+  },
+  low: {
+    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/40",
+    barClass: "bg-emerald-400",
+    textClass: "text-emerald-300",
+    calloutClass: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
+  },
+  neutral: {
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+    barClass: "bg-slate-400",
+    textClass: "text-slate-300",
+    calloutClass: "border-line bg-surface-raised text-foreground/80",
   },
 };
+
+export const RISK_LEVEL_TONE: Record<RiskLevel, RiskTone> = {
+  unknown: "neutral",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+};
+
+export const SEVERITY_TONE: Record<RiskSeverity, RiskTone> = {
+  critical: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+  info: "neutral",
+};
+
+const SEVERITY_LABELS: Record<RiskSeverity, string> = { critical: "Kritis", high: "Tinggi", medium: "Sedang", low: "Rendah", info: "Info" };
+
+export const SEVERITY_META: Record<RiskSeverity, Meta & { tone: RiskTone; textClass: string; calloutClass: string }> = Object.fromEntries(
+  (Object.keys(SEVERITY_LABELS) as RiskSeverity[]).map((severity) => {
+    const tone = SEVERITY_TONE[severity];
+    const { className, textClass, calloutClass } = RISK_TONES[tone];
+    return [severity, { label: SEVERITY_LABELS[severity], tone, className, textClass, calloutClass }];
+  }),
+) as Record<RiskSeverity, Meta & { tone: RiskTone; textClass: string; calloutClass: string }>;
+
+const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
+  unknown: "Belum dinilai",
+  low: "Risiko rendah",
+  medium: "Risiko sedang",
+  high: "Risiko tinggi",
+  critical: "Risiko kritis",
+};
+
+export const RISK_LEVEL_META: Record<RiskLevel, Meta & { tone: RiskTone; barClass: string; textClass: string }> = Object.fromEntries(
+  (Object.keys(RISK_LEVEL_LABELS) as RiskLevel[]).map((level) => {
+    const tone = RISK_LEVEL_TONE[level];
+    const { className, barClass, textClass } = RISK_TONES[tone];
+    return [level, { label: RISK_LEVEL_LABELS[level], tone, className, barClass, textClass }];
+  }),
+) as Record<RiskLevel, Meta & { tone: RiskTone; barClass: string; textClass: string }>;
 
 export const ENTITY_LABEL_META: Record<EntityLabelType, Meta> = {
   exchange: { label: "Exchange", className: "bg-violet-500/15 text-violet-300 ring-violet-400/30" },
@@ -361,8 +407,9 @@ export const DANGER_TRAIT_META: Record<DangerTrait, { label: string; category: D
   bridge_hop: { label: "Pindah chain lewat bridge", category: "flow", description: "Dana dipindah ke chain lain, jejaknya perlu dilanjutkan di sana." },
 };
 
+/** Status ciri berbahaya; warnanya mengikuti nada risiko tinggi dan rendah. */
 export const DANGER_STATUS_META: Record<DangerTraitStatus, { label: string; className: string }> = {
-  detected: { label: "Terdeteksi", className: "text-orange-300" },
+  detected: { label: "Terdeteksi", className: RISK_TONES.high.textClass },
   unknown: { label: "Belum bisa dicek", className: "text-muted" },
-  clear: { label: "Tidak terdeteksi", className: "text-emerald-300" },
+  clear: { label: "Tidak terdeteksi", className: RISK_TONES.low.textClass },
 };

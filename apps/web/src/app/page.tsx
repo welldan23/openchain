@@ -12,7 +12,7 @@ import { searchFailureDemoPath } from "@/lib/api/search";
 import { listSampleTraces, traceFailureDemoPath, tracePath } from "@/lib/api/traces";
 import { shortenHash } from "@/lib/format";
 import { addressTitle } from "@/lib/fund-flow";
-import { RISK_OBJECT_KIND_META } from "@/lib/labels";
+import { RISK_OBJECT_KIND_META, RISK_TONES } from "@/lib/labels";
 
 export default async function Home() {
   const [samples, flows, traces, maps, multichain, risks] = await Promise.all([
@@ -292,7 +292,7 @@ export default async function Home() {
                     <ChainBadge chain={risk.chain} />
                     <RiskScoreBadge score={risk.score} level={risk.level} />
                     {risk.warningCount > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-orange-300">
+                      <span className={`inline-flex items-center gap-1 text-[11px] ${RISK_TONES.high.textClass}`}>
                         <BellRing className="size-3" aria-hidden />
                         {risk.warningCount} peringatan
                       </span>

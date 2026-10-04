@@ -30,8 +30,9 @@ import { EmptyState } from "@/components/ui/states";
 import { warningAnchorId } from "@/lib/anchors";
 import { explorerAddressUrl, explorerTxUrl, getChain } from "@/lib/chains";
 import { formatDateTime, formatNumber, formatPct, formatRelativeTime, shortenHash } from "@/lib/format";
-import { CASE_DATA_STATUS_META, CLASSIFICATION_META, RISK_OBJECT_KIND_META } from "@/lib/labels";
-import { labelSourceSummary, scoreBreakdown, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "@/lib/risk";
+import { cn } from "@/lib/cn";
+import { CASE_DATA_STATUS_META, CLASSIFICATION_META, RISK_OBJECT_KIND_META, SEVERITY_META } from "@/lib/labels";
+import { labelSourceSummary, scoreBreakdown, SEVERITY_ORDER, sortLabels, sortReasons, sortWarnings, urgentWarnings } from "@/lib/risk";
 import type { ChainId, ObjectRisk, RiskObjectLink } from "@/lib/types";
 
 const LINK_ICONS: Record<RiskObjectLink["kind"], LucideIcon> = {
@@ -67,8 +68,10 @@ export function EvidenceHashes({ risk, hashes }: { risk: ObjectRisk; hashes: str
 
 export function RiskObjectHeader({ risk, now }: { risk: ObjectRisk; now: Date }) {
   const [primary] = sortLabels(risk.labels);
-  const [latestUrgent] = sortWarnings(urgentWarnings(risk.warnings));
-  const urgentCount = urgentWarnings(risk.warnings).length;
+  const urgent = urgentWarnings(risk.warnings);
+  const [latestUrgent] = sortWarnings(urgent);
+  // Warna banner mengikuti peringatan terberat, sama dengan badge keparahannya.
+  const worstSeverity = SEVERITY_ORDER.find((severity) => urgent.some((warning) => warning.severity === severity)) ?? "high";
   const chain: ChainId = risk.chain;
   return (
     <header className="rounded-xl border border-line bg-surface p-4 sm:p-5">
@@ -103,11 +106,11 @@ export function RiskObjectHeader({ risk, now }: { risk: ObjectRisk; now: Date })
       {latestUrgent ? (
         <a
           href={`#${warningAnchorId(latestUrgent.id)}`}
-          className="mt-4 flex items-start gap-2 rounded-lg border border-orange-400/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-200 transition hover:border-orange-300/60"
+          className={cn("mt-4 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs transition hover:brightness-125", SEVERITY_META[worstSeverity].calloutClass)}
         >
           <BellRing className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
-            <strong className="font-semibold">{urgentCount} peringatan dini perlu dicek.</strong> Terbaru:{" "}
+            <strong className="font-semibold">{urgent.length} peringatan dini perlu dicek.</strong> Terbaru:{" "}
             {latestUrgent.title} ({formatRelativeTime(latestUrgent.detectedAt, now)}).
           </span>
         </a>

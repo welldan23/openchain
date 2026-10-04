@@ -1,4 +1,4 @@
-import { BellRing, CircleCheck, CircleDashed, TriangleAlert, type LucideIcon } from "lucide-react";
+import { BellRing, CircleCheck, CircleDashed, type LucideIcon } from "lucide-react";
 import { SeverityBadge } from "@/components/badges";
 import { ClassificationBadge } from "@/components/classification-badge";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +19,11 @@ import {
   warningSummary,
 } from "@/lib/risk";
 import type { DangerTraitCheck, DangerTraitStatus, ObjectRisk } from "@/lib/types";
+import { RISK_TONE_ICONS } from "./risk-icons";
 import { EvidenceHashes } from "./risk-object";
 
 const STATUS_ICONS: Record<DangerTraitStatus, LucideIcon> = {
-  detected: TriangleAlert,
+  detected: RISK_TONE_ICONS.high,
   unknown: CircleDashed,
   clear: CircleCheck,
 };

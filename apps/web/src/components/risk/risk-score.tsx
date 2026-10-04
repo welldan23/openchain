@@ -1,6 +1,7 @@
 import { cn } from "@/lib/cn";
 import { RISK_LEVEL_META } from "@/lib/labels";
 import { RISK_BANDS, scorePosition } from "@/lib/risk";
+import { RISK_LEVEL_ICONS } from "./risk-icons";
 import type { RiskLevel } from "@/lib/types";
 
 /**
@@ -66,6 +67,7 @@ export function RiskScoreScale({ score, level, className }: { score: number | nu
 /** Skor ringkas untuk daftar, mis. "68 · Risiko tinggi"; tanpa skor tertulis "Belum dinilai". */
 export function RiskScoreBadge({ score, level }: { score: number | null; level: RiskLevel }) {
   const meta = RISK_LEVEL_META[level];
+  const Icon = RISK_LEVEL_ICONS[level];
   return (
     <span
       title={score === null ? "Data belum cukup untuk dinilai" : `Skor risiko ${score} dari 100`}
@@ -74,6 +76,7 @@ export function RiskScoreBadge({ score, level }: { score: number | null; level: 
         meta.className,
       )}
     >
+      <Icon className="size-3 shrink-0" aria-hidden />
       {score === null ? null : (
         <>
           <span className="tabular-nums">{score}</span>
