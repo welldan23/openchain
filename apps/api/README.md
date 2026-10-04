@@ -345,7 +345,9 @@ exchange, liquidity pool, bridge, dan burn. Tag lain dibiarkan.
 
 ## Endpoint
 
-Semua endpoint memakai prefix `/api` dan bersifat read-only.
+Semua endpoint memakai prefix `/api` dan bersifat read-only terhadap blockchain.
+Satu-satunya yang menulis ke database adalah `GET /api/maps`, yang menyimpan
+peta yang baru dibentuk supaya bisa dibuka ulang.
 
 Semua endpoint token memakai pemilih snapshot yang sama, supaya investigasi
 bisa dibuka ulang dengan hasil yang sama:
@@ -524,6 +526,33 @@ Jalur dana dari satu wallet ke wallet lain lewat transfer yang tersimpan
 - Respons error: `404` untuk chain tak dikenal atau address asal yang belum
   pernah dipindai; `400` untuk format address, asal sama dengan tujuan, atau
   parameter yang salah.
+
+### `GET /api/maps/:chain/:token`
+
+Peta Hubungan Wallet satu token: holder teratas, pendananya, wallet
+penghubung, dan garis transfer di antara mereka. Kontraknya ada di
+`src/maps/maps.types.ts`. Query: `radius` (0–5, default 2), `holders` (1–1000,
+default 50), `map` (id peta tersimpan).
+
+- Peta tersimpan dipakai ulang (`map.reused: true`) bila dibentuk dari snapshot
+  terbaru dengan jumlah holder sama, kedalamannya ≥ radius, dan belum ada
+  pemindaian aliran dana baru di chain itu sesudahnya. Selain itu peta dibentuk
+  dari data tersimpan (lihat *Membentuk peta hubungan*), minimal sedalam 2
+  lapis. Provider tidak dihubungi saat diminta.
+- `radius` memotong peta ke wallet yang jaraknya paling banyak N garis dari
+  holder mana pun (`distance` di tiap node): holder 0, pendana langsung dan
+  penghubung 1, pendana dari pendana 2. Garis ikut bila kedua ujungnya masih di
+  dalam radius.
+- `?map=<id>` membuka peta lama dengan hasil yang sama; radius tidak boleh
+  melebihi kedalaman peta itu.
+- Setiap garis adalah transfer on-chain (`verified_fact`) dengan hash, blok,
+  aset, dan jumlahnya. `caveats` mengingatkan bahwa kedekatan di peta bukan
+  bukti kepemilikan yang sama, dan menyebut hub/kontrak yang tidak ditelusuri.
+- `map.status`/`statusReason`/`missingFields` adalah kelengkapan saat peta
+  dibentuk; `dataStatus` menjadi `stale` bila snapshot dasarnya sudah lama.
+- Respons error: `404` untuk chain atau token yang belum dikenal, token tanpa
+  snapshot, atau peta yang bukan milik token itu; `400` untuk format address
+  atau parameter yang salah.
 
 ## Merekam snapshot
 

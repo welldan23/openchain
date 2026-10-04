@@ -1,7 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
-import { addresses, chains, holders, labels, tokens, tokenSnapshots } from '../database/schema/index.js';
+import {
+  addresses,
+  addressFlowScans,
+  chains,
+  holders,
+  labels,
+  mapNodes,
+  providerRuns,
+  tokens,
+  tokenSnapshotSources,
+  tokenSnapshots,
+  walletMaps,
+} from '../database/schema/index.js';
 import { HUB_LABEL_TYPES } from '../flows/flows.repository.js';
 import type { AddressProfile, GraphTransfer, HistoryCoverage, MapGraphLoader } from './map-graph.js';
 
@@ -27,7 +39,23 @@ function toTransfer(row: Raw, source: GraphTransfer['source']): GraphTransfer {
   };
 }
 
-/** Query baca untuk membentuk peta hubungan. Penulisan ada di `WalletMapBuilder`. */
+/** Garis peta beserta transfer yang menjadi buktinya. */
+export interface MapEdgeRow {
+  edgeId: number;
+  kind: 'funding' | 'token_transfer';
+  fromNodeId: number;
+  toNodeId: number;
+  source: 'native' | 'internal' | 'token';
+  transferId: number;
+  txHash: string;
+  amountRaw: string;
+  amountUsd: string | null;
+  blockNumber: number;
+  timestamp: Date;
+  tokenId: number | null;
+}
+
+/** Query baca untuk membentuk dan membuka peta hubungan. Penulisan ada di `WalletMapBuilder`. */
 @Injectable()
 export class MapsRepository {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -39,7 +67,7 @@ export class MapsRepository {
 
   async findToken(chainId: string, addressNormalized: string) {
     const [row] = await this.db
-      .select({ id: tokens.id, address: addresses.address, symbol: tokens.symbol })
+      .select({ id: tokens.id, address: addresses.address, name: tokens.name, symbol: tokens.symbol, decimals: tokens.decimals })
       .from(tokens)
       .innerJoin(addresses, eq(tokens.addressId, addresses.id))
       .where(and(eq(tokens.chainId, chainId), eq(addresses.addressNormalized, addressNormalized)))
@@ -60,6 +88,115 @@ export class MapsRepository {
       .orderBy(sql`${tokenSnapshots.blockNumber} desc`)
       .limit(1);
     return snapshot ?? null;
+  }
+
+  async findSnapshotById(snapshotId: number) {
+    const [snapshot] = await this.db.select().from(tokenSnapshots).where(eq(tokenSnapshots.id, snapshotId)).limit(1);
+    return snapshot ?? null;
+  }
+
+  /** Nama provider yang dipakai membentuk snapshot. */
+  async snapshotSources(snapshotId: number): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ provider: providerRuns.provider })
+      .from(tokenSnapshotSources)
+      .innerJoin(providerRuns, eq(tokenSnapshotSources.providerRunId, providerRuns.id))
+      .where(eq(tokenSnapshotSources.snapshotId, snapshotId))
+      .orderBy(asc(providerRuns.provider));
+    return rows.map((row) => row.provider);
+  }
+
+  async findMap(mapId: number) {
+    const [map] = await this.db.select().from(walletMaps).where(eq(walletMaps.id, mapId)).limit(1);
+    return map ?? null;
+  }
+
+  /** Peta terbaru dari snapshot ini dengan jumlah holder sama dan kedalaman cukup. */
+  async findReusableMap(snapshotId: number, holderLimit: number, minDepth: number) {
+    const [map] = await this.db
+      .select()
+      .from(walletMaps)
+      .where(and(eq(walletMaps.snapshotId, snapshotId), eq(walletMaps.holderLimit, holderLimit), gte(walletMaps.fundingDepth, minDepth)))
+      .orderBy(desc(walletMaps.builtAt), desc(walletMaps.id))
+      .limit(1);
+    return map ?? null;
+  }
+
+  /** Ada pemindaian aliran dana di chain ini sesudah waktu tertentu. */
+  async hasScanAfter(chainId: string, after: Date): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: addressFlowScans.id })
+      .from(addressFlowScans)
+      .where(and(eq(addressFlowScans.chainId, chainId), gt(addressFlowScans.scannedAt, after)))
+      .limit(1);
+    return row !== undefined;
+  }
+
+  async mapNodes(mapId: number) {
+    return this.db
+      .select({
+        id: mapNodes.id,
+        addressId: mapNodes.addressId,
+        address: addresses.address,
+        role: mapNodes.role,
+        sharePct: mapNodes.sharePct,
+        isContract: mapNodes.isContract,
+      })
+      .from(mapNodes)
+      .innerJoin(addresses, eq(mapNodes.addressId, addresses.id))
+      .where(eq(mapNodes.mapId, mapId))
+      .orderBy(asc(mapNodes.id));
+  }
+
+  async mapEdges(mapId: number): Promise<MapEdgeRow[]> {
+    const rows = await this.rows(sql`
+      select e.id as edge_id, e.kind, e.from_node_id, e.to_node_id,
+        case when e.token_transfer_id is not null then 'token' when n.kind = 'internal' then 'internal' else 'native' end as source,
+        coalesce(e.native_transfer_id, e.token_transfer_id) as transfer_id,
+        coalesce(n.tx_hash, t.tx_hash) as tx_hash,
+        coalesce(n.amount_raw, t.amount_raw)::text as amount_raw,
+        coalesce(n.amount_usd, t.amount_usd)::text as amount_usd,
+        coalesce(n.block_number, t.block_number) as block_number,
+        coalesce(n.block_timestamp, t.block_timestamp) as block_timestamp,
+        t.token_id
+      from map_edges e
+      left join native_transfers n on n.id = e.native_transfer_id
+      left join token_transfers t on t.id = e.token_transfer_id
+      where e.map_id = ${mapId}
+      order by e.id`);
+    return rows.map((row) => ({
+      edgeId: Number(row.edge_id),
+      kind: row.kind === 'token_transfer' ? 'token_transfer' : 'funding',
+      fromNodeId: Number(row.from_node_id),
+      toNodeId: Number(row.to_node_id),
+      source: row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native',
+      transferId: Number(row.transfer_id),
+      txHash: String(row.tx_hash),
+      amountRaw: String(row.amount_raw),
+      amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      blockNumber: Number(row.block_number),
+      timestamp: new Date(row.block_timestamp as string | Date),
+      tokenId: row.token_id === null ? null : Number(row.token_id),
+    }));
+  }
+
+  async labelsByAddressIds(addressIds: number[]) {
+    const grouped = new Map<number, (typeof labels.$inferSelect)[]>();
+    if (addressIds.length === 0) return grouped;
+    const rows = await this.db.select().from(labels).where(inArray(labels.addressId, addressIds)).orderBy(asc(labels.id));
+    for (const row of rows) grouped.set(row.addressId, [...(grouped.get(row.addressId) ?? []), row]);
+    return grouped;
+  }
+
+  /** Metadata token beserta address kontraknya. */
+  async tokensByIds(tokenIds: number[]) {
+    if (tokenIds.length === 0) return new Map<number, { address: string; symbol: string | null; name: string | null; decimals: number | null }>();
+    const rows = await this.db
+      .select({ id: tokens.id, address: addresses.address, symbol: tokens.symbol, name: tokens.name, decimals: tokens.decimals })
+      .from(tokens)
+      .innerJoin(addresses, eq(addresses.id, tokens.addressId))
+      .where(inArray(tokens.id, tokenIds));
+    return new Map(rows.map(({ id, ...token }) => [id, token]));
   }
 
   /** Holder teratas pada snapshot, urut peringkat. */
