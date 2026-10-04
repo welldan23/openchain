@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MOCK_FLOWS } from "../mock/flows";
-import { MOCK_FAILING_QUERY } from "../mock/search";
+import { MOCK_FAILING_QUERY, MOCK_HISTORY } from "../mock/search";
 import { MOCK_TOKENS } from "../mock/tokens";
 import {
   deleteInvestigation,
   listInvestigationHistory,
   MOCK_FAILING_NOTE,
   MOCK_UNDELETABLE_HISTORY_ID,
+  recordInvestigation,
   saveInvestigationNote,
   searchInvestigations,
   searchPath,
@@ -123,6 +124,20 @@ describe("API pencarian (mock)", () => {
       await vi.advanceTimersByTimeAsync(5_000);
       await assertion;
     }
+  });
+
+  it("mencatat investigasi dari pencarian; halaman yang sama hanya diperbarui waktunya", async () => {
+    vi.setSystemTime(new Date("2026-10-04T01:00:00.000Z"));
+    const known = await settle(recordInvestigation({ kind: "map", title: "x", href: MOCK_HISTORY[0].href }));
+    expect(known).toMatchObject({ id: MOCK_HISTORY[0].id, openedAt: "2026-10-04T01:00:00.000Z" });
+    vi.setSystemTime(new Date("2026-10-04T01:00:00.000Z"));
+    const fresh = await settle(recordInvestigation({ kind: "token", title: "Baru", href: "/token/base/0x1" }));
+    expect(fresh).toMatchObject({ title: "Baru", openedAt: "2026-10-04T01:00:00.000Z" });
+    expect(fresh.id).not.toBe(known.id);
+    const pending = recordInvestigation({ kind: "token", title: "Luar", href: "https://contoh.com" });
+    const assertion = expect(pending).rejects.toThrow(/Hanya halaman investigasi/);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await assertion;
   });
 
   it("riwayat terbaru dulu dan semua tautannya menuju halaman yang ada", async () => {

@@ -15,9 +15,19 @@ import {
 } from "@/lib/api/search";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatRelativeTime } from "@/lib/format";
-import { classifyQuery, diagnoseQuery, highlightMatch, moveActiveIndex, normalizeText, QUERY_KIND_LABEL } from "@/lib/search";
+import {
+  classifyQuery,
+  diagnoseQuery,
+  highlightMatch,
+  investigationFromResult,
+  moveActiveIndex,
+  normalizeText,
+  QUERY_KIND_LABEL,
+  withSearchOrigin,
+} from "@/lib/search";
 import type { InvestigationEntry, SearchResult } from "@/lib/types";
 import { INVESTIGATION_KIND_META, RESULT_GROUPS } from "./kind-meta";
+import { recordVisit } from "./record-visit";
 
 /** Jeda setelah berhenti mengetik sebelum meminta saran. */
 const DEBOUNCE_MS = 200;
@@ -30,8 +40,9 @@ type Option =
 
 type Status = "idle" | "loading" | "ready" | "error";
 
-function optionHref(option: Option): string {
-  if (option.type === "result") return option.result.href;
+/** Tujuan opsi; hasil pencarian membawa kata kunci asal untuk tombol kembali. */
+function optionHref(option: Option, query: string): string {
+  if (option.type === "result") return withSearchOrigin(option.result.href, query);
   if (option.type === "history") return option.entry.href;
   return searchPath(option.query);
 }
@@ -201,7 +212,12 @@ export function GlobalSearch({ variant, defaultValue = "", autoFocus = false }: 
     } else if (option.type === "result" || option.type === "history") {
       setValue("");
     }
-    router.push(optionHref(option));
+    if (option.type === "result") recordVisit(investigationFromResult(option.result));
+    if (option.type === "history") {
+      const { kind, title, chain, href } = option.entry;
+      recordVisit({ kind, title, ...(chain ? { chain } : {}), href });
+    }
+    router.push(optionHref(option, query));
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {

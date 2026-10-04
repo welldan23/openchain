@@ -10,6 +10,7 @@ import { describeResultMeta, diagnoseQuery, normalizeText, QUERY_KIND_LABEL } fr
 import { EMPTY_SEARCH_FILTERS, filterRelaxations, searchFilterHref, type SearchFilters } from "@/lib/search-filter";
 import type { SearchResult, SearchResultMeta } from "@/lib/types";
 import { RESULT_GROUPS } from "./kind-meta";
+import { ResultLink } from "./result-link";
 
 function MetaBadges({ meta }: { meta: SearchResultMeta }) {
   if (meta.kind === "token") {
@@ -30,7 +31,7 @@ function MetaBadges({ meta }: { meta: SearchResultMeta }) {
   return null;
 }
 
-function ResultRow({ result, icon: Icon, now }: { result: SearchResult; icon: LucideIcon; now: Date }) {
+function ResultRow({ result, query, icon: Icon, now }: { result: SearchResult; query: string; icon: LucideIcon; now: Date }) {
   const meta = result.meta;
   // Address multichain tidak terikat satu chain; tampilkan semua chain aktifnya.
   const chains = result.chain ? [result.chain] : meta?.kind === "address" ? meta.activeChains : [];
@@ -42,12 +43,13 @@ function ResultRow({ result, icon: Icon, now }: { result: SearchResult; icon: Lu
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Link
-              href={result.href}
+            <ResultLink
+              result={result}
+              query={query}
               className="truncate text-sm font-medium outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent"
             >
               {result.title}
-            </Link>
+            </ResultLink>
             {chains.map((chain) => (
               <ChainBadge key={chain} chain={chain} />
             ))}
@@ -177,7 +179,7 @@ export function SearchResults({
             </h3>
             <ul className="mt-2 space-y-2">
               {items.map((result) => (
-                <ResultRow key={result.id} result={result} icon={group.icon} now={now} />
+                <ResultRow key={result.id} result={result} query={response.query} icon={group.icon} now={now} />
               ))}
             </ul>
           </section>

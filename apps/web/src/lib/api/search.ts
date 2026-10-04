@@ -15,6 +15,7 @@ import type { InvestigationEntry, SearchQueryKind, SearchResult } from "../types
 const MOCK_LATENCY_MS = 400;
 const SUGGEST_LATENCY_MS = 150;
 const SAVE_LATENCY_MS = 300;
+const RECORD_LATENCY_MS = 150;
 /** Teks lebih pendek dari ini terlalu umum untuk dicari sebagian. */
 export const MIN_TEXT_QUERY = 2;
 
@@ -122,6 +123,25 @@ export async function deleteInvestigation(id: string): Promise<void> {
     throw new Error("Simulasi: item ini gagal dihapus karena layanan tidak bisa dihubungi.");
   }
   if (!MOCK_HISTORY.some((item) => item.id === id)) throw new Error("Investigasi ini sudah tidak ada di riwayat.");
+}
+
+export type NewInvestigationEntry = Omit<InvestigationEntry, "id" | "openedAt">;
+
+/**
+ * Catat investigasi yang dibuka dari pencarian (asumsi kontrak:
+ * `POST /investigations` dengan `NewInvestigationEntry` → `InvestigationEntry`;
+ * server memakai waktu dan id-nya sendiri, dan membuka ulang halaman yang sama
+ * cukup memperbarui waktunya). Versi tiruan tidak menyimpan permanen.
+ */
+export async function recordInvestigation(input: NewInvestigationEntry): Promise<InvestigationEntry> {
+  // Waktu dibuka = saat user memilih, bukan saat jawaban server tiba.
+  const openedAt = new Date().toISOString();
+  await delay(RECORD_LATENCY_MS);
+  if (!/^\/(token|flow|trace|map|multichain)\//.test(input.href)) {
+    throw new Error("Hanya halaman investigasi yang dicatat di riwayat.");
+  }
+  const existing = MOCK_HISTORY.find((item) => item.href === input.href);
+  return existing ? { ...existing, openedAt } : { ...input, id: `rekam-${Date.parse(openedAt)}`, openedAt };
 }
 
 /** Contoh isian yang bisa dicoba saat kotak cari masih kosong. */

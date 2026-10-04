@@ -4,7 +4,7 @@
  */
 import { formatDateTime, formatNumber, formatRelativeTime, formatTokenAmount, formatUsdCompact, formatUsdPrice, shortenHash } from "./format";
 import { addressTitle } from "./fund-flow";
-import type { SearchQueryKind, SearchResult, SearchResultKind, SearchResultMeta } from "./types";
+import type { InvestigationEntry, InvestigationKind, SearchQueryKind, SearchResult, SearchResultKind, SearchResultMeta } from "./types";
 
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const EVM_TX = /^0x[0-9a-fA-F]{64}$/;
@@ -167,4 +167,43 @@ export function diagnoseQuery(raw: string): string | null {
     return `Isian ${query.length} karakter. Address Solana 32–44 karakter dan signature transaksi 64–90 karakter; mungkin ada yang terpotong.`;
   }
   return null;
+}
+
+/* ------------------------- Dari hasil ke investigasi ------------------------ */
+
+/** Parameter URL yang membawa kata kunci pencarian ke halaman investigasi. */
+export const SEARCH_ORIGIN_PARAM = "cari";
+
+/**
+ * Tambahkan kata kunci asal ke tautan investigasi, sebelum `#bukti-…` bila
+ * ada, supaya halaman tujuan bisa menawarkan kembali ke hasil pencarian.
+ */
+export function withSearchOrigin(href: string, query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return href;
+  const hashIndex = href.indexOf("#");
+  const [path, hash] = hashIndex < 0 ? [href, ""] : [href.slice(0, hashIndex), href.slice(hashIndex)];
+  const queryIndex = path.indexOf("?");
+  const [pathname, search] = queryIndex < 0 ? [path, ""] : [path.slice(0, queryIndex), path.slice(queryIndex + 1)];
+  const params = new URLSearchParams(search);
+  params.set(SEARCH_ORIGIN_PARAM, trimmed);
+  return `${pathname}?${params.toString()}${hash}`;
+}
+
+/** Jenis halaman investigasi yang dibuka oleh satu hasil pencarian. */
+export function investigationKindOf(result: SearchResult): InvestigationKind {
+  if (result.kind === "token") return "token";
+  if (result.meta?.kind === "address" && result.meta.view === "multichain") return "multichain";
+  // Address satu chain dan hash transaksi sama-sama membuka halaman aliran dana.
+  return "flow";
+}
+
+/** Data riwayat untuk hasil yang dipilih; id dan waktu diisi oleh server. */
+export function investigationFromResult(result: SearchResult): Omit<InvestigationEntry, "id" | "openedAt"> {
+  return {
+    kind: investigationKindOf(result),
+    title: result.title,
+    ...(result.chain ? { chain: result.chain } : {}),
+    href: result.href,
+  };
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
+import { SearchOriginBar } from "@/components/search/search-origin-bar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,6 +33,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col font-sans">
         <AppHeader />
+        {/* Membaca ?cari= di browser; Suspense supaya halaman statis tetap bisa dirender saat build. */}
+        <Suspense fallback={null}>
+          <SearchOriginBar />
+        </Suspense>
         {children}
       </body>
     </html>

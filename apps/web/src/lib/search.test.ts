@@ -5,9 +5,12 @@ import {
   describeResultMeta,
   diagnoseQuery,
   highlightMatch,
+  investigationFromResult,
+  investigationKindOf,
   moveActiveIndex,
   normalizeText,
   parseResultKindFilter,
+  withSearchOrigin,
 } from "./search";
 import type { SearchResult } from "./types";
 
@@ -127,5 +130,33 @@ describe("diagnosa isian", () => {
     expect(diagnoseQuery("0x12")).toBeNull();
     expect(diagnoseQuery(`0x${"ab".repeat(20)}`)).toBeNull();
     expect(diagnoseQuery("")).toBeNull();
+  });
+});
+
+describe("dari hasil ke halaman investigasi", () => {
+  const result = (over: Partial<SearchResult>): SearchResult => ({
+    id: "r",
+    kind: "address",
+    title: "Pendana",
+    subtitle: "",
+    href: "/flow/ethereum/0xabc",
+    matchedBy: "",
+    ...over,
+  });
+
+  it("membawa kata kunci ke tautan, sebelum hash bukti dan bersama parameter lain", () => {
+    expect(withSearchOrigin("/flow/ethereum/0xabc", " nebula finance ")).toBe("/flow/ethereum/0xabc?cari=nebula+finance");
+    expect(withSearchOrigin("/flow/ethereum/0xabc#bukti-0x1", "0x1")).toBe("/flow/ethereum/0xabc?cari=0x1#bukti-0x1");
+    expect(withSearchOrigin("/map/ethereum/0xabc?lapisan=kelompok", "nbla")).toBe("/map/ethereum/0xabc?lapisan=kelompok&cari=nbla");
+    expect(withSearchOrigin("/token/ethereum/0xabc", "  ")).toBe("/token/ethereum/0xabc");
+  });
+
+  it("memetakan jenis hasil ke jenis halaman investigasi", () => {
+    expect(investigationKindOf(result({ kind: "token" }))).toBe("token");
+    expect(investigationKindOf(result({ kind: "transaction" }))).toBe("flow");
+    expect(investigationKindOf(result({ meta: { kind: "address", view: "flow", txCount: 1, activeChains: [] } }))).toBe("flow");
+    expect(investigationKindOf(result({ meta: { kind: "address", view: "multichain", txCount: 1, activeChains: [] } }))).toBe("multichain");
+    expect(investigationFromResult(result({ chain: "base" }))).toEqual({ kind: "flow", title: "Pendana", chain: "base", href: "/flow/ethereum/0xabc" });
+    expect(investigationFromResult(result({}))).not.toHaveProperty("chain");
   });
 });
