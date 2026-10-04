@@ -6,10 +6,15 @@ import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import type {
   FlowAsset,
   FlowAssetSummary,
+  FlowChainInfo,
+  FlowFailedAttempt,
+  FlowScanInfo,
   FlowSide,
   FlowSummaryResponse,
   FlowTotals,
+  FlowWindowView,
 } from './flow-summary.types.js';
+import type { ResolvedWindow } from './flow-range.js';
 import type { FlowAggregates, ScanRow, SideRow } from './flows.repository.js';
 
 /** Desimal native coin per keluarga chain; `null` bila belum diketahui. */
@@ -30,7 +35,7 @@ export interface FlowSummaryRows {
   labels: LabelRow[];
   scan: ScanRow | null;
   failedAttempt: ScanRow | null;
-  window: { from: Date; to: Date; clipped: boolean } | null;
+  window: ResolvedWindow | null;
   aggregates: FlowAggregates | null;
 }
 
@@ -101,9 +106,49 @@ function totalsOf(assets: FlowAssetSummary[], aggregates: FlowAggregates): FlowT
   };
 }
 
+export function toChainInfo(chain: FlowSummaryRows['chain']): FlowChainInfo {
+  return {
+    id: chain.id,
+    name: chain.name,
+    nativeSymbol: chain.nativeSymbol,
+    explorerUrl: chain.explorerUrl,
+    supportStatus: chain.supportStatus,
+  };
+}
+
+export function nativeAssetOf(chain: FlowSummaryRows['chain']): FlowAsset {
+  return { type: 'native', symbol: chain.nativeSymbol, decimals: NATIVE_DECIMALS[chain.family] ?? null };
+}
+
+export function toScanInfo(scan: ScanRow, now: Date, staleAfterMinutes: number): FlowScanInfo {
+  return {
+    id: scan.id,
+    scannedAt: scan.scannedAt.toISOString(),
+    blockFrom: scan.blockFrom,
+    blockTo: scan.blockTo,
+    windowFrom: scan.windowFrom.toISOString(),
+    windowTo: scan.windowTo.toISOString(),
+    coverage: { native: scan.nativeScanned, internal: scan.internalScanned, tokens: scan.tokensScanned },
+    collectedStatus: scan.status,
+    dataStatus: effectiveStatus(scan.status, scan.scannedAt, now, staleAfterMinutes),
+    statusReason: scan.statusReason,
+    missingFields: scan.missingFields,
+  };
+}
+
+export function toFailedAttempt(scan: ScanRow | null): FlowFailedAttempt | null {
+  return scan ? { scannedAt: scan.scannedAt.toISOString(), status: scan.status, statusReason: scan.statusReason } : null;
+}
+
+export function toWindowView(window: ResolvedWindow | null): FlowWindowView | null {
+  return window
+    ? { from: window.from.toISOString(), to: window.to.toISOString(), clipped: window.clipped, preset: window.preset }
+    : null;
+}
+
 export function toFlowSummary(rows: FlowSummaryRows, now: Date, staleAfterMinutes: number): FlowSummaryResponse {
   const { chain, scan, aggregates } = rows;
-  const nativeAsset: FlowAsset = { type: 'native', symbol: chain.nativeSymbol, decimals: NATIVE_DECIMALS[chain.family] ?? null };
+  const nativeAsset = nativeAssetOf(chain);
 
   const assets: FlowAssetSummary[] = [];
   if (aggregates) {
@@ -125,43 +170,15 @@ export function toFlowSummary(rows: FlowSummaryRows, now: Date, staleAfterMinute
     assets.push(...tokenAssets);
   }
 
-  const scanInfo = scan
-    ? {
-        id: scan.id,
-        scannedAt: scan.scannedAt.toISOString(),
-        blockFrom: scan.blockFrom,
-        blockTo: scan.blockTo,
-        windowFrom: scan.windowFrom.toISOString(),
-        windowTo: scan.windowTo.toISOString(),
-        coverage: { native: scan.nativeScanned, internal: scan.internalScanned, tokens: scan.tokensScanned },
-        collectedStatus: scan.status,
-        dataStatus: effectiveStatus(scan.status, scan.scannedAt, now, staleAfterMinutes),
-        statusReason: scan.statusReason,
-        missingFields: scan.missingFields,
-      }
-    : null;
+  const scanInfo = scan ? toScanInfo(scan, now, staleAfterMinutes) : null;
 
   return {
-    chain: {
-      id: chain.id,
-      name: chain.name,
-      nativeSymbol: chain.nativeSymbol,
-      explorerUrl: chain.explorerUrl,
-      supportStatus: chain.supportStatus,
-    },
+    chain: toChainInfo(chain),
     address: rows.address,
     labels: sortLabels(rows.labels).map(toLabelView),
     scan: scanInfo,
-    lastFailedAttempt: rows.failedAttempt
-      ? {
-          scannedAt: rows.failedAttempt.scannedAt.toISOString(),
-          status: rows.failedAttempt.status,
-          statusReason: rows.failedAttempt.statusReason,
-        }
-      : null,
-    window: rows.window
-      ? { from: rows.window.from.toISOString(), to: rows.window.to.toISOString(), clipped: rows.window.clipped }
-      : null,
+    lastFailedAttempt: toFailedAttempt(rows.failedAttempt),
+    window: toWindowView(rows.window),
     totals: aggregates ? totalsOf(assets, aggregates) : null,
     assets,
     dataStatus: scanInfo?.dataStatus ?? 'unavailable',

@@ -43,6 +43,14 @@ export interface FlowFailedAttempt {
   statusReason: string | null;
 }
 
+/** Rentang waktu yang benar-benar dipakai; `preset` kosong untuk rentang sendiri. */
+export interface FlowWindowView {
+  from: string;
+  to: string;
+  clipped: boolean;
+  preset: '24h' | '7d' | '30d' | 'all' | null;
+}
+
 export type FlowAsset =
   | { type: 'native'; symbol: string; decimals: number | null }
   | { type: 'token'; address: string; symbol: string | null; name: string | null; decimals: number | null };
@@ -92,7 +100,7 @@ export interface FlowSummaryResponse {
   scan: FlowScanInfo | null;
   lastFailedAttempt: FlowFailedAttempt | null;
   /** Rentang waktu yang benar-benar diringkas: irisan permintaan dan cakupan. */
-  window: { from: string; to: string; clipped: boolean } | null;
+  window: FlowWindowView | null;
   totals: FlowTotals | null;
   assets: FlowAssetSummary[];
   dataStatus: DataStatus;

@@ -397,7 +397,8 @@ Ringkasan aliran masuk dan keluar satu address dari pemindaian yang tersimpan
 | tanpa parameter | pemindaian terbaru yang berhasil (bukan `unavailable`) |
 | `?scan=<id>` | pemindaian tertentu, supaya hasil bisa direproduksi |
 | `?at=<waktu ISO>` | pemindaian terakhir sampai waktu itu |
-| `?from=` / `?to=` (ISO) | persempit rentang waktu; dipotong ke cakupan pemindaian (`window.clipped`) |
+| `?range=24h\|7d\|30d\|all` | preset rentang, dihitung mundur dari akhir cakupan pemindaian (bukan dari sekarang) supaya bisa direproduksi |
+| `?from=` / `?to=` (ISO) | rentang sendiri; tidak boleh digabung dengan `range`. Selalu dipotong ke cakupan (`window.clipped`) |
 
 - `assets`: per aset (native dulu, lalu token), jumlah transfer, jumlah mentah
   (string, presisi uint256), jumlah dalam satuan aset bila desimal diketahui,
@@ -415,6 +416,33 @@ Ringkasan aliran masuk dan keluar satu address dari pemindaian yang tersimpan
 - Respons error: `404` untuk chain tak dikenal, address yang belum pernah
   dipindai, atau `scan` yang tidak ada; `400` untuk format address, waktu, id,
   atau `from` setelah `to`.
+
+### `GET /api/flows/:chain/:address/transfers`
+
+Daftar transfer satu address, terbaru dulu, dengan pemilih pemindaian dan
+rentang yang sama dengan ringkasan (`scan`, `at`, `range`, `from`/`to`).
+
+- `?direction=in|out` menyaring arah. Transfer ke diri sendiri muncul dengan
+  arah `self` bila arah tidak disaring.
+- `?limit=` 1–200 (default 50). `nextCursor` dipakai sebagai `?cursor=` untuk
+  halaman berikutnya; cursor keyset (blok, jenis, id) sehingga halaman tidak
+  bergeser walau ada data baru.
+- Tiap item: arah, jenis transfer (`native`/`internal`/`token`), lawan
+  transaksi beserta labelnya, aset, jumlah mentah dan desimal, nilai USD saat
+  transaksi (`null` bila tidak diketahui), hash, blok, dan waktu.
+
+### `GET /api/flows/:address/chains`
+
+Status aliran dana sebuah address di setiap chain yang format address-nya
+cocok (address `0x…` di chain EVM, base58 di Solana), urut prioritas adapter.
+Chain fase 4 (Bitcoin, Tron, TON) belum punya aturan address, jadi belum
+ditampilkan.
+
+- `?chains=ethereum,base` membatasi chain; chain tak dikenal, format address
+  yang tidak cocok, atau chain fase 4 menghasilkan `400`.
+- Tiap chain: apakah address sudah tercatat, pemindaian terbaru yang berhasil,
+  percobaan gagal sesudahnya, dan jumlah transfer dalam cakupan. Chain yang
+  belum dipindai punya `transferCount: null` (belum diketahui), bukan `0`.
 
 ### `GET /api/traces/:chain/:from/:to`
 

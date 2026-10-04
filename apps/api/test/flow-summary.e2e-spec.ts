@@ -223,9 +223,19 @@ describe('GET /api/flows/:chain/:address/summary', () => {
     const { body } = await request(app.getHttpServer())
       .get(url(WALLET, '?from=2026-08-01T00:00:00Z&to=2026-09-21T00:30:00Z'))
       .expect(200);
-    expect(body.window).toEqual({ from: '2026-09-01T00:00:00.000Z', to: '2026-09-21T00:30:00.000Z', clipped: true });
+    expect(body.window).toEqual({ from: '2026-09-01T00:00:00.000Z', to: '2026-09-21T00:30:00.000Z', clipped: true, preset: null });
     expect(body.assets).toHaveLength(1);
     expect(body.assets[0]).toMatchObject({ in: { transferCount: 2, amount: '12' }, out: { transferCount: 1, amount: '2' } });
+  });
+
+  it('preset rentang dihitung mundur dari akhir cakupan', async () => {
+    // Cakupan berakhir 2026-10-03T04:30Z: 30 hari ke belakang mulai 2026-09-03T04:30Z.
+    const { body } = await request(app.getHttpServer()).get(url(WALLET, '?range=30d')).expect(200);
+    expect(body.window).toEqual({ from: '2026-09-03T04:30:00.000Z', to: '2026-10-03T04:30:00.000Z', clipped: false, preset: '30d' });
+    // Transfer dari exchange (10 Sep) masih masuk; tidak ada yang sebelum 3 Sep.
+    expect(body.assets[0].in.transferCount).toBe(3);
+    const day = await request(app.getHttpServer()).get(url(WALLET, '?range=24h')).expect(200);
+    expect(day.body).toMatchObject({ window: { preset: '24h' }, totals: { in: { transferCount: 0 }, out: { transferCount: 0 } }, assets: [] });
   });
 
   it('rentang di luar cakupan: total tidak diketahui, bukan nol', async () => {
@@ -261,5 +271,7 @@ describe('GET /api/flows/:chain/:address/summary', () => {
     await request(server).get(url(WALLET, '?from=kemarin')).expect(400);
     await request(server).get(url(WALLET, '?scan=abc')).expect(400);
     await request(server).get(url(WALLET, '?from=2026-09-10T00:00:00Z&to=2026-09-01T00:00:00Z')).expect(400);
+    await request(server).get(url(WALLET, '?range=1y')).expect(400);
+    expect((await request(server).get(url(WALLET, '?range=7d&from=2026-09-10T00:00:00Z')).expect(400)).body.message).toContain('range');
   });
 });

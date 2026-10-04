@@ -55,6 +55,27 @@ export interface TraceEdgeRow extends TraceEdge {
   tokenId: number | null;
 }
 
+/** Posisi terakhir halaman daftar transfer (urutan terbaru dulu). */
+export interface TransferCursor {
+  blockNumber: number;
+  sourceRank: number;
+  id: number;
+}
+
+export interface TransferRow {
+  source: 'native' | 'internal' | 'token';
+  sourceRank: number;
+  id: number;
+  txHash: string;
+  fromId: number;
+  toId: number;
+  amountRaw: string;
+  amountUsd: string | null;
+  blockNumber: number;
+  timestamp: Date;
+  tokenId: number | null;
+}
+
 /**
  * Jenis label yang menandai hub: dana dari banyak orang tercampur di sana,
  * jadi jalur yang lewat hub belum tentu dana yang sama.
@@ -69,6 +90,23 @@ export class FlowsRepository {
   async findChain(chainId: string) {
     const [chain] = await this.db.select().from(chains).where(eq(chains.id, chainId)).limit(1);
     return chain ?? null;
+  }
+
+  async listChains() {
+    return this.db.select().from(chains);
+  }
+
+  /** Jumlah transfer (native dan token) yang melibatkan address dalam rentang blok. */
+  async countTransfers(chainId: string, addressId: number, blockFrom: number, blockTo: number): Promise<number> {
+    const [row] = await this.rows(sql`
+      select
+        (select count(*) from native_transfers n where n.chain_id = ${chainId}
+          and (n.from_address_id = ${addressId} or n.to_address_id = ${addressId})
+          and n.block_number between ${blockFrom} and ${blockTo})
+        + (select count(*) from token_transfers t where t.chain_id = ${chainId}
+          and (t.from_address_id = ${addressId} or t.to_address_id = ${addressId})
+          and t.block_number between ${blockFrom} and ${blockTo}) as total`);
+    return Number(row?.total ?? 0);
   }
 
   async findAddress(chainId: string, addressNormalized: string) {
@@ -249,6 +287,60 @@ export class FlowsRepository {
       txHash: String(row.tx_hash),
       amountRaw: String(row.amount_raw),
       amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      tokenId: row.token_id === null ? null : Number(row.token_id),
+    }));
+  }
+
+  /**
+   * Transfer yang melibatkan address dalam rentang, terbaru dulu. Halaman
+   * berikutnya memakai cursor keyset (blok, jenis, id) supaya stabil walau
+   * ada data baru. `direction` `self` = transfer ke diri sendiri.
+   */
+  async listTransfers(
+    chainId: string,
+    addressId: number,
+    range: FlowRange,
+    options: { direction: 'in' | 'out' | null; limit: number; cursor: TransferCursor | null },
+  ): Promise<TransferRow[]> {
+    const within = (alias: string) => sql`
+      ${sql.raw(alias)}.chain_id = ${chainId}
+      and (${sql.raw(alias)}.from_address_id = ${addressId} or ${sql.raw(alias)}.to_address_id = ${addressId})
+      and ${sql.raw(alias)}.block_number between ${range.blockFrom} and ${range.blockTo}
+      and ${sql.raw(alias)}.block_timestamp between ${range.from.toISOString()}::timestamptz and ${range.to.toISOString()}::timestamptz`;
+    const filters: SQL[] = [];
+    if (options.direction === 'in') filters.push(sql`to_address_id = ${addressId} and from_address_id <> ${addressId}`);
+    if (options.direction === 'out') filters.push(sql`from_address_id = ${addressId} and to_address_id <> ${addressId}`);
+    if (options.cursor) {
+      const { blockNumber, sourceRank, id } = options.cursor;
+      filters.push(sql`(block_number, source_rank, id) < (${blockNumber}::bigint, ${sourceRank}::int, ${id}::bigint)`);
+    }
+    const where = filters.length > 0 ? sql`where ${sql.join(filters, sql` and `)}` : sql``;
+    const rows = await this.rows(sql`
+      with moves as (
+        select case when n.kind = 'internal' then 'internal' else 'native' end as source,
+          case when n.kind = 'internal' then 1 else 0 end as source_rank,
+          n.id, n.tx_hash, n.from_address_id, n.to_address_id, n.amount_raw::text as amount_raw,
+          n.amount_usd::text as amount_usd, n.block_number, n.block_timestamp, null::bigint as token_id
+        from native_transfers n where ${within('n')}
+        union all
+        select 'token', 2, t.id, t.tx_hash, t.from_address_id, t.to_address_id, t.amount_raw::text, t.amount_usd::text,
+          t.block_number, t.block_timestamp, t.token_id
+        from token_transfers t where ${within('t')}
+      )
+      select * from moves ${where}
+      order by block_number desc, source_rank desc, id desc
+      limit ${options.limit}`);
+    return rows.map((row) => ({
+      source: row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native',
+      sourceRank: Number(row.source_rank),
+      id: Number(row.id),
+      txHash: String(row.tx_hash),
+      fromId: Number(row.from_address_id),
+      toId: Number(row.to_address_id),
+      amountRaw: String(row.amount_raw),
+      amountUsd: row.amount_usd === null ? null : String(row.amount_usd),
+      blockNumber: Number(row.block_number),
+      timestamp: new Date(row.block_timestamp as string | Date),
       tokenId: row.token_id === null ? null : Number(row.token_id),
     }));
   }

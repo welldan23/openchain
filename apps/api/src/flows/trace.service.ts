@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { formatUnits, numericToNumber } from '../common/units.js';
 import { InvalidIdentifierError, normalizeAddress } from '../database/identifiers.js';
-import type { ChainFamily } from '../database/schema/enums.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
+import { nativeAssetOf, toChainInfo } from './flow-summary.mapper.js';
 import type { FlowAsset } from './flow-summary.types.js';
 import { FlowsRepository, type TraceEdgeRow } from './flows.repository.js';
 import { searchTrace } from './trace-search.js';
@@ -12,8 +12,6 @@ import type { TraceParty, TraceResponse } from './trace.types.js';
 
 export const DEFAULT_MAX_HOPS = 4;
 export const MAX_HOPS_LIMIT = 6;
-
-const NATIVE_DECIMALS: Partial<Record<ChainFamily, number>> = { evm: 18, solana: 9 };
 
 export interface TraceQuery {
   maxHops?: number;
@@ -80,7 +78,7 @@ export class TraceService {
       scanned: scanned.has(id),
     });
 
-    const nativeAsset: FlowAsset = { type: 'native', symbol: chain.nativeSymbol, decimals: NATIVE_DECIMALS[chain.family] ?? null };
+    const nativeAsset = nativeAssetOf(chain);
     const hops = result.path.map((edge, index) => {
       const token = edge.tokenId === null ? null : tokensById.get(edge.tokenId);
       const asset: FlowAsset = token
@@ -128,7 +126,7 @@ export class TraceService {
     if (!found && dataStatus === 'complete' && (unscannedAddresses > 0 || result.truncated)) dataStatus = 'partial';
 
     return {
-      chain: { id: chain.id, name: chain.name, nativeSymbol: chain.nativeSymbol, explorerUrl: chain.explorerUrl, supportStatus: chain.supportStatus },
+      chain: toChainInfo(chain),
       from: party(fromAddress.id, fromAddress.address),
       to: toAddress ? party(toAddress.id, toAddress.address) : { address: rawTo.trim(), labels: [], scanned: false },
       maxHops,
