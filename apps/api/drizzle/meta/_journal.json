@@ -99,6 +99,13 @@
       "when": 1791113571423,
       "tag": "0013_bridge_unknown_destination",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791114701637,
+      "tag": "0014_search_entities",
+      "breakpoints": true
     }
   ]
 }

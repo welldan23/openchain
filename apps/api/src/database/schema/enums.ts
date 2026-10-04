@@ -68,6 +68,9 @@ export const infrastructureRole = pgEnum('infrastructure_role', ['bridge_entry',
  */
 export const bridgeMatchStatus = pgEnum('bridge_match_status', ['matched', 'pending', 'unmatched']);
 
+/** Jenis entitas di indeks pencarian teks. */
+export const searchEntityKind = pgEnum('search_entity_kind', ['token', 'address']);
+
 /** Klasifikasi informasi: dari fakta terverifikasi sampai data yang tidak tersedia. */
 export const infoClassification = pgEnum('info_classification', [
   'verified_fact',
@@ -210,6 +213,7 @@ export type ChainCapability = (typeof chainCapability.enumValues)[number];
 export type BridgeMatchStatus = (typeof bridgeMatchStatus.enumValues)[number];
 export type InfrastructureKind = (typeof infrastructureKind.enumValues)[number];
 export type InfrastructureRole = (typeof infrastructureRole.enumValues)[number];
+export type SearchEntityKind = (typeof searchEntityKind.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];

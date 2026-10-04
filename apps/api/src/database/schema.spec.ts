@@ -54,6 +54,7 @@ const EXPECTED_TABLES = [
   'provider_runs',
   'risk_finding_evidence',
   'risk_findings',
+  'search_entities',
   'token_snapshot_sources',
   'token_snapshots',
   'token_transfers',
@@ -1247,5 +1248,58 @@ describe('jembatan dan router', () => {
     await db
       .insert(schema.infrastructureContracts)
       .values({ ...base, source: 'heuristic', classification: 'heuristic', sourceName: 'OpenChain heuristic', confidence: '0.700', labelId: null });
+  });
+});
+
+describe('indeks pencarian', () => {
+  it('mencari teks lewat tsvector, termasuk awalan kata, dan menjaga aturan label', async () => {
+    const { address, token } = await insertTokenWithSnapshot('0x' + 'c5'.repeat(20), 700);
+    const holder = await insertAddress('robinhood', '0x' + 'c6'.repeat(20));
+    const base = { chainId: 'robinhood', refreshedAt: FETCHED_AT };
+    await db.insert(schema.searchEntities).values([
+      { ...base, kind: 'token', addressId: address.id, tokenId: token.id, title: 'Nebula Finance (NBLA)', searchText: 'nebula finance nbla ' + address.addressNormalized },
+      {
+        ...base,
+        kind: 'address',
+        addressId: holder.id,
+        title: 'Bybit: Hot Wallet 6',
+        labelType: 'exchange',
+        labelName: 'Bybit: Hot Wallet 6',
+        labelSource: 'external',
+        labelSourceName: 'Blockscout',
+        searchText: 'bybit hot wallet 6 ' + holder.addressNormalized,
+      },
+    ]);
+    const find = async (query: string) =>
+      (
+        await db.execute<{ title: string }>(
+          sql`select title from search_entities where search_vector @@ to_tsquery('simple', ${query}) order by title`,
+        )
+      ).rows.map((row) => row.title);
+    expect(await find('nebu:*')).toEqual(['Nebula Finance (NBLA)']);
+    expect(await find('hot:* & wallet:*')).toEqual(['Bybit: Hot Wallet 6']);
+    expect(await find('nbla')).toEqual(['Nebula Finance (NBLA)']);
+
+    await expectConstraintViolation(
+      db.insert(schema.searchEntities).values({ ...base, kind: 'token', addressId: holder.id, title: 'x', searchText: 'x' }),
+      'search_entities_token_has_token_id',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.searchEntities).values({ ...base, kind: 'address', addressId: address.id, title: 'x', searchText: 'Huruf Besar' }),
+      'search_entities_search_text_lowercase',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.searchEntities).values({ ...base, kind: 'address', addressId: address.id, title: 'x', searchText: 'x', labelType: 'exchange' }),
+      'search_entities_label_has_source',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.searchEntities).values({ ...base, kind: 'address', addressId: holder.id, title: 'lagi', searchText: 'lagi' }),
+      'search_entities_kind_address_unique',
+    );
+    const elsewhere = await insertAddress('ethereum', '0x' + 'c7'.repeat(20));
+    await expectConstraintViolation(
+      db.insert(schema.searchEntities).values({ ...base, kind: 'address', addressId: elsewhere.id, title: 'x', searchText: 'x' }),
+      'search_entities_chain_address_fk',
+    );
   });
 });

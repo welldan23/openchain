@@ -858,6 +858,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
 | Lintas chain | `multichain_scans`, `multichain_chain_activity`, `bridge_transfers`, `infrastructure_protocols`, `infrastructure_contracts` |
 | Peta hubungan | `wallet_maps`, `map_nodes`, `map_edges`, `map_clusters` (+ `map_cluster_members`, `map_cluster_signals`, `map_cluster_signal_evidence`), `coordination_events` (+ `coordination_event_members`, `coordination_txs`) |
+| Pencarian | `search_entities` (indeks turunan dari token, address, dan label) |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
 Aturan PRD yang dijaga langsung oleh database:
@@ -937,5 +938,14 @@ Aturan PRD yang dijaga langsung oleh database:
   sama. Satu kontrak boleh dikenali beberapa sumber. Address kontrak tidak
   diisi dari ingatan: hanya dari sumber yang bisa ditelusuri.
   `bridge_transfers.protocol_id` menunjuk protokol bridge yang dipakai.
+
+- `search_entities` adalah indeks pencarian teks: satu baris per token atau
+  address per chain, dengan judul, label utama beserta sumbernya (label tanpa
+  sumber ditolak), dan teks huruf kecil yang dicari (nama, simbol, nama label,
+  address). Kolom `search_vector` (`tsvector`, konfigurasi `simple`) dibuat
+  otomatis dari teks itu dan diindeks GIN, jadi pencarian awalan kata seperti
+  `nebu:*` cepat tanpa ekstensi tambahan. Isinya turunan dan bisa dibangun
+  ulang; ikut terhapus bila address atau tokennya dihapus. Hash transaksi dan
+  address persis dicari langsung di tabel sumber.
 
 Tabel `investigations` menyusul di task fitur yang memakainya.

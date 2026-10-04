@@ -2,6 +2,7 @@
  * Skema database OpenChain Intelligence (PostgreSQL, Drizzle ORM).
  *
  * Tabel `investigations` belum ada di sini dan menyusul di task fiturnya.
+ * `search_entities` adalah indeks pencarian turunan dari token, address, dan label.
  * Hubungan pendanaan di peta disimpan di `map_edges` (kind `funding`), kelompok
  * wallet di `map_clusters`, dan gerak serempak di `coordination_events`.
  * Transfer internal native coin disimpan di `native_transfers` (kind `internal`).
@@ -14,3 +15,4 @@ export * from './evidence.js';
 export * from './transfers.js';
 export * from './maps.js';
 export * from './multichain.js';
+export * from './search.js';
