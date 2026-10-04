@@ -516,6 +516,31 @@ harus milik address yang diminta; selain itu `404`.
   `404` untuk address yang belum pernah tercatat, atau transfer/bridge yang
   bukan miliknya.
 
+### `GET /api/search`
+
+Pencarian cepat dari data tersimpan. Kontraknya ada di
+`src/search/search.types.ts`. Query: `q` (maks. 200 karakter), `kind`
+(`all`/`token`/`address`/`transaction`), `chains` dan `labels` (dipisah koma;
+`none` = tanpa label), `labelSource` (`all`/`external`/`heuristic`), `limit`
+(1–100, default 20).
+
+- Bentuk `q` dikenali seperti di frontend (`queryKind`). Address persis
+  (EVM, Solana): token bila itu kontrak token, address per chain (`/flow/…`),
+  dan satu hasil `/multichain/…` bila address EVM itu dikenal di beberapa chain.
+  Hash transaksi persis: satu hasil per chain yang mencatatnya, dibuka di aliran
+  dana pengirim langsung ke buktinya (`#bukti-<hash>`). Teks: nama token, simbol,
+  dan nama label lewat indeks `search_entities` (awalan kata, paling relevan
+  dulu); indeks dibangun ulang dari tabel sumber paling sering sekali per menit.
+- Tiap hasil membawa label utama (eksternal dulu) beserta sumbernya, alasan
+  cocok (`matchedBy`), dan ringkasan (`meta`): snapshot token terbaru, chain
+  tempat address sudah dipindai, atau waktu dan jumlah perpindahan transaksi.
+  Nilai yang belum ada `null`, bukan nol.
+- `facets`: pilihan filter dari semua hasil beserta jumlahnya, dihitung dengan
+  filter dimensi lain tetap berlaku (sama seperti chip di frontend). Hasil tanpa
+  label ikut tersaring saat sumber label dipilih.
+- Tidak ditemukan dijelaskan di `caveats` ("bukan berarti tidak ada di
+  blockchain"); nilai filter yang salah dijawab `400`.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,

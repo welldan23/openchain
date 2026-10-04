@@ -219,6 +219,7 @@ export type EntityLabelType = (typeof entityLabelType.enumValues)[number];
 export type CheckStatus = (typeof checkStatus.enumValues)[number];
 export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];
 export type ChainCapability = (typeof chainCapability.enumValues)[number];
+export type RiskLevel = (typeof riskLevel.enumValues)[number];
 export type BridgeMatchStatus = (typeof bridgeMatchStatus.enumValues)[number];
 export type InfrastructureKind = (typeof infrastructureKind.enumValues)[number];
 export type InfrastructureRole = (typeof infrastructureRole.enumValues)[number];
