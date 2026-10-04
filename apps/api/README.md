@@ -368,7 +368,8 @@ exchange, liquidity pool, bridge, dan burn. Tag lain dibiarkan.
 
 Semua endpoint memakai prefix `/api` dan bersifat read-only terhadap blockchain.
 Yang menulis ke database hanya `GET /api/maps` dan `GET /api/multichain`, yang
-menyimpan peta atau ringkasan yang baru dibentuk supaya bisa dibuka ulang.
+menyimpan peta, ringkasan, hasil deteksi bridge, dan pengenalan kontrak
+protokol dari data yang sudah tersimpan supaya bisa dibuka ulang.
 
 Semua endpoint token memakai pemilih snapshot yang sama, supaya investigasi
 bisa dibuka ulang dengan hasil yang sama:
@@ -418,6 +419,24 @@ tersimpan).
   `bridge_out`/`bridge_in`, dan `bridgeId` menunjuk pasangan bridge-nya.
 - `bridges`: perpindahan bridge dari `bridge_transfers`; pencocokan kaki kirim
   dan terima selalu `heuristic` dengan keyakinan.
+- Sebelum menyusun respons (kecuali saat membuka `?scan=`), deteksi bridge
+  dijalankan dari data tersimpan (`BridgeDetectionService`, heuristic
+  `openchain-bridge-match-v1`): kiriman ke address bridge dicocokkan dengan
+  penerimaan aset yang sama ke address yang sama di chain lain, 0–24 jam
+  sesudahnya, dengan selisih jumlah ≤1% dan tidak lebih besar. Satu kandidat
+  dengan selisih ≤0,5% dalam 1 jam = `high`, satu kandidat lain = `medium`,
+  beberapa kandidat = `low` (dipilih selisih terkecil). Tanpa kandidat:
+  `pending`, atau `unmatched` bila chain lain sudah terbaca lebih dari 24 jam
+  sesudah kiriman; chain tujuannya kosong karena belum diketahui. Hasilnya
+  disimpan per kiriman dan diperbarui saat dijalankan ulang (`bridgeDetection`
+  merangkum hasilnya).
+- `infrastructure`: bridge dan router yang pernah jadi lawan transaksi,
+  dikelompokkan per protokol (jumlah interaksi, chain, address, USD dari
+  transfer berharga, terakhir dipakai) beserta label sumbernya. Address
+  berlabel bridge/router dikenali sebagai kontrak protokol di
+  `infrastructure_contracts`; protokolnya diambil dari nama label (bagian
+  sebelum `:`), jadi dicatat `heuristic` (keyakinan 0,8 dari label eksternal,
+  0,5 dari label dugaan) dan merujuk label aslinya.
 - Ringkasan disimpan di `multichain_scans` dan dipakai ulang (`scan.reused`)
   selama pemindaian aliran dana dasarnya tidak berubah; buka lagi lewat
   `?scan=<id>`. Permintaan yang disaring chain atau waktu tidak disimpan
@@ -834,7 +853,8 @@ Aturan PRD yang dijaga langsung oleh database:
   transfer tersimpan di chain asal; kaki terima transfer di chain tujuan
   (dijaga foreign key komposit, jadi tidak bisa tertukar chain). `matched`
   wajib menunjuk kaki terima, penerima, jumlah, waktu, nama heuristic, dan
-  keyakinan; `pending`/`unmatched` tidak boleh punya kaki terima. Pencocokan
+  keyakinan; `pending`/`unmatched` tidak boleh punya kaki terima, dan chain
+  tujuannya boleh kosong karena belum diketahui. Pencocokan
   selalu `heuristic` dan penerimaan tidak boleh sebelum pengiriman.
 - Jembatan dan router dikelompokkan per protokol (`infrastructure_protocols`:
   bridge, router, atau aggregator) dengan kontraknya per chain

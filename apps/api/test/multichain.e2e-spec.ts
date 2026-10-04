@@ -94,37 +94,17 @@ describe('GET /api/multichain/:address', () => {
     ingestion = new FundFlowIngestionService(db as unknown as Database);
     // Ethereum: modal dari pendana, kirim token ke toko, lalu menerima dana bridge dari relayer.
     await ingestion.persist(scanOf('ethereum', SUBJECT, [native(FUNDER, SUBJECT, 100), native(RELAYER, SUBJECT, 400)], [token(SUBJECT, SHOP, 200)]), 'evm');
-    // Base: kirim ke kontrak bridge.
-    await ingestion.persist(scanOf('base', SUBJECT, [native(SUBJECT, BRIDGE, 300)]), 'evm');
+    // Base: kirim ke kontrak bridge dua kali; yang kedua tidak pernah diterima di chain lain.
+    await ingestion.persist(scanOf('base', SUBJECT, [native(SUBJECT, BRIDGE, 300), { ...native(SUBJECT, BRIDGE, 500), amountRaw: '2000000000000000000' }]), 'evm');
     // Optimism: hanya muncul sebagai penerima di riwayat address lain.
     await ingestion.persist(scanOf('optimism', OTHER, [native(OTHER, SUBJECT, 50)]), 'evm');
 
     const find = async (chainId: string, raw: string) =>
       (await db.select().from(schema.addresses).where(and(eq(schema.addresses.chainId, chainId), eq(schema.addresses.addressNormalized, raw.toLowerCase()))))[0];
-    const bridge = await find('base', BRIDGE);
-    await db.insert(schema.labels).values({ addressId: bridge.id, labelType: 'bridge', name: 'Contoh Bridge', source: 'external', sourceName: 'Blockscout', classification: 'external_label' });
-    const [sent] = await db.select().from(schema.nativeTransfers).where(eq(schema.nativeTransfers.toAddressId, bridge.id));
-    const ethSubject = await find('ethereum', SUBJECT);
-    const relayer = await find('ethereum', RELAYER);
-    const [received] = await db.select().from(schema.nativeTransfers).where(eq(schema.nativeTransfers.fromAddressId, relayer.id));
-    await db.insert(schema.bridgeTransfers).values({
-      sourceChainId: 'base',
-      destChainId: 'ethereum',
-      bridgeAddressId: bridge.id,
-      senderAddressId: sent.fromAddressId,
-      recipientAddressId: ethSubject.id,
-      sentNativeTransferId: sent.id,
-      receivedNativeTransferId: received.id,
-      amountSentRaw: '1000000000000000000',
-      amountReceivedRaw: '1000000000000000000',
-      status: 'matched',
-      matchHeuristic: 'bridge-amount-time-v1',
-      matchConfidence: 'medium',
-      matchReason: 'Jumlah sama, diterima 100 menit kemudian',
-      sentAt: at(300),
-      receivedAt: at(400),
-      updatedAt: SCANNED_AT,
-    });
+    const label = async (chainId: string, raw: string, labelType: 'bridge' | 'router', name: string) =>
+      db.insert(schema.labels).values({ addressId: (await find(chainId, raw)).id, labelType, name, source: 'external', sourceName: 'Blockscout', classification: 'external_label' });
+    await label('base', BRIDGE, 'bridge', 'Contoh Bridge: Spoke Pool');
+    await label('ethereum', SHOP, 'router', 'Contoh DEX: Router');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(DATABASE)
@@ -180,31 +160,54 @@ describe('GET /api/multichain/:address', () => {
     expect(body.caveats.join(' ')).toContain('bukan berarti tidak ada aktivitas');
   });
 
-  it('linimasa gabungan semua chain, dengan kiriman ke bridge dan pasangan bridge-nya', async () => {
+  it('mendeteksi bridge: kiriman yang diterima di chain lain dicocokkan, yang tidak pernah diterima ditandai tidak cocok', async () => {
     const { body } = await request(app.getHttpServer()).get(url()).expect(200);
+    expect(body.bridgeDetection).toEqual({ sends: 2, matched: 1, pending: 0, unmatched: 1 });
     expect(body.activities.map((item: { chain: string; kind: string; blockNumber: number }) => [item.chain, item.kind, item.blockNumber])).toEqual([
+      ['base', 'bridge_out', 500],
       ['ethereum', 'in', 400],
       ['base', 'bridge_out', 300],
       ['ethereum', 'out', 200],
       ['ethereum', 'in', 100],
     ]);
-    const bridgeId = body.bridges[0].id;
-    expect(body.activities[0].bridgeId).toBe(bridgeId);
-    expect(body.activities[1]).toMatchObject({ bridgeId, counterparty: BRIDGE, counterpartyLabels: [expect.objectContaining({ type: 'bridge' })], amount: '1' });
-    expect(body.activities[2]).toMatchObject({ transferKind: 'token', asset: { type: 'token', symbol: 'NBLA' }, amount: '5', classification: 'verified_fact' });
-    expect(body.bridges).toEqual([
-      expect.objectContaining({
-        fromChain: 'base',
-        toChain: 'ethereum',
-        bridgeAddress: BRIDGE,
-        status: 'matched',
-        matchClassification: 'heuristic',
-        matchConfidence: 'medium',
-        sentTxHash: body.activities[1].txHash,
-        receivedTxHash: body.activities[0].txHash,
-      }),
-    ]);
+    const matched = body.bridges.find((item: { status: string }) => item.status === 'matched');
+    expect(matched).toMatchObject({
+      fromChain: 'base',
+      toChain: 'ethereum',
+      protocolId: 'contoh-bridge',
+      bridgeAddress: BRIDGE,
+      matchClassification: 'heuristic',
+      matchConfidence: 'medium',
+      matchReason: 'Penerimaan di ethereum: jumlah sama persis, 2 jam setelah dikirim.',
+      sentTxHash: body.activities[2].txHash,
+      receivedTxHash: body.activities[1].txHash,
+    });
+    expect(body.activities[1].bridgeId).toBe(matched.id);
+    expect(body.activities[2]).toMatchObject({ bridgeId: matched.id, counterparty: BRIDGE, counterpartyLabels: [expect.objectContaining({ type: 'bridge' })], amount: '1' });
+    const unmatched = body.bridges.find((item: { status: string }) => item.status === 'unmatched');
+    expect(unmatched).toMatchObject({ toChain: null, receivedTxHash: null, amountSentRaw: '2000000000000000000', matchConfidence: null });
+    expect(unmatched.matchReason).toContain('Tidak ada penerimaan');
+    expect(body.activities[3]).toMatchObject({ transferKind: 'token', asset: { type: 'token', symbol: 'NBLA' }, amount: '5', classification: 'verified_fact' });
     expect(body.activityPage).toEqual({ limit: 100, truncated: false });
+
+    // Menjalankan ulang tidak menggandakan hasil deteksi.
+    await request(app.getHttpServer()).get(url()).expect(200);
+    expect(await db.select().from(schema.bridgeTransfers)).toHaveLength(2);
+  });
+
+  it('meringkas bridge dan router yang pernah dipakai per protokol, dari label sumbernya', async () => {
+    const { body } = await request(app.getHttpServer()).get(url()).expect(200);
+    expect(body.infrastructure).toEqual([
+      expect.objectContaining({ key: 'contoh-bridge', type: 'bridge', name: 'Contoh Bridge', protocolId: 'contoh-bridge', chains: ['base'], interactions: 2, totalUsd: null, unpricedCount: 2 }),
+      expect.objectContaining({ key: 'contoh-dex', type: 'router', name: 'Contoh DEX', chains: ['ethereum'], interactions: 1, addresses: [{ chain: 'ethereum', address: SHOP }] }),
+    ]);
+    expect(body.infrastructure[0].labels[0]).toMatchObject({ type: 'bridge', source: 'external', sourceName: 'Blockscout' });
+    const contracts = await db.select().from(schema.infrastructureContracts);
+    expect(contracts.map((row) => [row.protocolId, row.role, row.source, row.classification, row.confidence])).toEqual(
+      expect.arrayContaining([
+        ['contoh-bridge', 'bridge_both', 'heuristic', 'heuristic', '0.800'],
+      ]),
+    );
   });
 
   it('memakai ulang ringkasan tersimpan dan membukanya lagi lewat ?scan=', async () => {
@@ -223,7 +226,7 @@ describe('GET /api/multichain/:address', () => {
     expect(onlyEth.body.status).toBe('complete');
 
     const recent = await request(app.getHttpServer()).get(url(`?from=${at(250).toISOString()}`)).expect(200);
-    expect(recent.body.activities.map((item: { blockNumber: number }) => item.blockNumber)).toEqual([400, 300]);
+    expect(recent.body.activities.map((item: { blockNumber: number }) => item.blockNumber)).toEqual([500, 400, 300]);
     expect(recent.body.chains[1].txCount).toBe(1);
     expect(recent.body.window.from).toBe(at(250).toISOString());
 

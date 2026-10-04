@@ -7,6 +7,7 @@ import {
   bridgeTransfers,
   chains,
   infrastructureContracts,
+  infrastructureProtocols,
   labels,
   multichainChainActivity,
   multichainScans,
@@ -52,6 +53,26 @@ export interface ActivityRow {
   timestamp: Date;
   tokenId: number | null;
 }
+
+/** Transfer dengan aset yang bisa dibandingkan lintas chain. */
+export interface MoveWithAsset {
+  chainId: string;
+  table: 'native' | 'token';
+  id: number;
+  fromId: number;
+  toId: number;
+  amountRaw: string;
+  timestamp: Date;
+  asset: { type: 'native'; symbol: string } | { type: 'token'; symbol: string | null; decimals: number | null };
+}
+
+/** Batas transfer yang dibaca per chain untuk deteksi bridge. */
+const MOVE_LIMIT = 2_000;
+
+const BRIDGE_ADDRESSES = sql`select address_id from labels where label_type = 'bridge'
+  union select address_id from infrastructure_contracts where role in ('bridge_entry', 'bridge_exit', 'bridge_both')`;
+const INFRA_ADDRESSES = sql`select address_id from labels where label_type in ('bridge', 'router')
+  union select address_id from infrastructure_contracts`;
 
 function within(alias: string, range: ChainRange): SQL {
   const column = (name: string) => sql.raw(`${alias}.${name}`);
@@ -176,6 +197,139 @@ export class MultichainRepository {
       .from(bridgeTransfers)
       .where(or(inArray(bridgeTransfers.senderAddressId, addressIds), inArray(bridgeTransfers.recipientAddressId, addressIds)))
       .orderBy(desc(bridgeTransfers.sentAt), desc(bridgeTransfers.id));
+  }
+
+  /** Transfer keluar ke address bridge (label atau kontrak protokol bridge) dalam rentang. */
+  async outgoingToBridges(range: ChainRange): Promise<MoveWithAsset[]> {
+    return this.moves(
+      range,
+      sql`m.from_address_id = ${range.addressId} and m.to_address_id <> m.from_address_id and m.to_address_id in (${BRIDGE_ADDRESSES})`,
+    );
+  }
+
+  /** Transfer masuk ke address ini dalam rentang waktu tertentu. */
+  async incomingBetween(range: ChainRange, after: Date, before: Date): Promise<MoveWithAsset[]> {
+    return this.moves(
+      range,
+      sql`m.to_address_id = ${range.addressId} and m.from_address_id <> m.to_address_id and m.block_timestamp between ${after} and ${before}`,
+    );
+  }
+
+  private async moves(range: ChainRange, condition: SQL): Promise<MoveWithAsset[]> {
+    const result = (await this.db.execute(sql`
+      select m.* from (
+        select 'native' as source_table, n.id, n.from_address_id, n.to_address_id, n.amount_raw::text as amount_raw, n.block_timestamp, n.block_number,
+          c.native_symbol as symbol, 18 as decimals
+        from native_transfers n join chains c on c.id = n.chain_id
+        where ${within('n', range)}
+        union all
+        select 'token', t.id, t.from_address_id, t.to_address_id, t.amount_raw::text, t.block_timestamp, t.block_number, tk.symbol, tk.decimals
+        from token_transfers t join tokens tk on tk.id = t.token_id
+        where ${within('t', range)}
+      ) m
+      where ${condition}
+      order by m.block_timestamp, m.id
+      limit ${MOVE_LIMIT}`)) as unknown as { rows: Raw[] };
+    return result.rows.map((row) => ({
+      chainId: range.chainId,
+      table: row.source_table === 'token' ? 'token' : 'native',
+      id: Number(row.id),
+      fromId: Number(row.from_address_id),
+      toId: Number(row.to_address_id),
+      amountRaw: String(row.amount_raw),
+      timestamp: new Date(row.block_timestamp as string | Date),
+      asset:
+        row.source_table === 'token'
+          ? { type: 'token' as const, symbol: row.symbol === null ? null : String(row.symbol), decimals: row.decimals === null ? null : Number(row.decimals) }
+          : { type: 'native' as const, symbol: String(row.symbol) },
+    }));
+  }
+
+  /** Label bridge/router untuk sekumpulan address. */
+  async infrastructureLabels(addressIds: number[]) {
+    if (addressIds.length === 0) return [];
+    return this.db
+      .select({ id: labels.id, addressId: labels.addressId, chainId: addresses.chainId, labelType: labels.labelType, name: labels.name, source: labels.source })
+      .from(labels)
+      .innerJoin(addresses, eq(addresses.id, labels.addressId))
+      .where(and(inArray(labels.addressId, addressIds), inArray(labels.labelType, ['bridge', 'router'])))
+      .orderBy(asc(labels.id));
+  }
+
+  /** Interaksi address dengan bridge/router dalam rentang, per lawan transaksi. */
+  async infrastructureInteractions(range: ChainRange) {
+    const address = range.addressId;
+    const result = (await this.db.execute(sql`
+      with moves as (
+        select n.from_address_id, n.to_address_id, n.amount_usd, n.block_timestamp from native_transfers n where ${within('n', range)}
+        union all
+        select t.from_address_id, t.to_address_id, t.amount_usd, t.block_timestamp from token_transfers t where ${within('t', range)}
+      ),
+      sides as (
+        select case when from_address_id = ${address} then to_address_id else from_address_id end as counterparty, amount_usd, block_timestamp
+        from moves where from_address_id <> to_address_id
+      )
+      select counterparty, count(*)::int as interactions, sum(amount_usd)::text as total_usd,
+        count(*) filter (where amount_usd is null)::int as unpriced, max(block_timestamp) as last_at
+      from sides
+      where counterparty in (${INFRA_ADDRESSES})
+      group by counterparty`)) as unknown as { rows: Raw[] };
+    return result.rows.map((row) => ({
+      chainId: range.chainId,
+      addressId: Number(row.counterparty),
+      interactions: Number(row.interactions),
+      totalUsd: row.total_usd === null ? null : String(row.total_usd),
+      unpriced: Number(row.unpriced),
+      lastAt: new Date(row.last_at as string | Date),
+    }));
+  }
+
+  /** Kontrak protokol yang sudah dikenali untuk sekumpulan address. */
+  async infrastructureContractsFor(addressIds: number[]) {
+    if (addressIds.length === 0) return [];
+    return this.db
+      .select({ contract: infrastructureContracts, protocol: infrastructureProtocols })
+      .from(infrastructureContracts)
+      .innerJoin(infrastructureProtocols, eq(infrastructureProtocols.id, infrastructureContracts.protocolId))
+      .where(inArray(infrastructureContracts.addressId, addressIds))
+      .orderBy(asc(infrastructureContracts.id));
+  }
+
+  /** Simpan protokol dan kontrak hasil pengenalan; yang sudah ada tidak digandakan. */
+  async saveInfrastructure(
+    protocols: ReadonlyArray<typeof infrastructureProtocols.$inferInsert>,
+    contracts: ReadonlyArray<typeof infrastructureContracts.$inferInsert>,
+  ): Promise<void> {
+    if (protocols.length > 0) await this.db.insert(infrastructureProtocols).values([...protocols]).onConflictDoNothing();
+    if (contracts.length > 0) await this.db.insert(infrastructureContracts).values([...contracts]).onConflictDoNothing();
+  }
+
+  /** Simpan atau perbarui hasil pencocokan bridge, satu baris per kiriman. */
+  async upsertBridgeTransfers(rows: ReadonlyArray<typeof bridgeTransfers.$inferInsert>): Promise<number> {
+    let written = 0;
+    for (const row of rows) {
+      const update = {
+        destChainId: row.destChainId ?? null,
+        recipientAddressId: row.recipientAddressId ?? null,
+        receivedNativeTransferId: row.receivedNativeTransferId ?? null,
+        receivedTokenTransferId: row.receivedTokenTransferId ?? null,
+        amountReceivedRaw: row.amountReceivedRaw ?? null,
+        receivedAt: row.receivedAt ?? null,
+        status: row.status,
+        protocolId: row.protocolId ?? null,
+        bridgeLabelId: row.bridgeLabelId ?? null,
+        matchHeuristic: row.matchHeuristic ?? null,
+        matchConfidence: row.matchConfidence ?? null,
+        matchReason: row.matchReason ?? null,
+        updatedAt: row.updatedAt,
+      };
+      await this.db
+        .insert(bridgeTransfers)
+        .values(row)
+        .onConflictDoUpdate({ target: row.sentNativeTransferId ? bridgeTransfers.sentNativeTransferId : bridgeTransfers.sentTokenTransferId, set: update });
+      written++;
+    }
+    return written;
   }
 
   /** Hash transaksi transfer, per kunci `native:<id>` / `token:<id>`. */

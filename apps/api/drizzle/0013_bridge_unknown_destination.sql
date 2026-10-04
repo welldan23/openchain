@@ -1,0 +1,3 @@
+ALTER TABLE "bridge_transfers" DROP CONSTRAINT "bridge_transfers_matched_is_explained";--> statement-breakpoint
+ALTER TABLE "bridge_transfers" ALTER COLUMN "dest_chain_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "bridge_transfers" ADD CONSTRAINT "bridge_transfers_matched_is_explained" CHECK ("bridge_transfers"."status" <> 'matched' or ("bridge_transfers"."dest_chain_id" is not null and "bridge_transfers"."match_heuristic" is not null and "bridge_transfers"."match_confidence" is not null and "bridge_transfers"."recipient_address_id" is not null and "bridge_transfers"."amount_received_raw" is not null and "bridge_transfers"."received_at" is not null));

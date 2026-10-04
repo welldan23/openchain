@@ -189,9 +189,8 @@ export const bridgeTransfers = pgTable(
     sourceChainId: text('source_chain_id')
       .notNull()
       .references(() => chains.id),
-    destChainId: text('dest_chain_id')
-      .notNull()
-      .references(() => chains.id),
+    /** Chain tujuan; kosong selama kaki terima belum ditemukan (tujuannya belum diketahui). */
+    destChainId: text('dest_chain_id').references(() => chains.id),
     /** Kontrak bridge di chain asal. */
     bridgeAddressId: refId('bridge_address_id').notNull(),
     /** Label yang mengenali kontrak itu sebagai bridge, beserta sumbernya. */
@@ -259,7 +258,7 @@ export const bridgeTransfers = pgTable(
     ),
     check(
       'bridge_transfers_matched_is_explained',
-      sql`${t.status} <> 'matched' or (${t.matchHeuristic} is not null and ${t.matchConfidence} is not null and ${t.recipientAddressId} is not null and ${t.amountReceivedRaw} is not null and ${t.receivedAt} is not null)`,
+      sql`${t.status} <> 'matched' or (${t.destChainId} is not null and ${t.matchHeuristic} is not null and ${t.matchConfidence} is not null and ${t.recipientAddressId} is not null and ${t.amountReceivedRaw} is not null and ${t.receivedAt} is not null)`,
     ),
     check('bridge_transfers_received_after_sent', sql`${t.receivedAt} is null or ${t.receivedAt} >= ${t.sentAt}`),
   ],

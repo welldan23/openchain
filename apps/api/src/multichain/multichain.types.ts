@@ -57,7 +57,8 @@ export interface CrossChainActivityView {
 export interface BridgeMoveView {
   id: number;
   fromChain: string;
-  toChain: string;
+  /** `null` selama kaki terima belum ditemukan. */
+  toChain: string | null;
   protocolId: string | null;
   bridgeAddress: string;
   status: BridgeMatchStatus;
@@ -74,6 +75,24 @@ export interface BridgeMoveView {
   matchReason: string | null;
 }
 
+/** Bridge atau router yang pernah menjadi lawan transaksi, dikelompokkan per protokol. */
+export interface DetectedInfrastructureView {
+  /** Id protokol bila sudah dikenali, selain itu jenis + nama label. */
+  key: string;
+  type: 'bridge' | 'router';
+  name: string;
+  protocolId: string | null;
+  /** Label yang mengenalinya, beserta sumber dan klasifikasinya. */
+  labels: FlowLabelView[];
+  chains: string[];
+  addresses: Array<{ chain: string; address: string }>;
+  interactions: number;
+  /** Jumlah USD dari transfer berharga; `null` bila tidak ada yang berharga. */
+  totalUsd: number | null;
+  unpricedCount: number;
+  lastAt: string;
+}
+
 export interface MultichainProfileResponse {
   address: string;
   family: 'evm';
@@ -87,6 +106,10 @@ export interface MultichainProfileResponse {
   activities: CrossChainActivityView[];
   activityPage: { limit: number; truncated: boolean };
   bridges: BridgeMoveView[];
+  /** Bridge dan router yang pernah dipakai, terbanyak interaksinya dulu. */
+  infrastructure: DetectedInfrastructureView[];
+  /** Hasil deteksi bridge yang dijalankan untuk respons ini; `null` saat membuka ringkasan lama. */
+  bridgeDetection: { sends: number; matched: number; pending: number; unmatched: number } | null;
   /** Provider yang mencatat data pemindaian yang dipakai. */
   sources: string[];
   status: DataStatus;

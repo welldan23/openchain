@@ -19,8 +19,15 @@ import { FlowsRepository } from '../flows/flows.repository.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
+import { BridgeDetectionService } from './bridge-detection.service.js';
 import { MultichainRepository, type ActivityRow, type ChainRange } from './multichain.repository.js';
-import type { BridgeMoveView, CrossChainActivityView, MultichainChainView, MultichainProfileResponse } from './multichain.types.js';
+import type {
+  BridgeMoveView,
+  CrossChainActivityView,
+  DetectedInfrastructureView,
+  MultichainChainView,
+  MultichainProfileResponse,
+} from './multichain.types.js';
 
 type ChainRow = typeof chains.$inferSelect;
 type FlowScanRow = typeof addressFlowScans.$inferSelect;
@@ -56,6 +63,7 @@ export class MultichainService {
     private readonly repository: MultichainRepository,
     private readonly flows: FlowsRepository,
     private readonly freshness: SnapshotFreshness,
+    private readonly bridgesDetector: BridgeDetectionService,
   ) {}
 
   async getProfile(rawAddress: string, query: MultichainQuery = {}): Promise<MultichainProfileResponse> {
@@ -87,6 +95,8 @@ export class MultichainService {
     const addressOn = new Map(addressRows.map((row) => [row.chainId, row]));
 
     const filtered = (query.chains?.length ?? 0) > 0 || query.from !== undefined || query.to !== undefined;
+    // Deteksi bridge dari data tersimpan dulu, supaya linimasa dan daftar bridge memakai hasil terbaru.
+    const detection = query.scanId === undefined ? await this.bridgesDetector.detectForAddress(normalized) : null;
     let plans: ChainPlan[];
     let stored: Awaited<ReturnType<MultichainRepository['findScan']>> = null;
     let reused = false;
@@ -187,6 +197,7 @@ export class MultichainService {
     const activities = page.map((row) => this.toActivity(row, chainById.get(row.chainId)!, counterpartyAddresses, counterpartyLabels, bridgeIds, tokensById, bridgeOfTransfer));
     const bridges = await this.toBridges(bridgeRows, chainById);
 
+    const infrastructure = await this.infrastructure([...ranges.values()], chainById);
     const runs = await this.flows.providerRunsByIds(plans.flatMap((plan) => (plan.scan?.providerRunId ? [plan.scan.providerRunId] : [])));
     const status = combinedStatus(views);
     const window = query.from || query.to ? windowFromQuery(query, plans) : windowOf(plans);
@@ -211,11 +222,56 @@ export class MultichainService {
       activities,
       activityPage: { limit, truncated },
       bridges,
+      infrastructure,
+      bridgeDetection: detection ? { sends: detection.sends, matched: detection.matched, pending: detection.pending, unmatched: detection.unmatched } : null,
       sources: [...new Set(runs.map((run) => run.provider))].sort(),
       status: status.status,
       statusReason: status.statusReason,
       caveats,
     };
+  }
+
+  /** Bridge dan router yang pernah jadi lawan transaksi, per protokol (atau per label bila belum dikenali). */
+  private async infrastructure(ranges: ChainRange[], chainById: Map<string, ChainRow>): Promise<DetectedInfrastructureView[]> {
+    const interactions = (await Promise.all(ranges.map((range) => this.repository.infrastructureInteractions(range)))).flat();
+    if (interactions.length === 0) return [];
+    const ids = [...new Set(interactions.map((item) => item.addressId))];
+    // Kenali dulu semua bridge/router yang pernah jadi lawan transaksi (idempotent, dari label tersimpan).
+    await this.bridgesDetector.recognize(ids);
+    const [contracts, labelsById, addressById] = await Promise.all([
+      this.repository.infrastructureContractsFor(ids),
+      this.flows.labelsByAddressIds(ids),
+      this.flows.addressesByIds(ids),
+    ]);
+    const protocolOf = new Map(contracts.map((row) => [row.contract.addressId, row.protocol]));
+    const groups = new Map<string, DetectedInfrastructureView & { usd: number; priced: boolean }>();
+    for (const item of interactions) {
+      const labelRows = sortLabels(labelsById.get(item.addressId) ?? []).filter((label) => label.labelType === 'bridge' || label.labelType === 'router');
+      const protocol = protocolOf.get(item.addressId);
+      const type: 'bridge' | 'router' = protocol ? (protocol.kind === 'bridge' ? 'bridge' : 'router') : labelRows[0]?.labelType === 'bridge' ? 'bridge' : 'router';
+      const name = protocol?.name ?? labelRows[0]?.name ?? addressById.get(item.addressId) ?? '';
+      const key = protocol ? protocol.id : `${type}:${name}`;
+      const group =
+        groups.get(key) ??
+        ({ key, type, name, protocolId: protocol?.id ?? null, labels: [], chains: [], addresses: [], interactions: 0, totalUsd: null, unpricedCount: 0, lastAt: item.lastAt.toISOString(), usd: 0, priced: false } as DetectedInfrastructureView & { usd: number; priced: boolean });
+      group.interactions += item.interactions;
+      group.unpricedCount += item.unpriced;
+      if (item.totalUsd !== null) {
+        group.usd += Number(item.totalUsd);
+        group.priced = true;
+      }
+      if (!group.chains.includes(item.chainId)) group.chains.push(item.chainId);
+      group.addresses.push({ chain: item.chainId, address: addressById.get(item.addressId) ?? '' });
+      for (const label of labelRows.map(toLabelView)) {
+        if (!group.labels.some((existing) => existing.name === label.name && existing.sourceName === label.sourceName)) group.labels.push(label);
+      }
+      if (item.lastAt.toISOString() > group.lastAt) group.lastAt = item.lastAt.toISOString();
+      groups.set(key, group);
+    }
+    const order = (chain: string) => CHAIN_ORDER.get(chain) ?? (chainById.has(chain) ? Number.MAX_SAFE_INTEGER - 1 : Number.MAX_SAFE_INTEGER);
+    return [...groups.values()]
+      .map(({ usd, priced, ...view }) => ({ ...view, totalUsd: priced ? Math.round(usd * 100) / 100 : null, chains: view.chains.sort((a, b) => order(a) - order(b)) }))
+      .sort((a, b) => b.interactions - a.interactions || a.key.localeCompare(b.key));
   }
 
   private async plan(chain: ChainRow, addressId: number | null): Promise<ChainPlan> {
@@ -300,7 +356,7 @@ export class MultichainService {
     const hashOf = (native: number | null, token: number | null) =>
       native !== null ? (hashes.get(`native:${native}`) ?? null) : token !== null ? (hashes.get(`token:${token}`) ?? null) : null;
     return rows
-      .filter((row) => chainById.has(row.sourceChainId) && chainById.has(row.destChainId))
+      .filter((row) => chainById.has(row.sourceChainId) && (row.destChainId === null || chainById.has(row.destChainId)))
       .map((row) => ({
         id: row.id,
         fromChain: row.sourceChainId,
