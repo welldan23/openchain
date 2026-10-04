@@ -367,8 +367,8 @@ exchange, liquidity pool, bridge, dan burn. Tag lain dibiarkan.
 ## Endpoint
 
 Semua endpoint memakai prefix `/api` dan bersifat read-only terhadap blockchain.
-Satu-satunya yang menulis ke database adalah `GET /api/maps`, yang menyimpan
-peta yang baru dibentuk supaya bisa dibuka ulang.
+Yang menulis ke database hanya `GET /api/maps` dan `GET /api/multichain`, yang
+menyimpan peta atau ringkasan yang baru dibentuk supaya bisa dibuka ulang.
 
 Semua endpoint token memakai pemilih snapshot yang sama, supaya investigasi
 bisa dibuka ulang dengan hasil yang sama:
@@ -397,6 +397,33 @@ yang kemampuan itu minimal `experimental`).
 - `GET /api/chains/:chain` menambah daftar pemeriksaan smoke test terakhir dan
   riwayat 10 smoke test terbaru. Chain tak dikenal dijawab `404`; nilai filter
   yang salah `400`.
+
+### `GET /api/multichain/:address`
+
+Aktivitas satu address EVM di semua chain EVM, dari data aliran dana yang
+sudah dipindai (`npm run flows:collect`). Kontraknya ada di
+`src/multichain/multichain.types.ts`. Query: `chains` (dipisah koma), `from`/
+`to` (waktu ISO), `limit` (linimasa, 1–500, default 100), dan `scan` (ringkasan
+tersimpan).
+
+- `chains`: satu baris per chain EVM. Chain yang belum dipindai tetap tampil
+  `unavailable` dengan alasan (belum pernah dipindai, hanya tercatat sebagai
+  lawan transaksi, atau pemindaian gagal) dan angka `null`. Chain yang dipindai
+  memuat jumlah transaksi, masuk/keluar, lawan transaksi, pertama/terakhir
+  aktif, dan blok cakupan. USD hanya dari transfer yang punya harga saat
+  transaksi (`unpricedCount` menyebut sisanya); saldo native belum diambil,
+  jadi `null`.
+- `activities`: linimasa gabungan semua chain, terbaru dulu. Kiriman ke/dari
+  address berlabel bridge (atau kontrak protokol bridge) ditandai
+  `bridge_out`/`bridge_in`, dan `bridgeId` menunjuk pasangan bridge-nya.
+- `bridges`: perpindahan bridge dari `bridge_transfers`; pencocokan kaki kirim
+  dan terima selalu `heuristic` dengan keyakinan.
+- Ringkasan disimpan di `multichain_scans` dan dipakai ulang (`scan.reused`)
+  selama pemindaian aliran dana dasarnya tidak berubah; buka lagi lewat
+  `?scan=<id>`. Permintaan yang disaring chain atau waktu tidak disimpan
+  (`scan: null`).
+- Respons error: `400` untuk address non-EVM, chain tak dikenal/non-EVM, dan
+  parameter yang salah; `404` untuk ringkasan yang bukan milik address itu.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

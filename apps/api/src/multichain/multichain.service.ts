@@ -1,0 +1,385 @@
+/**
+ * Aktivitas satu address EVM di semua chain EVM, dari data aliran dana yang
+ * sudah tersimpan. Tidak ada provider yang dihubungi saat diminta.
+ *
+ * Ringkasan per chain disimpan sebagai `multichain_scans` supaya bisa dibuka
+ * ulang (`?scan=`). Ringkasan tersimpan dipakai ulang selama pemindaian aliran
+ * dana dasarnya belum berubah; permintaan yang disaring chain atau waktu tidak
+ * disimpan.
+ */
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { EVM_CHAIN_DEFINITIONS } from '../chains/chain-definitions.js';
+import { formatUnits, numericToNumber } from '../common/units.js';
+import { InvalidIdentifierError, normalizeAddress } from '../database/identifiers.js';
+import type { DataStatus } from '../database/schema/enums.js';
+import type { addressFlowScans, chains, multichainChainActivity } from '../database/schema/index.js';
+import { nativeAssetOf, toChainInfo } from '../flows/flow-summary.mapper.js';
+import type { FlowAsset } from '../flows/flow-summary.types.js';
+import { FlowsRepository } from '../flows/flows.repository.js';
+import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
+import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
+import { effectiveStatus } from '../tokens/token-summary.mapper.js';
+import { MultichainRepository, type ActivityRow, type ChainRange } from './multichain.repository.js';
+import type { BridgeMoveView, CrossChainActivityView, MultichainChainView, MultichainProfileResponse } from './multichain.types.js';
+
+type ChainRow = typeof chains.$inferSelect;
+type FlowScanRow = typeof addressFlowScans.$inferSelect;
+type ActivityRowStored = typeof multichainChainActivity.$inferSelect;
+
+export const DEFAULT_ACTIVITY_LIMIT = 100;
+export const MAX_ACTIVITY_LIMIT = 500;
+
+const CHAIN_ORDER = new Map(EVM_CHAIN_DEFINITIONS.map((definition, index) => [definition.id, index]));
+
+export interface MultichainQuery {
+  /** Hanya chain ini; kosong = semua chain EVM. */
+  chains?: string[];
+  from?: Date;
+  to?: Date;
+  /** Buka ringkasan tersimpan tertentu. */
+  scanId?: number;
+  limit?: number;
+}
+
+/** Satu chain yang sudah diputuskan pemindaian dasarnya. */
+interface ChainPlan {
+  chain: ChainRow;
+  addressId: number | null;
+  scan: FlowScanRow | null;
+  /** Alasan bila chain ini belum terbaca. */
+  missingReason: string | null;
+}
+
+@Injectable()
+export class MultichainService {
+  constructor(
+    private readonly repository: MultichainRepository,
+    private readonly flows: FlowsRepository,
+    private readonly freshness: SnapshotFreshness,
+  ) {}
+
+  async getProfile(rawAddress: string, query: MultichainQuery = {}): Promise<MultichainProfileResponse> {
+    let normalized: string;
+    try {
+      normalized = normalizeAddress('evm', rawAddress);
+    } catch (error) {
+      if (error instanceof InvalidIdentifierError) {
+        throw new BadRequestException('Jelajah multichain saat ini hanya untuk address EVM (0x diikuti 40 karakter hex).');
+      }
+      throw error;
+    }
+    if (query.from && query.to && query.from > query.to) throw new BadRequestException('Parameter from tidak boleh sesudah to.');
+    const limit = query.limit ?? DEFAULT_ACTIVITY_LIMIT;
+
+    const all = (await this.repository.evmChains()).sort(
+      (a, b) => (CHAIN_ORDER.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (CHAIN_ORDER.get(b.id) ?? Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id),
+    );
+    let selected = all;
+    if (query.chains && query.chains.length > 0) {
+      const unknown = query.chains.filter((id) => !all.some((chain) => chain.id === id));
+      if (unknown.length > 0) throw new BadRequestException(`Chain tidak dikenal atau bukan EVM: ${unknown.join(', ')}.`);
+      selected = all.filter((chain) => query.chains!.includes(chain.id));
+    }
+    const addressRows = await this.repository.addressesOn(
+      selected.map((chain) => chain.id),
+      normalized,
+    );
+    const addressOn = new Map(addressRows.map((row) => [row.chainId, row]));
+
+    const filtered = (query.chains?.length ?? 0) > 0 || query.from !== undefined || query.to !== undefined;
+    let plans: ChainPlan[];
+    let stored: Awaited<ReturnType<MultichainRepository['findScan']>> = null;
+    let reused = false;
+    if (query.scanId !== undefined) {
+      stored = await this.repository.findScan(query.scanId);
+      if (!stored || stored.scan.addressNormalized !== normalized) throw new NotFoundException(`Ringkasan lintas chain #${query.scanId} tidak ditemukan untuk address ini.`);
+      const scans = new Map((await this.repository.scansByIds(stored.rows.flatMap((row) => (row.flowScanId === null ? [] : [row.flowScanId])))).map((scan) => [scan.id, scan]));
+      plans = selected.flatMap((chain) => {
+        const row = stored!.rows.find((item) => item.chainId === chain.id);
+        if (!row) return [];
+        return [{ chain, addressId: row.addressId, scan: row.flowScanId === null ? null : (scans.get(row.flowScanId) ?? null), missingReason: row.statusReason }];
+      });
+      reused = true;
+    } else {
+      plans = await Promise.all(selected.map((chain) => this.plan(chain, addressOn.get(chain.id)?.id ?? null)));
+    }
+
+    // Angka per chain selalu dihitung dari pemindaian dasarnya; ringkasan tersimpan
+    // hanya menentukan pemindaian mana yang dipakai.
+    const now = this.freshness.now();
+    const latest = query.scanId === undefined && !filtered ? await this.repository.latestScan(normalized) : null;
+    if (latest && sameScans(latest.rows, plans)) {
+      stored = latest;
+      reused = true;
+    }
+    const ranges = new Map<string, ChainRange>();
+    for (const plan of plans) {
+      if (plan.addressId !== null && plan.scan) {
+        ranges.set(plan.chain.id, {
+          chainId: plan.chain.id,
+          addressId: plan.addressId,
+          blockFrom: plan.scan.blockFrom,
+          blockTo: plan.scan.blockTo,
+          from: query.from,
+          to: query.to,
+        });
+      }
+    }
+    const views: MultichainChainView[] = await Promise.all(plans.map((plan) => this.computeChain(plan, ranges.get(plan.chain.id), now)));
+
+    if (!stored && !filtered) {
+      const saved = await this.repository.saveScan(
+        {
+          family: 'evm',
+          address: rawAddress.trim(),
+          addressNormalized: normalized,
+          windowFrom: windowOf(plans)?.from ?? now,
+          windowTo: windowOf(plans)?.to ?? now,
+          ...combinedStatus(views),
+          scannedAt: now,
+        },
+        views.map((view, index) => ({
+          chainId: view.chain.id,
+          addressId: plans[index].addressId,
+          flowScanId: view.flowScanId,
+          status: view.status === 'stale' ? (plans[index].scan?.status ?? 'unavailable') : view.status,
+          statusReason: view.statusReason,
+          txCount: view.txCount,
+          inUsd: view.inUsd === null ? null : view.inUsd.toFixed(2),
+          outUsd: view.outUsd === null ? null : view.outUsd.toFixed(2),
+          counterpartyCount: view.counterpartyCount,
+          firstSeenAt: view.firstSeen ? new Date(view.firstSeen) : null,
+          lastSeenAt: view.lastSeen ? new Date(view.lastSeen) : null,
+          snapshotBlock: view.snapshotBlock,
+          fetchedAt: view.fetchedAt ? new Date(view.fetchedAt) : null,
+        })),
+      );
+      stored = saved;
+    }
+
+    // Linimasa gabungan semua chain, terbaru dulu.
+    const perChain = await Promise.all([...ranges.values()].map((range) => this.repository.activities(range, limit + 1)));
+    const merged = perChain.flat().sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime() || a.chainId.localeCompare(b.chainId) || b.id - a.id);
+    const truncated = merged.length > limit;
+    const page = merged.slice(0, limit);
+    const ownIds = addressRows.map((row) => row.id);
+    const counterpartyIds = [...new Set(page.map((row) => row.counterpartyId))];
+    const [counterpartyAddresses, counterpartyLabels, ownLabels, bridgeIds, tokensById, bridgeRows] = await Promise.all([
+      this.flows.addressesByIds(counterpartyIds),
+      this.flows.labelsByAddressIds(counterpartyIds),
+      this.flows.labelsByAddressIds(ownIds),
+      this.repository.bridgeAddressIds(counterpartyIds),
+      this.flows.tokensByIds([...new Set(page.flatMap((row) => (row.tokenId === null ? [] : [row.tokenId])))]),
+      this.repository.bridgeTransfersFor(ownIds),
+    ]);
+    const bridgeOfTransfer = new Map<string, number>();
+    for (const row of bridgeRows) {
+      for (const [table, id] of [
+        ['native', row.sentNativeTransferId],
+        ['token', row.sentTokenTransferId],
+        ['native', row.receivedNativeTransferId],
+        ['token', row.receivedTokenTransferId],
+      ] as const) {
+        if (id !== null) bridgeOfTransfer.set(`${table}:${id}`, row.id);
+      }
+    }
+    const chainById = new Map(all.map((chain) => [chain.id, chain]));
+    const activities = page.map((row) => this.toActivity(row, chainById.get(row.chainId)!, counterpartyAddresses, counterpartyLabels, bridgeIds, tokensById, bridgeOfTransfer));
+    const bridges = await this.toBridges(bridgeRows, chainById);
+
+    const runs = await this.flows.providerRunsByIds(plans.flatMap((plan) => (plan.scan?.providerRunId ? [plan.scan.providerRunId] : [])));
+    const status = combinedStatus(views);
+    const window = query.from || query.to ? windowFromQuery(query, plans) : windowOf(plans);
+    const caveats = [
+      'Setiap transfer di linimasa adalah fakta on-chain. Address yang sama di chain berbeda belum tentu dikendalikan orang yang sama (mis. kontrak dengan address sama).',
+      'Chain yang belum dipindai tampil unavailable; itu bukan berarti tidak ada aktivitas di sana.',
+      'Saldo native belum diambil, jadi saldo selalu kosong untuk sementara.',
+    ];
+    if (views.some((view) => (view.unpricedCount ?? 0) > 0)) {
+      caveats.push('Sebagian transfer belum punya harga saat transaksi, jadi total USD hanya dari transfer yang berharga (kosong bila tidak ada).');
+    }
+    if (bridges.length === 0) caveats.push('Belum ada perpindahan bridge yang dicocokkan; kiriman ke bridge tetap tampil di linimasa sebagai bridge_out.');
+    if (truncated) caveats.push(`Linimasa dibatasi ${limit} transfer terbaru.`);
+
+    return {
+      address: addressRows[0]?.address ?? rawAddress.trim(),
+      family: 'evm',
+      labels: sortLabels(ownIds.flatMap((id) => ownLabels.get(id) ?? [])).map(toLabelView),
+      scan: stored && !filtered ? { id: stored.scan.id, scannedAt: stored.scan.scannedAt.toISOString(), reused } : null,
+      window: window ? { from: window.from.toISOString(), to: window.to.toISOString() } : null,
+      chains: views,
+      activities,
+      activityPage: { limit, truncated },
+      bridges,
+      sources: [...new Set(runs.map((run) => run.provider))].sort(),
+      status: status.status,
+      statusReason: status.statusReason,
+      caveats,
+    };
+  }
+
+  private async plan(chain: ChainRow, addressId: number | null): Promise<ChainPlan> {
+    if (addressId === null) return { chain, addressId, scan: null, missingReason: `Address ini belum pernah dipindai di ${chain.name}.` };
+    const scan = await this.flows.findScan(chain.id, addressId);
+    if (scan) return { chain, addressId, scan, missingReason: null };
+    const failed = await this.flows.findFailedAttemptAfter(chain.id, addressId, null);
+    return {
+      chain,
+      addressId,
+      scan: null,
+      missingReason: failed?.statusReason ?? `Address ini tercatat di ${chain.name} sebagai lawan transaksi, tapi riwayatnya sendiri belum dipindai.`,
+    };
+  }
+
+  private async computeChain(plan: ChainPlan, range: ChainRange | undefined, now: Date): Promise<MultichainChainView> {
+    const base = emptyView(plan);
+    if (!plan.scan || !range) return base;
+    const stats = await this.repository.chainStats(range);
+    return {
+      ...base,
+      status: effectiveStatus(plan.scan.status, plan.scan.scannedAt, now, this.freshness.staleAfterMinutes),
+      statusReason: plan.scan.statusReason,
+      flowScanId: plan.scan.id,
+      txCount: stats.txCount,
+      inCount: stats.inCount,
+      outCount: stats.outCount,
+      inUsd: numericToNumber(stats.inUsd),
+      outUsd: numericToNumber(stats.outUsd),
+      unpricedCount: stats.unpricedCount,
+      counterpartyCount: stats.counterpartyCount,
+      firstSeen: stats.firstSeen?.toISOString() ?? null,
+      lastSeen: stats.lastSeen?.toISOString() ?? null,
+      snapshotBlock: plan.scan.blockTo,
+      fetchedAt: plan.scan.scannedAt.toISOString(),
+    };
+  }
+
+  private toActivity(
+    row: ActivityRow,
+    chain: ChainRow,
+    addressById: Map<number, string>,
+    labelsById: Awaited<ReturnType<FlowsRepository['labelsByAddressIds']>>,
+    bridgeIds: Set<number>,
+    tokensById: Awaited<ReturnType<FlowsRepository['tokensByIds']>>,
+    bridgeOfTransfer: Map<string, number>,
+  ): CrossChainActivityView {
+    const token = row.tokenId === null ? undefined : tokensById.get(row.tokenId);
+    const asset: FlowAsset = token
+      ? { type: 'token', address: token.address, symbol: token.symbol, name: token.name, decimals: token.decimals }
+      : nativeAssetOf(chain);
+    const viaBridge = bridgeIds.has(row.counterpartyId);
+    const kind = row.direction === 'self' ? 'self' : viaBridge ? (row.direction === 'out' ? 'bridge_out' : 'bridge_in') : row.direction;
+    const table = row.source === 'token' ? 'token' : 'native';
+    return {
+      id: `${row.chainId}:${table}:${row.id}`,
+      chain: row.chainId,
+      kind,
+      timestamp: row.timestamp.toISOString(),
+      blockNumber: row.blockNumber,
+      counterparty: addressById.get(row.counterpartyId) ?? '',
+      counterpartyLabels: sortLabels(labelsById.get(row.counterpartyId) ?? []).map(toLabelView),
+      transferKind: row.source,
+      asset,
+      amountRaw: row.amountRaw,
+      amount: asset.decimals === null ? null : formatUnits(row.amountRaw, asset.decimals),
+      amountUsd: numericToNumber(row.amountUsd),
+      txHash: row.txHash,
+      bridgeId: bridgeOfTransfer.get(`${table}:${row.id}`) ?? null,
+      classification: 'verified_fact',
+    };
+  }
+
+  private async toBridges(rows: Awaited<ReturnType<MultichainRepository['bridgeTransfersFor']>>, chainById: Map<string, ChainRow>): Promise<BridgeMoveView[]> {
+    if (rows.length === 0) return [];
+    const nativeIds = rows.flatMap((row) => [row.sentNativeTransferId, row.receivedNativeTransferId]).filter((id): id is number => id !== null);
+    const tokenIds = rows.flatMap((row) => [row.sentTokenTransferId, row.receivedTokenTransferId]).filter((id): id is number => id !== null);
+    const [hashes, bridgeAddresses] = await Promise.all([
+      this.repository.transferHashes(nativeIds, tokenIds),
+      this.flows.addressesByIds(rows.map((row) => row.bridgeAddressId)),
+    ]);
+    const hashOf = (native: number | null, token: number | null) =>
+      native !== null ? (hashes.get(`native:${native}`) ?? null) : token !== null ? (hashes.get(`token:${token}`) ?? null) : null;
+    return rows
+      .filter((row) => chainById.has(row.sourceChainId) && chainById.has(row.destChainId))
+      .map((row) => ({
+        id: row.id,
+        fromChain: row.sourceChainId,
+        toChain: row.destChainId,
+        protocolId: row.protocolId,
+        bridgeAddress: bridgeAddresses.get(row.bridgeAddressId) ?? '',
+        status: row.status,
+        amountSentRaw: row.amountSentRaw,
+        amountReceivedRaw: row.amountReceivedRaw,
+        amountUsd: numericToNumber(row.amountUsd),
+        sentTxHash: hashOf(row.sentNativeTransferId, row.sentTokenTransferId) ?? '',
+        sentAt: row.sentAt.toISOString(),
+        receivedTxHash: hashOf(row.receivedNativeTransferId, row.receivedTokenTransferId),
+        receivedAt: row.receivedAt?.toISOString() ?? null,
+        matchClassification: 'heuristic',
+        matchConfidence: row.matchConfidence,
+        matchReason: row.matchReason,
+      }));
+  }
+}
+
+function emptyView(plan: ChainPlan): MultichainChainView {
+  return {
+    chain: toChainInfo(plan.chain),
+    known: plan.addressId !== null,
+    status: 'unavailable',
+    statusReason: plan.missingReason,
+    flowScanId: null,
+    txCount: null,
+    inCount: null,
+    outCount: null,
+    inUsd: null,
+    outUsd: null,
+    unpricedCount: null,
+    counterpartyCount: null,
+    firstSeen: null,
+    lastSeen: null,
+    nativeBalanceRaw: null,
+    balanceUsd: null,
+    snapshotBlock: null,
+    fetchedAt: null,
+  };
+}
+
+/** Ringkasan tersimpan masih berlaku bila setiap chain memakai pemindaian dasar yang sama. */
+function sameScans(rows: readonly ActivityRowStored[], plans: readonly ChainPlan[]): boolean {
+  if (rows.length !== plans.length) return false;
+  return plans.every((plan) => {
+    const row = rows.find((item) => item.chainId === plan.chain.id);
+    return row !== undefined && row.flowScanId === (plan.scan?.id ?? null) && row.addressId === plan.addressId;
+  });
+}
+
+function windowOf(plans: readonly ChainPlan[]): { from: Date; to: Date } | null {
+  const scans = plans.flatMap((plan) => (plan.scan ? [plan.scan] : []));
+  if (scans.length === 0) return null;
+  return {
+    from: new Date(Math.min(...scans.map((scan) => scan.windowFrom.getTime()))),
+    to: new Date(Math.max(...scans.map((scan) => scan.windowTo.getTime()))),
+  };
+}
+
+function windowFromQuery(query: MultichainQuery, plans: readonly ChainPlan[]): { from: Date; to: Date } | null {
+  const coverage = windowOf(plans);
+  const from = query.from ?? coverage?.from;
+  const to = query.to ?? coverage?.to;
+  return from && to ? { from, to } : null;
+}
+
+function combinedStatus(views: readonly MultichainChainView[]): { status: DataStatus; statusReason: string | null; missingFields: string[] } {
+  const missing = views.filter((view) => view.status === 'unavailable');
+  if (views.length > 0 && missing.length === views.length) {
+    return { status: 'unavailable', statusReason: 'Address ini belum dipindai di chain mana pun.', missingFields: missing.map((view) => view.chain.id) };
+  }
+  const incomplete = views.filter((view) => view.status !== 'complete');
+  if (incomplete.length === 0) return { status: 'complete', statusReason: null, missingFields: [] };
+  return {
+    status: 'partial',
+    statusReason: `${incomplete.length} dari ${views.length} chain belum terbaca lengkap: ${incomplete.map((view) => view.chain.name).join(', ')}.`,
+    missingFields: incomplete.map((view) => view.chain.id),
+  };
+}
