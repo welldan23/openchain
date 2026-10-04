@@ -88,6 +88,7 @@ function collection(overrides: Partial<AddressFlowCollection>): AddressFlowColle
       statusReason: null,
       missingFields: [],
     },
+    partyLabels: [],
     failure: null,
     ...overrides,
   };

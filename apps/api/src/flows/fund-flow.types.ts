@@ -5,6 +5,7 @@
  */
 import type { DataStatus } from '../database/schema/enums.js';
 import type {
+  ExternalLabel,
   IndexedNativeTransfer,
   IndexedTokenTransfer,
   ProviderRunRecord,
@@ -69,4 +70,9 @@ export interface AddressFlowCollection {
   scan: FlowScan | null;
   /** Alasan tidak ada yang bisa dipindai; `null` bila setidaknya satu jenis terbaca. */
   failure: string | null;
+  /**
+   * Label eksternal pihak-pihak transfer dari indexer, per address, beserta
+   * run provider yang membawanya.
+   */
+  partyLabels: Array<{ address: string; labels: ExternalLabel[]; runKey: string }>;
 }

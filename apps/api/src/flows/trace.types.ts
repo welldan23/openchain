@@ -7,7 +7,7 @@
  * berarti tidak ada dalam data yang sudah dipindai, bukan pasti tidak ada.
  */
 import type { DataStatus } from '../database/schema/enums.js';
-import type { FlowAsset, FlowChainInfo, FlowLabelView } from './flow-summary.types.js';
+import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from './flow-summary.types.js';
 
 export interface TraceParty {
   /** Identifier asli address. */
@@ -30,6 +30,8 @@ export interface TraceHopView {
   blockNumber: number;
   timestamp: string;
   classification: 'verified_fact';
+  /** Jenis perpindahan dan dasarnya; `null` bila belum diklasifikasikan. */
+  movement: MovementTypeView | null;
 }
 
 export interface TraceResponse {

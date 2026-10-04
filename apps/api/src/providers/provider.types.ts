@@ -183,6 +183,8 @@ export interface ActivityPage<T> {
    * transfer yang disimpan.
    */
   oldestSeen?: { blockNumber: number; timestamp: Date } | null;
+  /** Label eksternal pihak-pihak di halaman ini, per address seperti yang diterima. */
+  partyLabels?: Readonly<Record<string, ExternalLabel[]>>;
 }
 
 /** Perpindahan native coin yang sudah final di blok tertentu. */

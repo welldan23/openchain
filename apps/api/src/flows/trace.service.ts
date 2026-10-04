@@ -4,7 +4,7 @@ import { InvalidIdentifierError, normalizeAddress } from '../database/identifier
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
-import { nativeAssetOf, toChainInfo } from './flow-summary.mapper.js';
+import { movementKey, nativeAssetOf, toChainInfo, toMovementType } from './flow-summary.mapper.js';
 import type { FlowAsset } from './flow-summary.types.js';
 import { FlowsRepository, type TraceEdgeRow } from './flows.repository.js';
 import { searchTrace } from './trace-search.js';
@@ -66,11 +66,12 @@ export class TraceService {
 
     const pathIds = [...new Set(result.path.flatMap((edge) => [edge.fromId, edge.toId]))];
     const partyIds = [...new Set([fromAddress.id, ...(toAddress ? [toAddress.id] : []), ...pathIds])];
-    const [addressById, labelsById, scanned, tokensById] = await Promise.all([
+    const [addressById, labelsById, scanned, tokensById, movementTypes] = await Promise.all([
       this.repository.addressesByIds(partyIds),
       this.repository.labelsByAddressIds(partyIds),
       this.repository.scannedAddressIds(chain.id, [...new Set([...partyIds, ...result.visited])]),
       this.repository.tokensByIds([...new Set(result.path.flatMap((edge) => (edge.tokenId === null ? [] : [edge.tokenId])))]),
+      this.repository.movementTypesFor(result.path),
     ]);
     const party = (id: number, fallback: string): TraceParty => ({
       address: addressById.get(id) ?? fallback,
@@ -97,6 +98,7 @@ export class TraceService {
         blockNumber: edge.blockNumber,
         timestamp: edge.timestamp.toISOString(),
         classification: 'verified_fact' as const,
+        movement: toMovementType(movementTypes.get(movementKey(edge.source, edge.id))),
       };
     });
 

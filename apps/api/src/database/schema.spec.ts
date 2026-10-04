@@ -32,6 +32,7 @@ const EXPECTED_TABLES = [
   'holders',
   'label_evidence',
   'labels',
+  'movement_classifications',
   'native_transfers',
   'provider_runs',
   'risk_finding_evidence',
@@ -649,6 +650,80 @@ describe('aliran dana: cakupan pemindaian address', () => {
     await expectConstraintViolation(
       db.insert(schema.addressFlowScans).values(scan(address.id, { chainId: 'base' })),
       'address_flow_scans_chain_address_fk',
+    );
+  });
+});
+
+describe('aliran dana: klasifikasi jenis perpindahan', () => {
+  async function nativeTransfer(seed: string) {
+    const from = await insertAddress('robinhood', '0x' + `${seed}a1`.repeat(10));
+    const to = await insertAddress('robinhood', '0x' + `${seed}b2`.repeat(10));
+    const [row] = await db
+      .insert(schema.nativeTransfers)
+      .values({
+        chainId: 'robinhood',
+        txHash: normalizeTxHash('evm', `0x${seed.repeat(32)}`),
+        kind: 'transaction',
+        fromAddressId: from.id,
+        toAddressId: to.id,
+        amountRaw: '5',
+        blockNumber: 1,
+        blockTimestamp: FETCHED_AT,
+        fetchedAt: FETCHED_AT,
+      })
+      .returning();
+    return row;
+  }
+
+  it('satu klasifikasi per transfer; transfer biasa adalah fakta', async () => {
+    const transfer = await nativeTransfer('71');
+    const value = { nativeTransferId: transfer.id, movementType: 'transfer' as const, classification: 'verified_fact' as const, basis: 'Transfer langsung.', classifiedAt: FETCHED_AT };
+    await db.insert(schema.movementClassifications).values(value);
+    await expectConstraintViolation(db.insert(schema.movementClassifications).values(value), 'movement_classifications_native_unique');
+  });
+
+  it('wajib menunjuk tepat satu transfer', async () => {
+    await expectConstraintViolation(
+      db.insert(schema.movementClassifications).values({ movementType: 'transfer', classification: 'verified_fact', basis: 'x', classifiedAt: FETCHED_AT }),
+      'movement_classifications_one_transfer',
+    );
+  });
+
+  it('jenis berbasis label tidak boleh disebut fakta, dan fakta hanya untuk transfer/mint/burn', async () => {
+    const transfer = await nativeTransfer('72');
+    await expectConstraintViolation(
+      db.insert(schema.movementClassifications).values({
+        nativeTransferId: transfer.id,
+        movementType: 'exchange_deposit',
+        classification: 'verified_fact',
+        basis: 'Penerima berlabel exchange.',
+        classifiedAt: FETCHED_AT,
+      }),
+      'movement_classifications_fact_types',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.movementClassifications).values({
+        nativeTransferId: transfer.id,
+        movementType: 'transfer',
+        classification: 'external_label',
+        basis: 'x',
+        classifiedAt: FETCHED_AT,
+      }),
+      'movement_classifications_fact_types',
+    );
+  });
+
+  it('tafsiran dugaan wajib punya tingkat keyakinan', async () => {
+    const transfer = await nativeTransfer('73');
+    await expectConstraintViolation(
+      db.insert(schema.movementClassifications).values({
+        nativeTransferId: transfer.id,
+        movementType: 'exchange_deposit',
+        classification: 'heuristic',
+        basis: 'Dugaan exchange.',
+        classifiedAt: FETCHED_AT,
+      }),
+      'movement_classifications_heuristic_has_confidence',
     );
   });
 });

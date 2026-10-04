@@ -186,6 +186,13 @@ menyimpannya ke `native_transfers`, `token_transfers`, dan `address_flow_scans`.
 - Status `complete` hanya bila ketiga jenis terbaca dan blok terbaru chain
   diketahui. Chain tanpa indexer (mis. BSC, HyperEVM) tercatat `unavailable`
   dengan alasannya. Address salah format ditolak sebelum ada request.
+- Label eksternal pihak transfer (tag Blockscout seperti exchange, router,
+  pool) ikut disimpan dengan sumber dan run provider-nya; hanya tag yang jelas
+  padanannya yang dipakai. Setelah itu jenis tiap perpindahan diklasifikasikan
+  (`MovementClassificationService`, bisa diulang per address lewat
+  `reclassifyAddress` saat label berubah). Endpoint daftar transfer, bukti
+  transaksi, dan telusur menampilkannya di field `movement` (`null` bila belum
+  diklasifikasikan).
 - Pengumpulan ulang tidak menggandakan transfer, tapi tetap mencatat
   pemindaian baru. Nilai USD saat transaksi belum diisi (belum ada sumber harga
   historis), jadi kolomnya kosong, bukan nol.
@@ -514,7 +521,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Referensi | `chains`, `addresses`, `labels`, `provider_runs` |
 | Data token | `tokens`, `token_snapshots`, `token_snapshot_sources`, `holders` |
 | Aktivitas | `transactions`, `token_transfers`, `trading_events` |
-| Aliran dana | `native_transfers`, `address_flow_scans` (plus `token_transfers`) |
+| Aliran dana | `native_transfers`, `address_flow_scans`, `movement_classifications` (plus `token_transfers`) |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 
 Aturan PRD yang dijaga langsung oleh database:
@@ -540,6 +547,14 @@ Aturan PRD yang dijaga langsung oleh database:
 - `address_flow_scans` mencatat rentang blok dan jenis transfer yang sudah
   dipindai per address. Status `complete` hanya sah bila native, token, dan
   transfer internal semuanya dipindai; `partial`/`unavailable` wajib dijelaskan.
+
+- `movement_classifications` menyimpan jenis tiap perpindahan (transfer biasa,
+  mint, burn, setor/tarik exchange, bridge keluar/masuk, interaksi DEX) dan
+  klasifikasi informasinya. Transfer biasa dan mint/burn (address nol) adalah
+  `verified_fact`; jenis yang lahir dari label mengikuti sumber labelnya
+  (`external_label`, `heuristic` dengan confidence, atau `assumption` untuk
+  label user), dan database menolak jenis berbasis label yang disebut fakta.
+  Disimpan terpisah dari transfer supaya bisa dihitung ulang saat label berubah.
 
 Tabel `funding_edges`, `clusters`, `cluster_members`, dan `investigations`
 menyusul di task fitur yang memakainya.

@@ -10,6 +10,7 @@ import { CLOCK } from '../src/common/clock.js';
 import { DATABASE, type Database } from '../src/database/database.module.js';
 import * as schema from '../src/database/schema/index.js';
 import { FundFlowIngestionService } from '../src/flows/fund-flow-ingestion.service.js';
+import { MovementClassificationService } from '../src/flows/movement-classification.service.js';
 import type { AddressFlowCollection, KindCoverage } from '../src/flows/fund-flow.types.js';
 import type { IndexedNativeTransfer, IndexedTokenTransfer } from '../src/providers/provider.types.js';
 import { createTestDatabase, type TestDatabase } from './support/database.js';
@@ -76,6 +77,7 @@ function collection(): AddressFlowCollection {
       statusReason: null,
       missingFields: [],
     },
+    partyLabels: [],
     failure: null,
   };
 }
@@ -97,6 +99,8 @@ describe('Endpoint aliran: daftar transfer dan pilihan chain', () => {
       sourceName: 'Blockscout',
       classification: 'external_label',
     });
+    // Label masuk setelah ingest: klasifikasi jenis perpindahan dihitung ulang.
+    await new MovementClassificationService(db as unknown as Database).reclassifyAddress('robinhood', exchange.id, new Date('2026-10-03T04:40:00Z'));
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(DATABASE)
       .useValue(db)
@@ -132,7 +136,16 @@ describe('Endpoint aliran: daftar transfer dan pilihan chain', () => {
         amountRaw: '1',
         amountUsd: null,
         classification: 'verified_fact',
+        movement: {
+          type: 'exchange_deposit',
+          classification: 'external_label',
+          basis: 'Penerima berlabel exchange: Hot wallet exchange (Blockscout).',
+          confidence: null,
+        },
       });
+      // Penarikan dari exchange dan transfer biasa.
+      expect(body.items[5].movement).toMatchObject({ type: 'exchange_withdrawal', classification: 'external_label' });
+      expect(body.items[4].movement).toMatchObject({ type: 'transfer', classification: 'verified_fact' });
       expect(body.items[5]).toMatchObject({ asset: { type: 'native', symbol: 'ETH' }, amount: '5', timestamp: at(10).toISOString() });
     });
 

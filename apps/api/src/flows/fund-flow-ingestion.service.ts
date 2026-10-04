@@ -4,7 +4,8 @@
  *
  * Idempotent: transfer yang sama (chain, hash, posisi) tidak digandakan saat
  * address dikumpulkan ulang, dan metadata token yang sudah dibaca lewat RPC
- * tidak ditimpa metadata dari indexer. Nilai USD saat transaksi belum diisi
+ * tidak ditimpa metadata dari indexer. Label eksternal pihak transfer ikut
+ * disimpan, lalu jenis tiap perpindahan diklasifikasikan. Nilai USD saat transaksi belum diisi
  * karena belum ada sumber harga historis; kolomnya dibiarkan kosong, bukan nol.
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -12,12 +13,17 @@ import type { Database } from '../database/database.module.js';
 import { insertProviderRuns, upsertAddresses, type StoredRun } from '../database/address-store.js';
 import { normalizeAddress, normalizeTxHash } from '../database/identifiers.js';
 import type { ChainFamily, DataStatus } from '../database/schema/enums.js';
-import { addressFlowScans, nativeTransfers, tokens, tokenTransfers } from '../database/schema/index.js';
+import { addressFlowScans, labels, nativeTransfers, tokens, tokenTransfers } from '../database/schema/index.js';
 import type { AddressFlowCollection } from './fund-flow.types.js';
+import { MovementClassificationService } from './movement-classification.service.js';
 
 const CHUNK = 500;
 
 export interface FlowIngestionResult {
+  /** Label eksternal pihak transfer yang disimpan atau diperbarui. */
+  labelsStored: number;
+  /** Perpindahan yang jenisnya diklasifikasikan. */
+  classified: number;
   chainId: string;
   address: string;
   /** `null` bila rentang blok tidak diketahui sama sekali. */
@@ -37,7 +43,11 @@ function chunks<T>(items: readonly T[]): T[][] {
 }
 
 export class FundFlowIngestionService {
-  constructor(private readonly db: Database) {}
+  private readonly classifier: MovementClassificationService;
+
+  constructor(private readonly db: Database) {
+    this.classifier = new MovementClassificationService(db);
+  }
 
   async persist(collection: AddressFlowCollection, family: ChainFamily): Promise<FlowIngestionResult> {
     const { chainId } = collection;
@@ -107,6 +117,15 @@ export class FundFlowIngestionService {
       tokensInserted += inserted.length;
     }
 
+    const labelsStored = await this.upsertPartyLabels(collection, runs, normalize, (value) => addressIds.get(normalize(value)));
+    const classified = await this.classifier.classify(
+      {
+        nativeIds: await this.nativeIdsOf(chainId, nativeRows),
+        tokenIds: await this.tokenIdsOf(chainId, tokenRows),
+      },
+      collection.fetchedAt,
+    );
+
     const scan = collection.scan;
     let scanId: number | null = null;
     if (scan) {
@@ -130,10 +149,85 @@ export class FundFlowIngestionService {
       status: scan?.status ?? 'unavailable',
       statusReason: scan?.statusReason ?? collection.failure,
       failure: collection.failure,
+      labelsStored,
+      classified,
       native: { found: nativeRows.length, inserted: nativeInserted },
       tokens: { found: tokenRows.length, inserted: tokensInserted },
       runs,
     };
+  }
+
+  /** Id transfer native dalam koleksi ini, termasuk yang sudah tersimpan sebelumnya. */
+  private async nativeIdsOf(chainId: string, rows: Array<{ txHash: string; kind: string; tracePath: string }>): Promise<number[]> {
+    const wanted = new Set(rows.map((row) => `${row.txHash}|${row.kind}|${row.tracePath}`));
+    const ids: number[] = [];
+    for (const chunk of chunks([...new Set(rows.map((row) => row.txHash))])) {
+      const found = await this.db
+        .select({ id: nativeTransfers.id, txHash: nativeTransfers.txHash, kind: nativeTransfers.kind, tracePath: nativeTransfers.tracePath })
+        .from(nativeTransfers)
+        .where(and(eq(nativeTransfers.chainId, chainId), inArray(nativeTransfers.txHash, chunk)));
+      for (const row of found) if (wanted.has(`${row.txHash}|${row.kind}|${row.tracePath}`)) ids.push(row.id);
+    }
+    return ids;
+  }
+
+  private async tokenIdsOf(chainId: string, rows: Array<{ txHash: string; logIndex: number }>): Promise<number[]> {
+    const wanted = new Set(rows.map((row) => `${row.txHash}|${row.logIndex}`));
+    const ids: number[] = [];
+    for (const chunk of chunks([...new Set(rows.map((row) => row.txHash))])) {
+      const found = await this.db
+        .select({ id: tokenTransfers.id, txHash: tokenTransfers.txHash, logIndex: tokenTransfers.logIndex })
+        .from(tokenTransfers)
+        .where(and(eq(tokenTransfers.chainId, chainId), inArray(tokenTransfers.txHash, chunk)));
+      for (const row of found) if (wanted.has(`${row.txHash}|${row.logIndex}`)) ids.push(row.id);
+    }
+    return ids;
+  }
+
+  /**
+   * Label eksternal pihak transfer dari indexer (mis. tag Blockscout), dengan
+   * sumber dan run provider-nya. Label yang sama dari sumber yang sama diganti.
+   */
+  private async upsertPartyLabels(
+    collection: AddressFlowCollection,
+    runs: StoredRun[],
+    normalize: (address: string) => string,
+    idOf: (address: string) => number | undefined,
+  ): Promise<number> {
+    const runIdByKey = new Map(collection.runs.map((run, index) => [run.key, runs[index]?.id ?? null]));
+    const providerByKey = new Map(collection.runs.map((run) => [run.key, run.provider]));
+    const seen = new Set<string>();
+    const rows = collection.partyLabels.flatMap((entry) => {
+      const addressId = idOf(entry.address);
+      if (addressId === undefined) return [];
+      const provider = providerByKey.get(entry.runKey) ?? 'indexer';
+      const sourceName = provider.charAt(0).toUpperCase() + provider.slice(1);
+      return entry.labels.flatMap((label) => {
+        const key = `${normalize(entry.address)}|${label.type}|${sourceName}`;
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [
+          {
+            addressId,
+            labelType: label.type,
+            name: label.name,
+            source: 'external' as const,
+            sourceName,
+            classification: 'external_label' as const,
+            providerRunId: runIdByKey.get(entry.runKey) ?? null,
+          },
+        ];
+      });
+    });
+    if (rows.length === 0) return 0;
+    await this.db
+      .insert(labels)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: [labels.addressId, labels.labelType, labels.sourceName],
+        set: { name: sql`excluded.name`, providerRunId: sql`excluded.provider_run_id` },
+      });
+    return rows.length;
   }
 
   /**

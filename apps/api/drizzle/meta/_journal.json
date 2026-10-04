@@ -36,6 +36,13 @@
       "when": 1791076955697,
       "tag": "0004_flow_transfers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791079103300,
+      "tag": "0005_movement_classifications",
+      "breakpoints": true
     }
   ]
 }

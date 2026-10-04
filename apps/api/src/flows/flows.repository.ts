@@ -9,6 +9,7 @@ import {
   chains,
   evidence,
   labels,
+  movementClassifications,
   providerRuns,
   tokens,
   transactions,
@@ -60,6 +61,8 @@ type Raw = Record<string, unknown>;
 /** Transfer keluar sebagai calon langkah jalur, beserta detail untuk respons. */
 export interface TraceEdgeRow extends TraceEdge {
   source: 'native' | 'internal' | 'token';
+  /** Id baris di tabel transfer (native untuk `native`/`internal`). */
+  id: number;
   txHash: string;
   amountRaw: string;
   amountUsd: string | null;
@@ -290,6 +293,7 @@ export class FlowsRepository {
       select * from ranked where rn <= ${perAddress} order by block_number, source, id`);
     return rows.map((row) => ({
       key: `${String(row.source)}:${String(row.id)}`,
+      id: Number(row.id),
       source: row.source === 'token' ? 'token' : row.source === 'internal' ? 'internal' : 'native',
       fromId: Number(row.from_address_id),
       toId: Number(row.to_address_id),
@@ -423,6 +427,25 @@ export class FlowsRepository {
   async providerRunsByIds(runIds: number[]) {
     if (runIds.length === 0) return [];
     return this.db.select().from(providerRuns).where(inArray(providerRuns.id, runIds)).orderBy(asc(providerRuns.id));
+  }
+
+  /**
+   * Jenis perpindahan yang tersimpan, dikunci `native:<id>` atau `token:<id>`
+   * (transfer internal tersimpan sebagai native).
+   */
+  async movementTypesFor(refs: ReadonlyArray<{ source: 'native' | 'internal' | 'token'; id: number }>) {
+    const result = new Map<string, typeof movementClassifications.$inferSelect>();
+    const nativeIds = refs.filter((ref) => ref.source !== 'token').map((ref) => ref.id);
+    const tokenIds = refs.filter((ref) => ref.source === 'token').map((ref) => ref.id);
+    if (nativeIds.length > 0) {
+      const rows = await this.db.select().from(movementClassifications).where(inArray(movementClassifications.nativeTransferId, nativeIds));
+      for (const row of rows) result.set(`native:${row.nativeTransferId}`, row);
+    }
+    if (tokenIds.length > 0) {
+      const rows = await this.db.select().from(movementClassifications).where(inArray(movementClassifications.tokenTransferId, tokenIds));
+      for (const row of rows) result.set(`token:${row.tokenTransferId}`, row);
+    }
+    return result;
   }
 
   /** Id address yang berlabel hub. */

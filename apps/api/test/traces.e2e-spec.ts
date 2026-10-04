@@ -73,6 +73,7 @@ function scanOf(address: string, nativeTransfers: IndexedNativeTransfer[], token
       statusReason: null,
       missingFields: [],
     },
+    partyLabels: [],
     failure: null,
   };
 }

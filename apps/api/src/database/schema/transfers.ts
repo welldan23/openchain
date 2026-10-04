@@ -4,6 +4,7 @@ import {
   check,
   foreignKey,
   index,
+  numeric,
   pgTable,
   text,
   unique,
@@ -16,8 +17,9 @@ import {
   timestampTz,
   usdAmount,
 } from './columns.js';
-import { dataStatus, nativeTransferKind } from './enums.js';
-import { addresses, chains, providerRuns } from './reference.js';
+import { dataStatus, infoClassification, movementType, nativeTransferKind } from './enums.js';
+import { addresses, chains, labels, providerRuns } from './reference.js';
+import { tokenTransfers } from './activity.js';
 
 /**
  * Perpindahan native coin (ETH, SOL, ...) untuk Lacak Aliran Dana. Transfer
@@ -150,6 +152,59 @@ export const addressFlowScans = pgTable(
     check(
       'address_flow_scans_partial_is_explained',
       sql`${t.status} <> 'partial' or ${t.statusReason} is not null or cardinality(${t.missingFields}) > 0`,
+    ),
+  ],
+);
+
+/**
+ * Jenis tiap perpindahan dana (mis. setoran ke exchange) beserta klasifikasi
+ * informasinya. Disimpan terpisah dari transfer: transfernya fakta on-chain,
+ * sedangkan jenisnya tafsiran yang bisa dihitung ulang saat label berubah.
+ * Tepat satu dari `native_transfer_id` dan `token_transfer_id` terisi.
+ */
+export const movementClassifications = pgTable(
+  'movement_classifications',
+  {
+    id: idColumn(),
+    nativeTransferId: refId('native_transfer_id').references(() => nativeTransfers.id, { onDelete: 'cascade' }),
+    tokenTransferId: refId('token_transfer_id').references(() => tokenTransfers.id, { onDelete: 'cascade' }),
+    movementType: movementType('movement_type').notNull(),
+    /**
+     * `verified_fact` untuk transfer biasa dan mint/burn (address nol);
+     * selebihnya mengikuti sumber label yang dipakai.
+     */
+    classification: infoClassification('classification').notNull(),
+    /** Alasan dalam bahasa sederhana, mis. "Penerima berlabel exchange (Blockscout)". */
+    basis: text('basis').notNull(),
+    /** Label yang menjadi dasar; kosong untuk transfer biasa dan mint/burn. */
+    labelId: refId('label_id').references(() => labels.id, { onDelete: 'set null' }),
+    /** 0–1; wajib untuk tafsiran heuristic. */
+    confidence: numeric('confidence', { precision: 4, scale: 3 }),
+    classifiedAt: timestampTz('classified_at').notNull(),
+  },
+  (t) => [
+    unique('movement_classifications_native_unique').on(t.nativeTransferId),
+    unique('movement_classifications_token_unique').on(t.tokenTransferId),
+    check(
+      'movement_classifications_one_transfer',
+      sql`(${t.nativeTransferId} is null) <> (${t.tokenTransferId} is null)`,
+    ),
+    check(
+      'movement_classifications_allowed_classification',
+      sql`${t.classification} in ('verified_fact', 'external_label', 'heuristic', 'assumption')`,
+    ),
+    // Transfer biasa dan mint/burn adalah fakta; jenis lain lahir dari label, jadi bukan fakta.
+    check(
+      'movement_classifications_fact_types',
+      sql`(${t.movementType} in ('transfer', 'mint', 'burn')) = (${t.classification} = 'verified_fact')`,
+    ),
+    check(
+      'movement_classifications_heuristic_has_confidence',
+      sql`${t.classification} <> 'heuristic' or ${t.confidence} is not null`,
+    ),
+    check(
+      'movement_classifications_confidence_range',
+      sql`${t.confidence} is null or (${t.confidence} >= 0 and ${t.confidence} <= 1)`,
     ),
   ],
 );

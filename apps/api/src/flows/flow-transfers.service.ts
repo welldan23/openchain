@@ -3,7 +3,7 @@ import { formatUnits, numericToNumber } from '../common/units.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { SnapshotFreshness } from '../tokens/snapshot-freshness.js';
 import { FlowLookupService, type FlowQuery } from './flow-lookup.service.js';
-import { nativeAssetOf, toChainInfo, toFailedAttempt, toScanInfo, toWindowView } from './flow-summary.mapper.js';
+import { movementKey, nativeAssetOf, toChainInfo, toFailedAttempt, toMovementType, toScanInfo, toWindowView } from './flow-summary.mapper.js';
 import type { FlowAsset } from './flow-summary.types.js';
 import type { FlowTransfersResponse, FlowTransferView } from './flow-transfers.types.js';
 import { FlowsRepository, type TransferCursor } from './flows.repository.js';
@@ -60,10 +60,11 @@ export class FlowTransfersService {
         : [];
     const page = rows.slice(0, limit);
     const counterpartyIds = [...new Set(page.map((row) => (row.fromId === address.id ? row.toId : row.fromId)))];
-    const [addressById, labelsById, tokensById] = await Promise.all([
+    const [addressById, labelsById, tokensById, movements] = await Promise.all([
       this.repository.addressesByIds(counterpartyIds),
       this.repository.labelsByAddressIds(counterpartyIds),
       this.repository.tokensByIds([...new Set(page.flatMap((row) => (row.tokenId === null ? [] : [row.tokenId])))]),
+      this.repository.movementTypesFor(page),
     ]);
     const nativeAsset = nativeAssetOf(chain);
 
@@ -90,6 +91,7 @@ export class FlowTransfersService {
         blockNumber: row.blockNumber,
         timestamp: row.timestamp.toISOString(),
         classification: 'verified_fact',
+        movement: toMovementType(movements.get(movementKey(row.source, row.id))),
       };
     });
     const last = page.at(-1);

@@ -6,7 +6,7 @@
  */
 import type { DataStatus } from '../database/schema/enums.js';
 import type { EvidenceView } from '../tokens/evidence.view.js';
-import type { FlowAsset, FlowChainInfo, FlowLabelView } from './flow-summary.types.js';
+import type { FlowAsset, FlowChainInfo, FlowLabelView, MovementTypeView } from './flow-summary.types.js';
 
 export interface TxParty {
   address: string;
@@ -25,6 +25,8 @@ export interface TxMovementView {
   amount: string | null;
   amountUsd: number | null;
   classification: 'verified_fact';
+  /** Jenis perpindahan dan dasarnya; `null` bila belum diklasifikasikan. */
+  movement: MovementTypeView | null;
 }
 
 export interface TransactionEvidenceResponse {

@@ -76,6 +76,7 @@ function collection(): AddressFlowCollection {
       statusReason: null,
       missingFields: [],
     },
+    partyLabels: [],
     failure: null,
   };
 }

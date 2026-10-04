@@ -107,6 +107,20 @@ function cursorOf(raw: unknown): PageCursor | null {
 
 const noneSkipped = (): SkippedCounts => ({ pending: 0, failed: 0, zeroValue: 0 });
 
+/** Label dari tag metadata pihak-pihak transfer (from, to, kontrak baru), per address. */
+function partyLabelsOf(items: RawRecord[]): Record<string, ExternalLabel[]> {
+  const result: Record<string, ExternalLabel[]> = {};
+  for (const item of items) {
+    for (const party of [item.from, item.to, item.created_contract]) {
+      if (!isRecord(party)) continue;
+      const hash = text(party.hash);
+      const found = labelsFromBlockscoutTags(isRecord(party.metadata) ? party.metadata.tags : null);
+      if (hash && found.length > 0 && !result[hash]) result[hash] = found;
+    }
+  }
+  return result;
+}
+
 type Seen = { blockNumber: number; timestamp: Date } | null;
 
 function older(current: Seen, blockNumber: number, timestamp: Date | null): Seen {
@@ -212,7 +226,7 @@ export class BlockscoutProvider implements ExplorerProvider, IndexedDataProvider
       }
       items.push({ txHash, kind: 'transaction', tracePath: '', from, to, amountRaw, blockNumber, timestamp });
     }
-    return { items, next: page.next, skipped, oldestSeen };
+    return { items, next: page.next, skipped, oldestSeen, partyLabels: partyLabelsOf(page.items) };
   }
 
   /** Panggilan internal yang memindahkan native coin dan berhasil. */
@@ -246,7 +260,7 @@ export class BlockscoutProvider implements ExplorerProvider, IndexedDataProvider
       }
       items.push({ txHash, kind: 'internal', tracePath: String(index), from, to, amountRaw, blockNumber, timestamp });
     }
-    return { items, next: page.next, skipped, oldestSeen };
+    return { items, next: page.next, skipped, oldestSeen, partyLabels: partyLabelsOf(page.items) };
   }
 
   /** Transfer token ERC-20 dari/ke address. */
@@ -283,7 +297,7 @@ export class BlockscoutProvider implements ExplorerProvider, IndexedDataProvider
         timestamp,
       };
     });
-    return { items, next: page.next };
+    return { items, next: page.next, partyLabels: partyLabelsOf(page.items) };
   }
 
   /** Satu halaman daftar; address yang belum dikenal indexer berarti daftar kosong. */

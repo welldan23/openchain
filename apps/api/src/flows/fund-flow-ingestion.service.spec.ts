@@ -1,10 +1,11 @@
 import type { PGlite } from '@electric-sql/pglite';
-import { asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq } from 'drizzle-orm';
 import { createTestDatabase, type TestDatabase } from '../../test/support/database.js';
 import type { Database } from '../database/database.module.js';
 import * as schema from '../database/schema/index.js';
 import type { IndexedNativeTransfer, IndexedTokenTransfer, ProviderRunRecord } from '../providers/provider.types.js';
 import { FundFlowIngestionService } from './fund-flow-ingestion.service.js';
+import { MovementClassificationService } from './movement-classification.service.js';
 import type { AddressFlowCollection, FlowScan, KindCoverage } from './fund-flow.types.js';
 
 const SUBJECT = '0xAbCdEf0123456789aBcDeF0123456789AbCdEf01';
@@ -77,6 +78,7 @@ function collection(overrides: Partial<AddressFlowCollection> = {}): AddressFlow
     tokenTransfers: [tokenOf(1), tokenOf(2, { from: OTHER, to: SUBJECT })],
     coverage: { native: covered, internal: covered, tokens: covered },
     scan: completeScan,
+    partyLabels: [],
     failure: null,
     ...overrides,
   };
@@ -152,6 +154,57 @@ describe('FundFlowIngestionService', () => {
     );
     const [token] = await db.select().from(schema.tokens);
     expect(token).toMatchObject({ symbol: 'TKN', decimals: 18, name: 'Nama Baru' });
+  });
+
+  it('menyimpan label eksternal pihak transfer dan mengklasifikasikan setiap perpindahan', async () => {
+    const exchange = '0x' + '3e'.repeat(20);
+    const result = await service.persist(
+      collection({
+        chainId: 'base',
+        nativeTransfers: [nativeOf('c1', { from: SUBJECT, to: exchange }), nativeOf('c2', { from: OTHER, to: SUBJECT })],
+        tokenTransfers: [],
+        partyLabels: [{ address: exchange, labels: [{ type: 'exchange', name: 'Hot wallet exchange' }], runKey: 'address.native_transfers' }],
+      }),
+      'evm',
+    );
+    expect(result).toMatchObject({ labelsStored: 1, classified: 2 });
+    const rows = await db
+      .select({ txHash: schema.nativeTransfers.txHash, type: schema.movementClassifications.movementType, classification: schema.movementClassifications.classification, basis: schema.movementClassifications.basis })
+      .from(schema.movementClassifications)
+      .innerJoin(schema.nativeTransfers, eq(schema.nativeTransfers.id, schema.movementClassifications.nativeTransferId))
+      .where(eq(schema.nativeTransfers.chainId, 'base'))
+      .orderBy(asc(schema.nativeTransfers.txHash));
+    expect(rows).toEqual([
+      { txHash: `0x${'c1'.repeat(32)}`, type: 'exchange_deposit', classification: 'external_label', basis: 'Penerima berlabel exchange: Hot wallet exchange (Blockscout).' },
+      { txHash: `0x${'c2'.repeat(32)}`, type: 'transfer', classification: 'verified_fact', basis: 'Transfer langsung antar address tanpa label khusus.' },
+    ]);
+    const [label] = await db.select().from(schema.labels).where(eq(schema.labels.labelType, 'exchange'));
+    expect(label).toMatchObject({ source: 'external', sourceName: 'Blockscout', classification: 'external_label', name: 'Hot wallet exchange' });
+    expect(label.providerRunId).toBe(result.runs.find((run) => run.operation === 'address.native_transfers')?.id);
+  });
+
+  it('klasifikasi bisa diulang setelah label baru masuk, tanpa menyentuh transfernya', async () => {
+    const [other] = await db
+      .select()
+      .from(schema.addresses)
+      .where(and(eq(schema.addresses.chainId, 'base'), eq(schema.addresses.addressNormalized, OTHER)));
+    await db.insert(schema.labels).values({
+      addressId: other.id,
+      labelType: 'bridge',
+      name: null,
+      source: 'heuristic',
+      sourceName: 'OpenChain heuristic',
+      classification: 'heuristic',
+      confidence: '0.700',
+    });
+    const reclassified = await new MovementClassificationService(db as unknown as Database).reclassifyAddress('base', other.id, FETCHED_AT);
+    expect(reclassified).toBe(1);
+    const [row] = await db
+      .select({ type: schema.movementClassifications.movementType, classification: schema.movementClassifications.classification, confidence: schema.movementClassifications.confidence })
+      .from(schema.movementClassifications)
+      .innerJoin(schema.nativeTransfers, eq(schema.nativeTransfers.id, schema.movementClassifications.nativeTransferId))
+      .where(eq(schema.nativeTransfers.txHash, `0x${'c2'.repeat(32)}`));
+    expect(row).toEqual({ type: 'bridge_in', classification: 'heuristic', confidence: '0.700' });
   });
 
   it('chain tanpa sumber data: hanya run dan cakupan "tidak tersedia" yang disimpan', async () => {

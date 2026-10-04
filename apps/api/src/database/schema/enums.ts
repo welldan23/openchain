@@ -122,6 +122,21 @@ export const nativeTransferKind = pgEnum('native_transfer_kind', [
   'internal',
 ]);
 
+/**
+ * Jenis perpindahan dana menurut pihak yang terlibat. `transfer` = tidak ada
+ * petunjuk khusus; jenis lain didasarkan pada address nol atau label pihaknya.
+ */
+export const movementType = pgEnum('movement_type', [
+  'transfer',
+  'mint',
+  'burn',
+  'exchange_deposit',
+  'exchange_withdrawal',
+  'bridge_out',
+  'bridge_in',
+  'dex_interaction',
+]);
+
 export type ChainFamily = (typeof chainFamily.enumValues)[number];
 export type DataStatus = (typeof dataStatus.enumValues)[number];
 export type InfoClassification = (typeof infoClassification.enumValues)[number];
@@ -130,3 +145,4 @@ export type EntityLabelType = (typeof entityLabelType.enumValues)[number];
 export type CheckStatus = (typeof checkStatus.enumValues)[number];
 export type ChainSupportStatus = (typeof chainSupportStatus.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
+export type MovementType = (typeof movementType.enumValues)[number];

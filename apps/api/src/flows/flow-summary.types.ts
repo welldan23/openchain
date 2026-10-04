@@ -5,7 +5,7 @@
  * diketahui bernilai `null`, bukan nol: address yang belum pernah dipindai
  * tidak sama dengan address tanpa transfer.
  */
-import type { DataStatus, InfoClassification } from '../database/schema/enums.js';
+import type { DataStatus, InfoClassification, MovementType } from '../database/schema/enums.js';
 import type { HolderLabelView } from '../tokens/holders.types.js';
 
 export interface FlowChainInfo {
@@ -49,6 +49,18 @@ export interface FlowWindowView {
   to: string;
   clipped: boolean;
   preset: '24h' | '7d' | '30d' | 'all' | null;
+}
+
+/**
+ * Jenis perpindahan (mis. setoran exchange) dan klasifikasi informasinya.
+ * `null` di respons berarti belum diklasifikasikan, bukan transfer biasa.
+ */
+export interface MovementTypeView {
+  type: MovementType;
+  classification: InfoClassification;
+  /** Alasan dalam bahasa sederhana. */
+  basis: string;
+  confidence: number | null;
 }
 
 export type FlowAsset =

@@ -3,7 +3,7 @@ import { formatUnits, numericToNumber } from '../common/units.js';
 import { InvalidIdentifierError, normalizeTxHash } from '../database/identifiers.js';
 import { explorerEvidenceUrl, toEvidenceView } from '../tokens/evidence.view.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
-import { nativeAssetOf, toChainInfo } from './flow-summary.mapper.js';
+import { movementKey, nativeAssetOf, toChainInfo, toMovementType } from './flow-summary.mapper.js';
 import type { FlowAsset } from './flow-summary.types.js';
 import { FlowsRepository } from './flows.repository.js';
 import type { TransactionEvidenceResponse, TxParty } from './transaction-evidence.types.js';
@@ -38,11 +38,12 @@ export class TransactionEvidenceService {
     }
 
     const partyIds = [...new Set(movements.flatMap((move) => [move.fromId, move.toId]))];
-    const [addressById, labelsById, tokensById, runs] = await Promise.all([
+    const [addressById, labelsById, tokensById, runs, movementTypes] = await Promise.all([
       this.repository.addressesByIds(partyIds),
       this.repository.labelsByAddressIds(partyIds),
       this.repository.tokensByIds([...new Set(movements.flatMap((move) => (move.tokenId === null ? [] : [move.tokenId])))]),
       this.repository.providerRunsByIds([...new Set(movements.flatMap((move) => (move.providerRunId === null ? [] : [move.providerRunId])))]),
+      this.repository.movementTypesFor(movements),
     ]);
     const party = (id: number): TxParty => ({
       address: addressById.get(id) ?? '',
@@ -77,6 +78,7 @@ export class TransactionEvidenceService {
           amount: asset.decimals === null ? null : formatUnits(move.amountRaw, asset.decimals),
           amountUsd: numericToNumber(move.amountUsd),
           classification: 'verified_fact' as const,
+          movement: toMovementType(movementTypes.get(movementKey(move.source, move.id))),
         };
       }),
       claims: claims.map((record) => toEvidenceView(record, chain)),

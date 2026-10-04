@@ -173,7 +173,7 @@ describe('BlockscoutProvider: riwayat transfer address', () => {
     const { fake, blockscout } = setup(instance, jsonResponse({ items: [], next_page_params: null }));
     const page = await blockscout.getNativeTransfers(ADDRESS, { block_number: '26114702', index: '22' });
     expect(fake.requests[0].url).toBe(`https://eth.blockscout.com/api/v2/addresses/${ADDRESS}/transactions?block_number=26114702&index=22`);
-    expect(page).toEqual({ items: [], next: null, skipped: { pending: 0, failed: 0, zeroValue: 0 }, oldestSeen: null });
+    expect(page).toEqual({ items: [], next: null, skipped: { pending: 0, failed: 0, zeroValue: 0 }, oldestSeen: null, partyLabels: {} });
   });
 
   it('mengambil panggilan internal yang memindahkan nilai, dengan posisi trace-nya', async () => {
@@ -251,9 +251,35 @@ describe('BlockscoutProvider: riwayat transfer address', () => {
     expect(page.next).toEqual({ index: '1039', block_number: '26115589' });
   });
 
+  it('mengambil label eksternal pihak transfer dari tag metadata', async () => {
+    const pool = '0x' + 'b0'.repeat(20);
+    const { blockscout } = setup(
+      instance,
+      jsonResponse({
+        items: [
+          tx({
+            from: party('0x' + 'aa'.repeat(20)),
+            to: {
+              hash: pool,
+              metadata: {
+                tags: [
+                  { tagType: 'name', name: 'Uniswap V2: CCP 26', slug: 'uniswap-v2-ccp-26' },
+                  { tagType: 'generic', name: 'Liquidity Pool', slug: 'liquidity-pool' },
+                ],
+              },
+            },
+          }),
+        ],
+        next_page_params: null,
+      }),
+    );
+    const page = await blockscout.getNativeTransfers(ADDRESS, null);
+    expect(page.partyLabels).toEqual({ [pool]: [{ type: 'liquidity_pool', name: 'Uniswap V2: CCP 26' }] });
+  });
+
   it('address yang belum dikenal indexer berarti riwayat kosong, bukan error', async () => {
     const { blockscout } = setup(instance, new Response('{"message":"Not found"}', { status: 404 }));
-    await expect(blockscout.getTokenTransfers(ADDRESS, null)).resolves.toEqual({ items: [], next: null });
+    await expect(blockscout.getTokenTransfers(ADDRESS, null)).resolves.toEqual({ items: [], next: null, partyLabels: {} });
   });
 
   it('format yang tidak dikenali ditolak, tidak ditebak', async () => {

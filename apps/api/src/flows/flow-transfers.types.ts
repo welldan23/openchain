@@ -3,7 +3,15 @@
  * address dalam rentang yang dipilih, terbaru dulu, per halaman.
  */
 import type { DataStatus } from '../database/schema/enums.js';
-import type { FlowAsset, FlowChainInfo, FlowFailedAttempt, FlowLabelView, FlowScanInfo, FlowWindowView } from './flow-summary.types.js';
+import type {
+  FlowAsset,
+  FlowChainInfo,
+  FlowFailedAttempt,
+  FlowLabelView,
+  FlowScanInfo,
+  FlowWindowView,
+  MovementTypeView,
+} from './flow-summary.types.js';
 
 export interface FlowTransferView {
   /** Kunci stabil transfer, mis. `token:42`. */
@@ -20,7 +28,10 @@ export interface FlowTransferView {
   txHash: string;
   blockNumber: number;
   timestamp: string;
+  /** Perpindahannya sendiri adalah fakta on-chain. */
   classification: 'verified_fact';
+  /** Jenis perpindahan dan dasarnya; `null` bila belum diklasifikasikan. */
+  movement: MovementTypeView | null;
 }
 
 export interface FlowTransfersResponse {

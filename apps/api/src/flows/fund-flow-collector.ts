@@ -16,6 +16,7 @@ import {
   ProviderError,
   type ActivityPage,
   type AddressActivityProvider,
+  type ExternalLabel,
   type IndexedNativeTransfer,
   type IndexedTokenTransfer,
   type PageCursor,
@@ -60,6 +61,8 @@ function addSkipped(total: SkippedCounts, more: SkippedCounts): void {
 
 type Fetcher<T> = (cursor: PageCursor | null) => Promise<ActivityPage<T> & { skipped?: SkippedCounts }>;
 
+type CollectedLabels = Map<string, { labels: ExternalLabel[]; runKey: string }>;
+
 export class FundFlowCollector {
   private readonly maxPages: number;
   private readonly concurrency: number;
@@ -88,18 +91,19 @@ export class FundFlowCollector {
     normalizeAddress(sources.family, address);
     const fetchedAt = this.clock.now();
     const runs: ProviderRunRecord[] = [];
+    const partyLabels: CollectedLabels = new Map();
 
     const head = await this.readHead(chainId, sources.rpc, runs);
     const activity = sources.activity;
     const noIndexer = 'Belum ada indexer riwayat address untuk chain ini';
     const native = activity
-      ? await this.readAll('native', activity.name, address, (cursor) => activity.getNativeTransfers(address, cursor), runs)
+      ? await this.readAll('native', activity.name, address, (cursor) => activity.getNativeTransfers(address, cursor), runs, partyLabels)
       : this.missing(noIndexer);
     const internal = activity
-      ? await this.readAll('internal', activity.name, address, (cursor) => activity.getInternalTransfers(address, cursor), runs)
+      ? await this.readAll('internal', activity.name, address, (cursor) => activity.getInternalTransfers(address, cursor), runs, partyLabels)
       : this.missing(noIndexer);
     const tokens = activity
-      ? await this.readAll('tokens', activity.name, address, (cursor) => activity.getTokenTransfers(address, cursor), runs)
+      ? await this.readAll('tokens', activity.name, address, (cursor) => activity.getTokenTransfers(address, cursor), runs, partyLabels)
       : this.missing(noIndexer);
 
     const coverage = { native: native.coverage, internal: internal.coverage, tokens: tokens.coverage };
@@ -118,6 +122,7 @@ export class FundFlowCollector {
       coverage,
       scan,
       failure: allFailed ? (activity ? 'Semua sumber riwayat transfer gagal dibaca' : noIndexer) : null,
+      partyLabels: [...partyLabels].map(([labelAddress, entry]) => ({ address: labelAddress, ...entry })),
     };
   }
 
@@ -142,6 +147,7 @@ export class FundFlowCollector {
     address: string,
     fetchPage: Fetcher<T>,
     runs: ProviderRunRecord[],
+    partyLabels: CollectedLabels,
   ): Promise<{ items: T[]; coverage: KindCoverage }> {
     const startedAt = this.clock.now();
     const items: T[] = [];
@@ -150,6 +156,8 @@ export class FundFlowCollector {
     let pages = 0;
     let exhausted = false;
     let oldestSeen: KindCoverage['oldest'] = null;
+    const pageLabels: CollectedLabels = new Map();
+    const runKey = `${OPERATION[kind]}:${address}`;
     try {
       while (pages < this.maxPages) {
         const page = await fetchPage(cursor);
@@ -157,6 +165,9 @@ export class FundFlowCollector {
         items.push(...page.items);
         if (page.skipped) addSkipped(skipped, page.skipped);
         if (page.oldestSeen && (!oldestSeen || page.oldestSeen.blockNumber < oldestSeen.blockNumber)) oldestSeen = page.oldestSeen;
+        for (const [labelAddress, labels] of Object.entries(page.partyLabels ?? {})) {
+          if (!pageLabels.has(labelAddress)) pageLabels.set(labelAddress, { labels, runKey });
+        }
         cursor = page.next;
         if (!cursor) {
           exhausted = true;
@@ -168,6 +179,8 @@ export class FundFlowCollector {
       runs.push(this.run(provider, 'indexed_data', OPERATION[kind], address, startedAt, reasonOf(error)));
       return { items: [], coverage: this.missing(reasonOf(error)).coverage };
     }
+    // Label hanya dipakai bila pengambilan jenis ini berhasil sampai akhir.
+    for (const [labelAddress, entry] of pageLabels) if (!partyLabels.has(labelAddress)) partyLabels.set(labelAddress, entry);
     // Termasuk item yang dilewati: blok itu sudah terbaca walau tanpa transfer.
     const oldest = items.reduce<KindCoverage['oldest']>(
       (current, item) =>

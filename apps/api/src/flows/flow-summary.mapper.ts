@@ -1,6 +1,6 @@
 import { formatUnits, numericToNumber } from '../common/units.js';
 import type { ChainFamily } from '../database/schema/enums.js';
-import type { labels } from '../database/schema/index.js';
+import type { labels, movementClassifications } from '../database/schema/index.js';
 import { effectiveStatus } from '../tokens/token-summary.mapper.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import type {
@@ -13,12 +13,14 @@ import type {
   FlowSummaryResponse,
   FlowTotals,
   FlowWindowView,
+  MovementTypeView,
 } from './flow-summary.types.js';
 import type { ResolvedWindow } from './flow-range.js';
 import type { FlowAggregates, ScanRow, SideRow } from './flows.repository.js';
 
 /** Desimal native coin per keluarga chain; `null` bila belum diketahui. */
 type LabelRow = typeof labels.$inferSelect;
+type MovementClassificationRow = typeof movementClassifications.$inferSelect;
 
 const NATIVE_DECIMALS: Partial<Record<ChainFamily, number>> = { evm: 18, solana: 9 };
 
@@ -104,6 +106,18 @@ function totalsOf(assets: FlowAssetSummary[], aggregates: FlowAggregates): FlowT
       classification: 'derived_metric',
     },
   };
+}
+
+/** Klasifikasi tersimpan sebagai tampilan; `null` bila belum diklasifikasikan. */
+export function toMovementType(row: MovementClassificationRow | undefined): MovementTypeView | null {
+  return row
+    ? { type: row.movementType, classification: row.classification, basis: row.basis, confidence: numericToNumber(row.confidence) }
+    : null;
+}
+
+/** Kunci klasifikasi untuk transfer: internal tersimpan di tabel native. */
+export function movementKey(source: 'native' | 'internal' | 'token', id: number): string {
+  return `${source === 'token' ? 'token' : 'native'}:${id}`;
 }
 
 export function toChainInfo(chain: FlowSummaryRows['chain']): FlowChainInfo {
