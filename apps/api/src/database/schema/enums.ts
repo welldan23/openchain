@@ -211,6 +211,28 @@ export const coordinationKind = pgEnum('coordination_kind', ['funding_burst', 's
 /** Aksi transaksi pendukung temuan koordinasi. */
 export const coordinationAction = pgEnum('coordination_action', ['funding', 'buy', 'sell', 'add_liquidity', 'transfer']);
 
+/** Objek yang dinilai risikonya. */
+export const riskObjectKind = pgEnum('risk_object_kind', ['token', 'wallet', 'contract']);
+
+/** Ciri berbahaya yang dipantau; sama dengan daftar di frontend. */
+export const dangerTrait = pgEnum('danger_trait', [
+  'tax_change',
+  'mint_active',
+  'sell_blocked',
+  'blacklist',
+  'upgradeable',
+  'liquidity_unlocked',
+  'liquidity_pulled',
+  'holder_concentration',
+  'bundled_launch',
+  'fresh_wallet_funding',
+  'exchange_cashout',
+  'bridge_hop',
+]);
+
+/** `clear` sudah dicek dan tidak ditemukan; `unknown` belum bisa dicek, bukan berarti aman. */
+export const dangerTraitStatus = pgEnum('danger_trait_status', ['detected', 'clear', 'unknown']);
+
 export type ChainFamily = (typeof chainFamily.enumValues)[number];
 export type DataStatus = (typeof dataStatus.enumValues)[number];
 export type InfoClassification = (typeof infoClassification.enumValues)[number];
@@ -236,3 +258,7 @@ export type ClusterLabel = (typeof clusterLabel.enumValues)[number];
 export type ConfidenceLevel = (typeof confidenceLevel.enumValues)[number];
 export type CoordinationKind = (typeof coordinationKind.enumValues)[number];
 export type CoordinationAction = (typeof coordinationAction.enumValues)[number];
+export type RiskSeverity = (typeof riskSeverity.enumValues)[number];
+export type RiskObjectKind = (typeof riskObjectKind.enumValues)[number];
+export type DangerTrait = (typeof dangerTrait.enumValues)[number];
+export type DangerTraitStatus = (typeof dangerTraitStatus.enumValues)[number];

@@ -962,6 +962,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Pencarian | `search_entities` (indeks turunan dari token, address, dan label) |
 | Riwayat dan kasus | `investigations`, `cases`, `case_subjects`, `case_findings`, `case_finding_evidence`, `case_notes`, `case_steps`, `case_snapshot_blocks` |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
+| Penilaian risiko | `risk_assessments` (+ `risk_assessment_sources`), `risk_reasons` (+ `risk_reason_evidence`), `risk_warnings` (+ `risk_warning_evidence`), `risk_trait_checks` |
 
 Aturan PRD yang dijaga langsung oleh database:
 
@@ -1061,3 +1062,14 @@ Aturan PRD yang dijaga langsung oleh database:
   informasi, tidak boleh `unavailable`, dan buktinya hash transaksi per chain
   (`case_finding_evidence`). Subjek dan temuan tidak digandakan dalam satu
   kasus; menghapus kasus menghapus semua isinya.
+- `risk_assessments` menilai satu objek (token, wallet, atau kontrak) pada satu
+  blok dengan versi metode tertentu (unik per objek, blok, dan metode). Skor
+  0–100 kosong bila belum bisa dinilai (tingkat `unknown`), data yang tidak
+  lengkap wajib dijelaskan, dan address harus dari chain yang sama. Alasan
+  (`risk_reasons`) menyimpan poin sumbangannya ke skor; asumsi tidak boleh
+  punya poin, dan alasan bukan `unavailable`. Bukti alasan dan peringatan
+  adalah hash transaksi per chain, opsional ditautkan ke `evidence`.
+- `risk_trait_checks` mencatat ciri berbahaya yang dipantau: `detected` wajib
+  merujuk alasan atau peringatan dari penilaian yang sama (foreign key
+  komposit) atau punya keterangan; `clear` dan `unknown` wajib berketerangan.
+  Menghapus penilaian menghapus semua isinya.

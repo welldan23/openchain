@@ -60,8 +60,15 @@ const EXPECTED_TABLES = [
   'multichain_scans',
   'native_transfers',
   'provider_runs',
+  'risk_assessment_sources',
+  'risk_assessments',
   'risk_finding_evidence',
   'risk_findings',
+  'risk_reason_evidence',
+  'risk_reasons',
+  'risk_trait_checks',
+  'risk_warning_evidence',
+  'risk_warnings',
   'search_entities',
   'token_snapshot_sources',
   'token_snapshots',
@@ -1377,5 +1384,114 @@ describe('riwayat investigasi dan kasus', () => {
       expect(await db.select().from(table)).toEqual([]);
     }
     expect(await db.select().from(schema.caseFindingEvidence)).toEqual([]);
+  });
+});
+
+describe('penilaian risiko objek', () => {
+  let next = 0;
+  async function assessment(overrides: Partial<typeof schema.riskAssessments.$inferInsert> = {}) {
+    next += 1;
+    const address = await insertAddress('ethereum', `0x${'c7'.repeat(19)}${next.toString(16).padStart(2, '0')}`);
+    const base = {
+      chainId: 'ethereum',
+      addressId: address.id,
+      objectKind: 'wallet' as const,
+      methodology: 'openchain-risk-v1',
+      score: 45,
+      level: 'medium' as const,
+      dataStatus: 'complete' as const,
+      blockNumber: 23_512_880,
+      fetchedAt: FETCHED_AT,
+      assessedAt: FETCHED_AT,
+      ...overrides,
+    };
+    return { address, base };
+  }
+
+  it('penilaian: skor 0–100, belum dinilai tanpa skor, data tidak lengkap dijelaskan, satu penilaian per blok dan metode', async () => {
+    const { base } = await assessment();
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values({ ...base, score: 101, level: 'critical' }), 'risk_assessments_score_range');
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values({ ...base, score: null }), 'risk_assessments_unknown_has_no_score');
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values({ ...base, level: 'unknown' }), 'risk_assessments_unknown_has_no_score');
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values({ ...base, dataStatus: 'partial' }), 'risk_assessments_not_complete_is_explained');
+    // Address harus dari chain yang sama dengan penilaiannya.
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values({ ...base, chainId: 'base' }), 'risk_assessments_chain_address_fk');
+    const { snapshot } = await insertTokenWithSnapshot('0x' + 'c9'.repeat(20), 900);
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values({ ...base, tokenSnapshotId: snapshot.id }), 'risk_assessments_token_snapshot_for_token');
+
+    const [unrated] = await db.insert(schema.riskAssessments).values({ ...base, score: null, level: 'unknown', dataStatus: 'unavailable', statusReason: 'Belum ada transfer.' }).returning();
+    expect(unrated).toMatchObject({ score: null, level: 'unknown' });
+    await expectConstraintViolation(db.insert(schema.riskAssessments).values(base), 'risk_assessments_object_block_unique');
+    await db.insert(schema.riskAssessments).values({ ...base, methodology: 'openchain-risk-v2' });
+    await db.delete(schema.riskAssessments);
+  });
+
+  it('alasan: asumsi tidak menambah skor, bukan "tidak tersedia", kode unik, bukti hash unik per alasan', async () => {
+    const { base } = await assessment();
+    const [row] = await db.insert(schema.riskAssessments).values(base).returning();
+    const reason = { assessmentId: row.id, code: 'batch_funding', title: 'Mendanai 5 wallet', description: '9 menit', severity: 'high' as const, classification: 'heuristic' as const, points: 20 };
+    const [saved] = await db.insert(schema.riskReasons).values(reason).returning();
+    await expectConstraintViolation(db.insert(schema.riskReasons).values(reason), 'risk_reasons_assessment_code_unique');
+    await expectConstraintViolation(
+      db.insert(schema.riskReasons).values({ ...reason, code: 'lp_lock', classification: 'assumption', points: 5 }),
+      'risk_reasons_assumption_not_counted',
+    );
+    await db.insert(schema.riskReasons).values({ ...reason, code: 'lp_lock', classification: 'assumption', points: null });
+    await expectConstraintViolation(db.insert(schema.riskReasons).values({ ...reason, code: 'x', classification: 'unavailable' }), 'risk_reasons_classification_is_claim');
+    await expectConstraintViolation(db.insert(schema.riskReasons).values({ ...reason, code: 'y', points: 120 }), 'risk_reasons_points_range');
+
+    await db.insert(schema.riskReasonEvidence).values({ reasonId: saved.id, chainId: 'ethereum', txHash: TX_HASH });
+    await expectConstraintViolation(db.insert(schema.riskReasonEvidence).values({ reasonId: saved.id, chainId: 'ethereum', txHash: TX_HASH }), 'risk_reason_evidence_unique');
+
+    const [warning] = await db
+      .insert(schema.riskWarnings)
+      .values({ assessmentId: row.id, code: 'fresh_wallet', trait: 'fresh_wallet_funding', title: 'Wallet baru', description: '0,25 ETH', severity: 'medium', classification: 'heuristic', detectedAt: FETCHED_AT })
+      .returning();
+    await db.insert(schema.riskWarningEvidence).values({ warningId: warning.id, chainId: 'base', txHash: TX_HASH });
+
+    await db.delete(schema.riskAssessments);
+    for (const table of [schema.riskReasons, schema.riskReasonEvidence, schema.riskWarnings, schema.riskWarningEvidence]) {
+      expect(await db.select().from(table)).toEqual([]);
+    }
+  });
+
+  it('ciri berbahaya: terdeteksi harus berdasar, lainnya berketerangan, dan rujukan dari penilaian yang sama', async () => {
+    const { base } = await assessment();
+    const [first] = await db.insert(schema.riskAssessments).values(base).returning();
+    const [other] = await db.insert(schema.riskAssessments).values({ ...base, blockNumber: base.blockNumber + 1 }).returning();
+    const reasonOf = async (assessmentId: number) =>
+      (
+        await db
+          .insert(schema.riskReasons)
+          .values({ assessmentId, code: 'bridge', title: 'Bridge', description: 'x', severity: 'low', classification: 'derived_metric', points: 8 })
+          .returning()
+      )[0];
+    const own = await reasonOf(first.id);
+    const foreign = await reasonOf(other.id);
+
+    await db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'bridge_hop', status: 'detected', reasonId: own.id });
+    await db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'mint_active', status: 'clear', note: 'Tidak ada fungsi mint.' });
+    await expectConstraintViolation(
+      db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'blacklist', status: 'detected' }),
+      'risk_trait_checks_detected_is_backed',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'sell_blocked', status: 'unknown' }),
+      'risk_trait_checks_other_is_explained',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'upgradeable', status: 'clear', note: 'x', reasonId: own.id }),
+      'risk_trait_checks_reference_only_when_detected',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'exchange_cashout', status: 'detected', reasonId: foreign.id }),
+      'risk_trait_checks_reason_fk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.riskTraitChecks).values({ assessmentId: first.id, trait: 'bridge_hop', status: 'clear', note: 'dobel' }),
+      'risk_trait_checks_assessment_id_trait_pk',
+    );
+    await db.delete(schema.riskAssessments);
+    expect(await db.select().from(schema.riskTraitChecks)).toEqual([]);
   });
 });
