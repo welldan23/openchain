@@ -12,6 +12,10 @@ const SEED_CHAINS_SQL = readFileSync(
   fileURLToPath(new URL('../../drizzle/0001_seed_chains.sql', import.meta.url)),
   'utf8',
 );
+const RISK_BACKFILL_SQL = readFileSync(
+  fileURLToPath(new URL('../../drizzle/0017_risk_assessments_backfill.sql', import.meta.url)),
+  'utf8',
+);
 const ROBINHOOD_EXPLORER_SQL = readFileSync(
   fileURLToPath(new URL('../../drizzle/0003_robinhood_explorer.sql', import.meta.url)),
   'utf8',
@@ -1493,5 +1497,80 @@ describe('penilaian risiko objek', () => {
     );
     await db.delete(schema.riskAssessments);
     expect(await db.select().from(schema.riskTraitChecks)).toEqual([]);
+  });
+});
+
+describe('migrasi salin penilaian risiko token lama', () => {
+  it('menyalin skor, provider, temuan, dan hash bukti; poin tidak dikarang, "tidak tersedia" dilewati, aman diulang', async () => {
+    const { address, snapshot } = await insertTokenWithSnapshot('0x' + 'd1'.repeat(20), 7_000);
+    await db.update(schema.tokenSnapshots).set({ riskScore: 68, riskLevel: 'high', dataStatus: 'partial' }).where(eq(schema.tokenSnapshots.id, snapshot.id));
+    const runs = await db
+      .insert(schema.providerRuns)
+      .values([
+        { provider: 'robinhood-rpc', kind: 'rpc', chainId: 'robinhood', operation: 'token.metadata', status: 'complete', fetchedAt: FETCHED_AT },
+        { provider: 'blockscout', kind: 'explorer', chainId: 'robinhood', operation: 'token.holders', status: 'unavailable', errorReason: 'HTTP 503', fetchedAt: FETCHED_AT },
+      ])
+      .returning();
+    await db.insert(schema.tokenSnapshotSources).values(runs.map((run) => ({ snapshotId: snapshot.id, providerRunId: run.id })));
+    const [tax, lock, missing] = await db
+      .insert(schema.riskFindings)
+      .values([
+        { snapshotId: snapshot.id, code: 'owner_can_change_tax', title: 'Pajak bisa diubah', description: 'Owner aktif', severity: 'high', classification: 'verified_fact' },
+        { snapshotId: snapshot.id, code: 'lp_lock_claim', title: 'Klaim LP terkunci', description: 'Belum ada transaksi', severity: 'medium', classification: 'assumption' },
+        { snapshotId: snapshot.id, code: 'holders_unavailable', title: 'Holder tidak terbaca', description: 'Provider gagal', severity: 'info', classification: 'unavailable' },
+      ])
+      .returning();
+    const [txEvidence, stateEvidence] = await db
+      .insert(schema.evidence)
+      .values([
+        { evidenceKey: buildEvidenceKey({ chainId: 'robinhood', classification: 'verified_fact', txHash: TX_HASH, subject: 'backfill-tax' }), chainId: 'robinhood', classification: 'verified_fact', explanation: 'setTax', txHash: TX_HASH, fetchedAt: FETCHED_AT },
+        { evidenceKey: buildEvidenceKey({ chainId: 'robinhood', classification: 'verified_fact', subject: 'backfill-owner' }), chainId: 'robinhood', classification: 'verified_fact', explanation: 'owner()', blockNumber: 7_000, fetchedAt: FETCHED_AT },
+      ])
+      .returning();
+    await db.insert(schema.riskFindingEvidence).values([
+      { findingId: tax.id, evidenceId: txEvidence.id },
+      { findingId: tax.id, evidenceId: stateEvidence.id },
+      { findingId: missing.id, evidenceId: txEvidence.id },
+    ]);
+
+    const runBackfill = async () => {
+      for (const statement of RISK_BACKFILL_SQL.split('--> statement-breakpoint')) await client.exec(statement);
+    };
+    await runBackfill();
+    await runBackfill();
+
+    const assessments = await db.select().from(schema.riskAssessments).where(eq(schema.riskAssessments.tokenSnapshotId, snapshot.id));
+    expect(assessments).toHaveLength(1);
+    const [assessment] = assessments;
+    expect(assessment).toMatchObject({
+      chainId: 'robinhood',
+      addressId: address.id,
+      objectKind: 'token',
+      methodology: 'token-snapshot-legacy',
+      score: 68,
+      level: 'high',
+      dataStatus: 'partial',
+      statusReason: 'blockscout: HTTP 503',
+      blockNumber: 7_000,
+    });
+    const sources = await db.select().from(schema.riskAssessmentSources).where(eq(schema.riskAssessmentSources.assessmentId, assessment.id));
+    expect(sources.map((row) => row.providerRunId).sort()).toEqual(runs.map((run) => run.id).sort());
+    const reasons = await db.select().from(schema.riskReasons).where(eq(schema.riskReasons.assessmentId, assessment.id)).orderBy(schema.riskReasons.position);
+    expect(reasons.map((row) => [row.code, row.classification, row.points, row.position])).toEqual([
+      ['owner_can_change_tax', 'verified_fact', null, 0],
+      ['lp_lock_claim', 'assumption', null, 1],
+    ]);
+    const evidenceRows = await db.select().from(schema.riskReasonEvidence).where(eq(schema.riskReasonEvidence.reasonId, reasons[0].id));
+    // Bukti tanpa hash transaksi (state di blok) tidak bisa jadi bukti hash.
+    expect(evidenceRows.map((row) => [row.chainId, row.txHash, row.evidenceId])).toEqual([['robinhood', TX_HASH, txEvidence.id]]);
+    expect(lock).toBeDefined();
+    // Data lama tetap utuh.
+    expect(await db.select({ total: count() }).from(schema.riskFindings).where(eq(schema.riskFindings.snapshotId, snapshot.id))).toEqual([{ total: 3 }]);
+  });
+
+  it('snapshot tanpa skor dan tanpa temuan tidak disalin', async () => {
+    const { snapshot } = await insertTokenWithSnapshot('0x' + 'd2'.repeat(20), 7_100);
+    for (const statement of RISK_BACKFILL_SQL.split('--> statement-breakpoint')) await client.exec(statement);
+    expect(await db.select().from(schema.riskAssessments).where(eq(schema.riskAssessments.tokenSnapshotId, snapshot.id))).toEqual([]);
   });
 });

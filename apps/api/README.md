@@ -1073,3 +1073,9 @@ Aturan PRD yang dijaga langsung oleh database:
   merujuk alasan atau peringatan dari penilaian yang sama (foreign key
   komposit) atau punya keterangan; `clear` dan `unknown` wajib berketerangan.
   Menghapus penilaian menghapus semua isinya.
+- Migrasi `0017` menyalin penilaian risiko token lama (snapshot berskor atau
+  bertemuan) ke `risk_assessments` dengan metode `token-snapshot-legacy`,
+  beserta provider, temuan (`risk_findings` → `risk_reasons`), dan hash bukti
+  dari `evidence`. Poin per alasan dibiarkan kosong karena data lama tidak
+  menyimpannya; temuan `unavailable` dan bukti tanpa hash transaksi tidak
+  disalin. Data lama tidak dihapus, dan migrasi aman dijalankan ulang.
