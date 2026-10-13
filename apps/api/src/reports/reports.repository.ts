@@ -51,6 +51,7 @@ function toBlockView(block: BlockRow, evidence: EvidenceRow[]): ReportBlockView 
           observedAt: block.observedAt?.toISOString() ?? null,
           evidence: refs,
           evidenceTxHashes: refs.map((ref) => ref.txHash),
+          sourceKey: block.sourceKey,
         },
       };
     }
@@ -66,7 +67,12 @@ function toBlockView(block: BlockRow, evidence: EvidenceRow[]): ReportBlockView 
         claimBlockId: block.claimBlockId === null ? null : String(block.claimBlockId),
       };
     case 'entity':
-      return { kind: 'entity', id, subject: { kind: block.entityKind!, chain: block.chainId, address: block.address!, title: block.title ?? '', href: block.href! } };
+      return {
+        kind: 'entity',
+        id,
+        subject: { kind: block.entityKind!, chain: block.chainId, address: block.address!, title: block.title ?? '', href: block.href! },
+        sourceKey: block.sourceKey,
+      };
   }
 }
 
@@ -174,6 +180,59 @@ export class ReportsRepository {
   async remove(id: number): Promise<boolean> {
     const deleted = await this.db.delete(reports).where(eq(reports.id, id)).returning({ id: reports.id });
     return deleted.length > 0;
+  }
+
+  /**
+   * Tambahkan blok di akhir bagian berjudul `sectionTitle`; bagian dibuat
+   * bila belum ada, di posisi `insertAt`. Menjawab id blok baru.
+   */
+  async appendBlocks(
+    executor: Executor,
+    reportId: number,
+    sectionTitle: string,
+    blocks: Array<ResolvedBlock & { sourceKey: string }>,
+    insertAt: (titles: string[]) => number,
+    now: Date,
+  ): Promise<number[]> {
+    if (blocks.length === 0) return [];
+    const sections = await executor
+      .select()
+      .from(reportSections)
+      .where(eq(reportSections.reportId, reportId))
+      .orderBy(asc(reportSections.position), asc(reportSections.id));
+    let section = sections.find((row) => row.title === sectionTitle);
+    if (!section) {
+      [section] = await executor.insert(reportSections).values({ reportId, title: sectionTitle, position: 0 }).returning();
+      const ordered = [...sections];
+      ordered.splice(insertAt(sections.map((row) => row.title)), 0, section);
+      for (const [position, row] of ordered.entries()) {
+        await executor.update(reportSections).set({ position }).where(eq(reportSections.id, row.id));
+      }
+    }
+    const sectionId = section.id;
+    const existing = await executor.select({ position: reportBlocks.position }).from(reportBlocks).where(eq(reportBlocks.sectionId, sectionId));
+    let position = existing.reduce((max, row) => Math.max(max, row.position), -1);
+    const ids: number[] = [];
+    for (const block of blocks) {
+      position += 1;
+      const [row] = await executor
+        .insert(reportBlocks)
+        .values({ ...blockColumns(block), reportId, sectionId, kind: block.kind, position, sourceKey: block.sourceKey, createdAt: now })
+        .returning({ id: reportBlocks.id });
+      if (block.kind === 'claim' && block.claim.evidence.length > 0) {
+        await executor
+          .insert(reportClaimEvidence)
+          .values(block.claim.evidence.map((ref, index) => ({ blockId: row.id, chainId: ref.chain, txHash: ref.txHash, position: index })));
+      }
+      ids.push(row.id);
+    }
+    return ids;
+  }
+
+  /** Kunci asal blok yang sudah ada di laporan. */
+  async sourceKeys(reportId: number): Promise<Set<string>> {
+    const rows = await this.db.select({ sourceKey: reportBlocks.sourceKey }).from(reportBlocks).where(eq(reportBlocks.reportId, reportId));
+    return new Set(rows.flatMap((row) => (row.sourceKey === null ? [] : [row.sourceKey])));
   }
 
   /** Tulis isi laporan utuh. Id klien yang cocok dengan id tersimpan laporan ini memperbarui baris itu. */

@@ -1458,6 +1458,11 @@ describe('laporan bukti', () => {
       'report_blocks_entity_token_has_chain',
     );
     await db.insert(schema.reportBlocks).values({ ...at, kind: 'entity', entityKind: 'address', address: '0xabc', title: 'Pendana', href: '/multichain/0xabc' });
+    // Asal blok susunan otomatis: hanya klaim/entitas, dan tidak boleh kembar dalam satu laporan.
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'paragraph', body: 'x', sourceKey: 'case:a' }), 'report_blocks_source_kind');
+    const sourced = { ...at, kind: 'claim' as const, title: 'Dari kasus', body: '', classification: 'heuristic' as const, sourceKey: 'case:a' };
+    await db.insert(schema.reportBlocks).values(sourced);
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values(sourced), 'report_blocks_source_unique');
 
     // Catatan bisa membahas klaim; klaim dihapus, catatannya tetap ada.
     const [note] = await db.insert(schema.reportBlocks).values({ ...at, kind: 'note', body: 'Cek ulang', claimBlockId: claim.id }).returning();

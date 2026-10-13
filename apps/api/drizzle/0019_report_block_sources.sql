@@ -1,0 +1,3 @@
+ALTER TABLE "report_blocks" ADD COLUMN "source_key" text;--> statement-breakpoint
+ALTER TABLE "report_blocks" ADD CONSTRAINT "report_blocks_source_unique" UNIQUE("report_id","source_key");--> statement-breakpoint
+ALTER TABLE "report_blocks" ADD CONSTRAINT "report_blocks_source_kind" CHECK ("report_blocks"."source_key" is null or ("report_blocks"."kind" in ('claim', 'entity') and length("report_blocks"."source_key") between 1 and 300));

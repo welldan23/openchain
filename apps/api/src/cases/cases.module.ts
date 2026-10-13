@@ -9,5 +9,6 @@ import { CasesService } from './cases.service.js';
   imports: [FlowsModule],
   controllers: [CasesController],
   providers: [CasesService, CasesRepository, { provide: CLOCK, useValue: systemClock }],
+  exports: [CasesService],
 })
 export class CasesModule {}

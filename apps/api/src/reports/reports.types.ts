@@ -4,7 +4,7 @@
  * istilah backend (`verified_fact`, `derived_metric`, …).
  */
 import type { CaseEvidenceView, CaseSnapshotView } from '../cases/cases.types.js';
-import type { CaseSubjectKind, InfoClassification, ReportStatus } from '../database/schema/enums.js';
+import type { CaseSubjectKind, InfoClassification, RiskLevel, RiskObjectKind, RiskSeverity, ReportStatus } from '../database/schema/enums.js';
 
 export interface ReportClaimView {
   id: string;
@@ -17,6 +17,8 @@ export interface ReportClaimView {
   evidence: Array<{ chain: string; txHash: string }>;
   /** Hash bukti saja, sesuai bentuk frontend. */
   evidenceTxHashes: string[];
+  /** Asal klaim yang disusun otomatis (temuan kasus atau penilaian risiko); `null` bila ditulis sendiri. */
+  sourceKey: string | null;
 }
 
 export interface ReportEntityView {
@@ -32,7 +34,7 @@ export type ReportBlockView =
   | { kind: 'claim'; id: string; claim: ReportClaimView }
   | { kind: 'evidence'; id: string; chain: string; txHash: string; caption: string }
   | { kind: 'note'; id: string; body: string; createdAt: string; editedAt: string | null; claimBlockId: string | null }
-  | { kind: 'entity'; id: string; subject: ReportEntityView };
+  | { kind: 'entity'; id: string; subject: ReportEntityView; sourceKey: string | null };
 
 export interface ReportSectionView {
   id: string;
@@ -87,4 +89,60 @@ export interface ReportSummaryView {
   evidenceCount: number;
   /** Masalah yang menghalangi laporan difinalkan. */
   blockerCount: number;
+}
+
+/** Kandidat isi laporan dari kasus sumber dan penilaian risiko entitasnya. */
+export interface ReportPickerResponse {
+  reportId: string;
+  status: ReportStatus;
+  source: { caseId: string; title: string } | null;
+  /** Subjek kasus sumber, untuk blok entitas. */
+  subjects: Array<{ key: string; subject: ReportEntityView; inReport: boolean }>;
+  /** Temuan kasus sumber. */
+  findings: Array<{
+    key: string;
+    title: string;
+    detail: string;
+    classification: InfoClassification;
+    inReport: boolean;
+    evidenceCount: number;
+    storedCount: number;
+  }>;
+  /** Entitas (subjek kasus dan blok entitas laporan) beserta temuan penilaian risikonya per chain. */
+  analyzed: Array<{
+    subjectKey: string;
+    title: string;
+    chain: string | null;
+    address: string;
+    status: 'assessed' | 'no_data';
+    /** Kenapa belum ada penilaian; `null` bila sudah dinilai. */
+    reason: string | null;
+    objectKind: RiskObjectKind | null;
+    score: number | null;
+    level: RiskLevel | null;
+    methodology: string | null;
+    findings: Array<{
+      key: string;
+      kind: 'reason' | 'warning';
+      code: string;
+      title: string;
+      severity: RiskSeverity;
+      classification: InfoClassification;
+      points: number | null;
+      inReport: boolean;
+      evidenceCount: number;
+      storedCount: number;
+    }>;
+  }>;
+  caveats: string[];
+}
+
+export interface ReportComposeResult {
+  report: ReportView;
+  addedSubjects: number;
+  addedFindings: number;
+  /** Id blok baru, untuk disorot di layar. */
+  addedBlockIds: string[];
+  /** Kunci yang dilewati karena sudah ada di laporan. */
+  skipped: string[];
 }

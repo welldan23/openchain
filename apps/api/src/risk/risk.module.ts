@@ -13,6 +13,6 @@ import { RiskRepository } from './risk.repository.js';
   imports: [FlowsModule],
   controllers: [RiskController],
   providers: [RiskRepository, RiskWarningService, RiskScoringService, RiskSummaryService, RiskFindingsService, RiskFindingDetailService, { provide: CLOCK, useValue: systemClock }],
-  exports: [RiskScoringService, RiskRepository],
+  exports: [RiskScoringService, RiskRepository, RiskSummaryService, RiskFindingsService],
 })
 export class RiskModule {}

@@ -4,7 +4,7 @@ import type { ReportClaimView, ReportSectionView } from './reports.types.js';
 const claim = (id: string, overrides: Partial<ReportClaimView> = {}) => ({
   kind: 'claim' as const,
   id,
-  claim: { id, title: id, detail: '', classification: 'verified_fact' as const, provider: 'Blockscout', observedAt: '2026-10-03T00:00:00.000Z', evidence: [{ chain: 'base', txHash: '0x1' }], evidenceTxHashes: ['0x1'], ...overrides },
+  claim: { id, title: id, detail: '', classification: 'verified_fact' as const, provider: 'Blockscout', observedAt: '2026-10-03T00:00:00.000Z', evidence: [{ chain: 'base', txHash: '0x1' }], evidenceTxHashes: ['0x1'], sourceKey: null, ...overrides },
 });
 
 describe('kesiapan laporan', () => {

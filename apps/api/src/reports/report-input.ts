@@ -244,3 +244,24 @@ export function parseReportUpdate(value: unknown): ReportUpdateInput {
   if (Object.keys(update).length === 0) throw new ReportInputError('Tidak ada yang diubah.');
   return update;
 }
+
+export interface ComposeInput {
+  /** Kunci subjek kasus (`kind:chain:address`). */
+  subjects: string[];
+  /** Kunci temuan: `case:<id>` atau `risk:<chain>:<address>:<reason|warning>:<kode>`. */
+  findings: string[];
+}
+
+export const MAX_COMPOSE_ITEMS = 200;
+
+export function parseCompose(value: unknown): ComposeInput {
+  const body = record(value, 'Isi permintaan');
+  const keys = (raw: unknown, what: string) => {
+    const items = list(raw, what);
+    if (items.length > MAX_COMPOSE_ITEMS) throw new ReportInputError(`${what} maksimal ${MAX_COMPOSE_ITEMS}.`);
+    return [...new Set(items.map((item) => text(item, `Kunci ${what.toLowerCase()}`, 300)))];
+  };
+  const input = { subjects: keys(body.subjects, 'Entitas'), findings: keys(body.findings, 'Temuan') };
+  if (input.subjects.length + input.findings.length === 0) throw new ReportInputError('Pilih minimal satu entitas atau temuan.');
+  return input;
+}

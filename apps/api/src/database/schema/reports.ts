@@ -98,6 +98,9 @@ export const reportSections = pgTable(
  *   membahas sebuah klaim.
  * - `entity`: salinan subjek kasus: `entity_kind`, `chain_id`, `address`,
  *   `title`, `href`.
+ *
+ * Klaim dan entitas yang disusun dari kasus atau penilaian risiko menyimpan
+ * asalnya di `source_key`.
  */
 export const reportBlocks = pgTable(
   'report_blocks',
@@ -121,12 +124,20 @@ export const reportBlocks = pgTable(
     address: text('address'),
     href: text('href'),
     claimBlockId: refId('claim_block_id').references((): AnyPgColumn => reportBlocks.id, { onDelete: 'set null' }),
+    /**
+     * Asal blok yang disusun otomatis, mis. `case:<id temuan>`,
+     * `risk:<chain>:<address>:reason:<kode>`, atau `subject:<kunci subjek>`;
+     * mencegah temuan atau entitas yang sama masuk dua kali.
+     */
+    sourceKey: text('source_key'),
     createdAt: timestampTz('created_at').notNull(),
     editedAt: timestampTz('edited_at'),
   },
   (t) => [
     foreignKey({ name: 'report_blocks_section_fk', columns: [t.reportId, t.sectionId], foreignColumns: [reportSections.reportId, reportSections.id] }).onDelete('cascade'),
     index('report_blocks_order_idx').on(t.sectionId, t.position),
+    unique('report_blocks_source_unique').on(t.reportId, t.sourceKey),
+    check('report_blocks_source_kind', sql`${t.sourceKey} is null or (${t.kind} in ('claim', 'entity') and length(${t.sourceKey}) between 1 and 300)`),
     index('report_blocks_tx_idx').on(t.chainId, t.txHash),
     check('report_blocks_paragraph', sql`${t.kind} <> 'paragraph' or (${t.body} is not null and length(${t.body}) <= 5000)`),
     check(

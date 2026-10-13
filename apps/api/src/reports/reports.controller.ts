@@ -1,8 +1,9 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { parsePositiveInteger } from '../common/query-params.js';
-import { parseNewReport, parseReportUpdate, ReportInputError } from './report-input.js';
+import { ReportComposeService } from './report-compose.service.js';
+import { parseCompose, parseNewReport, parseReportUpdate, ReportInputError } from './report-input.js';
 import { ReportsService } from './reports.service.js';
-import type { ReportSummaryView, ReportView } from './reports.types.js';
+import type { ReportComposeResult, ReportPickerResponse, ReportSummaryView, ReportView } from './reports.types.js';
 
 function parsed<T>(parse: () => T): T {
   try {
@@ -24,10 +25,15 @@ function idOf(value: string): number {
  * dan kesiapan), `POST` laporan baru (opsional dari kasus), `PATCH /:id`
  * mengubah judul, ringkasan, status, atau seluruh isi bagian, `DELETE /:id`.
  * Laporan final dikunci; finalisasi ditolak `409` selama ada blocker.
+ * `GET /:id/picker` memberi kandidat isi dari kasus sumber dan penilaian
+ * risiko entitasnya; `POST /:id/compose` memasukkan pilihan sebagai blok.
  */
 @Controller('reports')
 export class ReportsController {
-  constructor(private readonly service: ReportsService) {}
+  constructor(
+    private readonly service: ReportsService,
+    private readonly composer: ReportComposeService,
+  ) {}
 
   @Get()
   list(): Promise<ReportSummaryView[]> {
@@ -37,6 +43,17 @@ export class ReportsController {
   @Get(':id')
   get(@Param('id') id: string): Promise<ReportView> {
     return this.service.get(idOf(id));
+  }
+
+  @Get(':id/picker')
+  picker(@Param('id') id: string): Promise<ReportPickerResponse> {
+    return this.composer.picker(idOf(id));
+  }
+
+  @Post(':id/compose')
+  @HttpCode(200)
+  compose(@Param('id') id: string, @Body() body: unknown): Promise<ReportComposeResult> {
+    return this.composer.compose(idOf(id), parsed(() => parseCompose(body)));
   }
 
   @Post()

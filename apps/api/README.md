@@ -754,6 +754,23 @@ Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
   apa pun dijawab `409` sampai statusnya dibuka lagi ke `review` atau `draft`.
 - `DELETE /api/reports/:id` — `204`, atau `404` bila sudah tidak ada.
 - Isian yang salah dan chain tak dikenal dijawab `400`.
+- `GET /api/reports/:id/picker` — kandidat isi laporan: subjek dan temuan kasus
+  sumber, serta `analyzed`: temuan penilaian risiko (alasan dan peringatan,
+  terberat dulu) setiap entitas teranalisis (subjek kasus dan blok entitas
+  laporan; subjek multichain dinilai di setiap chain tempat address-nya
+  tercatat). Entitas tanpa data yang bisa dinilai muncul `status: "no_data"`
+  beserta alasannya. Setiap kandidat punya `key`, `inReport`, dan jumlah hash
+  bukti (`evidenceCount`) serta yang rinciannya tersimpan (`storedCount`).
+- `POST /api/reports/:id/compose` (`200`), body `{ subjects?, findings? }`
+  berisi `key` dari picker. Entitas masuk bagian "Entitas yang diselidiki"
+  (dibuat setelah "Ringkasan" bila belum ada), klaim masuk "Temuan" (setelah
+  entitas). Klaim temuan kasus memakai provider dan waktu snapshot kasus;
+  klaim risiko memakai provider dan waktu data penilaiannya, menyebut
+  sumbangan poinnya (peringatan disebut tidak menambah skor). Dugaan disebut
+  "OpenChain heuristic (data: …)". Hash bukti ikut. Asalnya disimpan di
+  `sourceKey`, jadi pilihan yang sudah ada dilewati (`skipped`). Menjawab
+  `{ report, addedSubjects, addedFindings, addedBlockIds, skipped }`. Kunci
+  tak dikenal `400`, laporan final `409`.
 
 ### `GET /api/tokens/:chain/:address/summary`
 
@@ -1230,3 +1247,5 @@ Aturan PRD yang dijaga langsung oleh database:
   280 karakter dan tetap ada bila klaim yang dibahasnya dihapus. Blok hanya
   bisa masuk bagian di laporan yang sama (foreign key komposit); menghapus
   laporan menghapus semua isinya.
+- Migrasi `0019` menambah `report_blocks.source_key`: asal klaim atau entitas
+  yang disusun otomatis (`case:…`, `risk:…`, `subject:…`), unik per laporan.
