@@ -571,6 +571,15 @@ tersimpan. Kontraknya ada di `src/risk/risk.types.ts`.
 - Skor `null` berarti belum bisa dinilai, bukan aman. Chain tak dikenal,
   address rusak, atau `refresh` salah dijawab `400`; address yang belum
   tercatat, atau tanpa data yang bisa dinilai di chain itu, dijawab `404`.
+- `GET /api/risk/:chain/:address/findings` memberi semua temuan: alasan
+  penilaian (berpoin) dan peringatan dini, terberat dulu. Tiap temuan membawa
+  jenis informasi beserta nama dan artinya (`info_classification_labels`),
+  ciri berbahaya terkait, dan hash bukti dengan status `stored` (rincian
+  transaksinya sudah tersimpan atau belum) serta tautan explorer. Saringan
+  `?classification=` dan `?severity=` (dipisah koma; nilai tak dikenal `400`),
+  `facets` berisi pilihan dan jumlahnya, `traits` berisi ciri yang dipantau
+  (terdeteksi dulu) beserta temuan dasarnya. Temuan tanpa hash (cek keadaan
+  kontrak, hitungan, label) disebut di `caveats`.
 
 ### `GET /api/search`
 

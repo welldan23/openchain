@@ -3,6 +3,7 @@
  * kontrak) per chain. Skor `null` berarti belum bisa dinilai, bukan aman.
  */
 import type {
+  DangerTrait,
   DangerTraitStatus,
   DataStatus,
   InfoClassification,
@@ -67,5 +68,53 @@ export interface MultichainRiskResponse {
   chains: Array<RiskSummaryView | RiskNoDataView>;
   /** Chain dengan skor tertinggi di antara yang sudah dinilai; `null` bila tidak ada skor. */
   highest: { chain: string; score: number; level: RiskLevel } | null;
+  caveats: string[];
+}
+
+/** Satu temuan risiko: alasan penilaian (berpoin) atau peringatan dini. */
+export interface RiskFindingView {
+  /** Kode stabil temuan, unik dalam satu penilaian per jenis. */
+  id: string;
+  kind: 'reason' | 'warning';
+  title: string;
+  description: string;
+  severity: RiskSeverity;
+  classification: InfoClassification;
+  /** Nama dan arti jenis informasi, dari tabel `info_classification_labels`. */
+  classificationInfo: { name: string; description: string };
+  /** Poin ke skor; `null` bila tidak dihitung (asumsi) atau peringatan. */
+  points: number | null;
+  trait: DangerTrait | null;
+  /** Waktu pola terdeteksi, untuk peringatan. */
+  detectedAt: string | null;
+  evidence: Array<{ chain: string; txHash: string; stored: boolean; explorerUrl: string | null }>;
+}
+
+export interface RiskTraitView {
+  trait: DangerTrait;
+  status: DangerTraitStatus;
+  note: string | null;
+  /** Temuan yang menjadi dasar ciri terdeteksi. */
+  finding: { kind: 'reason' | 'warning'; id: string } | null;
+}
+
+export interface RiskFindingsResponse {
+  chain: string;
+  address: string;
+  objectKind: RiskObjectKind;
+  assessmentId: string;
+  methodology: string;
+  score: number | null;
+  level: RiskLevel;
+  filters: { classification: InfoClassification[]; severity: RiskSeverity[] };
+  /** Temuan setelah disaring, terberat dulu. */
+  findings: RiskFindingView[];
+  total: number;
+  /** Pilihan saringan beserta jumlahnya; jumlah dihitung dengan saringan lain tetap berlaku. */
+  facets: {
+    classification: Array<{ classification: InfoClassification; name: string; count: number }>;
+    severity: Array<{ severity: RiskSeverity; count: number }>;
+  };
+  traits: RiskTraitView[];
   caveats: string[];
 }

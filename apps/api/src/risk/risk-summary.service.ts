@@ -11,7 +11,7 @@ import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import { RISK_METHODOLOGY } from './risk-rules.js';
 import { objectKindOf, RiskScoringError, RiskScoringService } from './risk-scoring.service.js';
 import { riskLinks, riskTitle, toSummaryView } from './risk-summary.mapper.js';
-import { RiskRepository, type RiskObjectRow } from './risk.repository.js';
+import { RiskRepository } from './risk.repository.js';
 import type { MultichainRiskResponse, RiskNoDataView, RiskSummaryView } from './risk.types.js';
 
 /** Terjemahkan galat skoring ke respons HTTP yang jelas. */
@@ -46,10 +46,24 @@ export class RiskSummaryService {
     return { address: rawAddress.trim(), chains, highest: top ? { chain: top.chain, score: top.score!, level: top.level } : null, caveats };
   }
 
-  private async summaries(rawAddress: string, chainId: string | undefined, refresh: boolean): Promise<Array<RiskSummaryView | RiskNoDataView>> {
+  /**
+   * Penilaian terbaru satu objek di satu chain; dinilai dulu bila belum ada
+   * atau bila `refresh`. Tanpa data yang bisa dinilai dijawab 404 beserta alasannya.
+   */
+  async assessmentFor(chainId: string, rawAddress: string, refresh = false) {
+    const { objects, fresh } = await this.prepare(rawAddress, chainId, refresh);
+    const [object] = objects;
+    const assessment = await this.repository.latestAssessment(object.chainId, object.addressId, RISK_METHODOLOGY);
+    if (!assessment) {
+      const result = fresh.get(object.chainId);
+      throw new NotFoundException(result?.status === 'no_data' ? result.reason : 'Belum ada data tersimpan yang bisa dinilai di chain ini.');
+    }
+    return { object, assessment };
+  }
+
+  /** Cari objek, lalu nilai chain yang diminta ulang atau belum pernah dinilai. */
+  private async prepare(rawAddress: string, chainId: string | undefined, refresh: boolean) {
     const chains = await this.repository.chains();
-    // Penilaian dijalankan bila diminta ulang atau ada chain yang belum pernah dinilai.
-    let objects: RiskObjectRow[];
     let fresh = new Map<string, Awaited<ReturnType<RiskScoringService['assessAddress']>>[number]>();
     try {
       if (refresh) {
@@ -59,20 +73,21 @@ export class RiskSummaryService {
       const family: ChainFamily | undefined = chainId ? chains.find((item) => item.id === chainId)?.family : /^0x[0-9a-fA-F]{40}$/.test(rawAddress.trim()) ? 'evm' : 'solana';
       if (!family) throw new RiskScoringError('chain_not_found', `Chain "${chainId}" tidak dikenal.`);
       const chainIds = chainId ? [chainId] : chains.filter((item) => item.family === family).map((item) => item.id);
-      objects = await this.repository.objects(chainIds, normalizeAddressSafe(family, rawAddress));
+      const objects = await this.repository.objects(chainIds, normalizeAddressSafe(family, rawAddress));
       if (objects.length === 0) throw new RiskScoringError('address_not_found', `Address ${rawAddress.trim()} belum pernah tercatat di data tersimpan.`);
-      const missing = [];
       for (const object of objects) {
-        if (!fresh.has(object.chainId) && !(await this.repository.latestAssessment(object.chainId, object.addressId, RISK_METHODOLOGY))) missing.push(object.chainId);
+        if (fresh.has(object.chainId) || (await this.repository.latestAssessment(object.chainId, object.addressId, RISK_METHODOLOGY))) continue;
+        const [result] = await this.scoring.assessAddress(rawAddress, object.chainId);
+        fresh.set(object.chainId, result);
       }
-      for (const id of missing) {
-        const [result] = await this.scoring.assessAddress(rawAddress, id);
-        fresh.set(id, result);
-      }
+      return { chains, objects, fresh };
     } catch (error) {
-      toHttpError(error);
+      return toHttpError(error);
     }
+  }
 
+  private async summaries(rawAddress: string, chainId: string | undefined, refresh: boolean): Promise<Array<RiskSummaryView | RiskNoDataView>> {
+    const { chains, objects, fresh } = await this.prepare(rawAddress, chainId, refresh);
     const labels = await this.flows.labelsByAddressIds(objects.map((object) => object.addressId));
     const views: Array<RiskSummaryView | RiskNoDataView> = [];
     for (const object of objects) {

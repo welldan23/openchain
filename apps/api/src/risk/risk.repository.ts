@@ -4,7 +4,7 @@
  * bridge, label) dan penyimpanan hasil penilaian. Tidak menghubungi provider.
  */
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
 import type { ChainFamily, CheckStatus, ClusterLabel, ConfidenceLevel, DataStatus, InfoClassification, RiskObjectKind } from '../database/schema/enums.js';
 import {
@@ -244,6 +244,44 @@ export class RiskRepository {
       select t.name, t.symbol, exists (select 1 from wallet_maps m where m.token_id = t.id) as has_map
       from tokens t where t.id = ${tokenId}`);
     return { name: row?.name == null ? null : String(row.name), symbol: row?.symbol == null ? null : String(row.symbol), hasMap: Boolean(row?.has_map) };
+  }
+
+  async reasonEvidence(reasonIds: number[]) {
+    if (reasonIds.length === 0) return [];
+    return this.db.select().from(riskReasonEvidence).where(inArray(riskReasonEvidence.reasonId, reasonIds)).orderBy(asc(riskReasonEvidence.id));
+  }
+
+  async warningEvidence(warningIds: number[]) {
+    if (warningIds.length === 0) return [];
+    return this.db.select().from(riskWarningEvidence).where(inArray(riskWarningEvidence.warningId, warningIds)).orderBy(asc(riskWarningEvidence.id));
+  }
+
+  /** Nama dan arti tiap jenis informasi. */
+  async classificationLabels(): Promise<Map<InfoClassification, { name: string; description: string }>> {
+    const rows = await this.rows(sql`select classification, name, description from info_classification_labels order by position`);
+    return new Map(rows.map((row) => [row.classification as InfoClassification, { name: String(row.name), description: String(row.description) }]));
+  }
+
+  /** Hash transaksi yang perpindahannya tersimpan, sebagai `chain:hash`. */
+  async storedTransactions(pairs: Array<{ chainId: string; txHash: string }>): Promise<Set<string>> {
+    if (pairs.length === 0) return new Set();
+    const values = sql.join(
+      pairs.map((pair) => sql`(${pair.chainId}, ${pair.txHash})`),
+      sql`, `,
+    );
+    const rows = await this.rows(sql`
+      with wanted(chain_id, tx_hash) as (values ${values})
+      select w.chain_id, w.tx_hash from wanted w
+      where exists (select 1 from native_transfers n where n.chain_id = w.chain_id and n.tx_hash = w.tx_hash)
+        or exists (select 1 from token_transfers t where t.chain_id = w.chain_id and t.tx_hash = w.tx_hash)
+        or exists (select 1 from transactions x where x.chain_id = w.chain_id and x.hash = w.tx_hash)`);
+    return new Set(rows.map((row) => `${row.chain_id}:${row.tx_hash}`));
+  }
+
+  /** Alamat explorer tiap chain. */
+  async explorerUrls(): Promise<Map<string, string | null>> {
+    const rows = await this.rows(sql`select id, explorer_url from chains`);
+    return new Map(rows.map((row) => [String(row.id), row.explorer_url === null ? null : String(row.explorer_url)]));
   }
 
   /* ------------------------------- Penyimpanan ------------------------------ */

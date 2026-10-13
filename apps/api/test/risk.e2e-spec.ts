@@ -131,6 +131,43 @@ describe('/api/risk', () => {
     expect(wallets.map((row) => row.blockNumber).sort()).toEqual([1_000, 2_000]);
   });
 
+  it('temuan: jenis informasi beserta artinya, bukti hash dengan status tersimpan, ciri, dan saringan', async () => {
+    const server = app.getHttpServer();
+    const { body } = await request(server).get(`/api/risk/robinhood/${TOKEN}/findings`).expect(200);
+    expect(body).toMatchObject({ chain: 'robinhood', objectKind: 'token', score: 33, level: 'medium', total: 3, filters: { classification: [], severity: [] } });
+    expect(body.findings.map((item: { id: string; kind: string }) => [item.id, item.kind])).toEqual([
+      ['check_tax', 'reason'],
+      ['holder_concentration', 'reason'],
+      ['check_ownership', 'reason'],
+    ]);
+    const [tax] = body.findings;
+    expect(tax).toMatchObject({
+      classification: 'verified_fact',
+      classificationInfo: { name: 'Fakta on-chain' },
+      points: 20,
+      trait: 'tax_change',
+      detectedAt: null,
+    });
+    // Hash bukti pajak ada di catatan bukti, tapi transaksinya belum tersimpan sebagai transfer.
+    expect(tax.evidence).toEqual([expect.objectContaining({ chain: 'robinhood', stored: false, explorerUrl: expect.stringContaining('/tx/0x') })]);
+    expect(body.facets.classification).toEqual([
+      { classification: 'verified_fact', name: 'Fakta on-chain', count: 2 },
+      { classification: 'derived_metric', name: 'Kalkulasi', count: 1 },
+    ]);
+    expect(body.traits[0]).toMatchObject({ status: 'detected', finding: { kind: 'reason' } });
+    expect(body.traits.map((item: { status: string }) => item.status)).toContain('unknown');
+    expect(body.caveats.join(' ')).toContain('explorer');
+    // Konsentrasi holder adalah hitungan, jadi tidak punya hash transaksi.
+    expect(body.caveats.join(' ')).toContain('1 temuan tidak punya hash transaksi');
+
+    const filtered = await request(server).get(`/api/risk/robinhood/${TOKEN}/findings?classification=derived_metric`).expect(200);
+    expect(filtered.body).toMatchObject({ total: 1, findings: [{ id: 'holder_concentration' }] });
+    expect(filtered.body.facets.classification.find((item: { classification: string }) => item.classification === 'verified_fact').count).toBe(2);
+    await request(server).get(`/api/risk/robinhood/${TOKEN}/findings?classification=rumor`).expect(400);
+    await request(server).get(`/api/risk/robinhood/${TOKEN}/findings?severity=parah`).expect(400);
+    await request(server).get(`/api/risk/base/${WALLET}/findings`).expect(404);
+  });
+
   it('galat: chain tak dikenal 400, address rusak 400, belum tercatat atau tanpa data 404, refresh salah 400', async () => {
     const server = app.getHttpServer();
     await request(server).get(`/api/risk/mars/${WALLET}`).expect(400);
