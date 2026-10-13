@@ -265,3 +265,18 @@ export function parseCompose(value: unknown): ComposeInput {
   if (input.subjects.length + input.findings.length === 0) throw new ReportInputError('Pilih minimal satu entitas atau temuan.');
   return input;
 }
+
+export interface EmbedInput {
+  chain: string;
+  /** Hash mentah; dinormalkan sesuai keluarga chain di service. */
+  txHash: string;
+  /** Kosong: keterangan bawaan dari klaim yang mengutipnya. */
+  caption: string | null;
+}
+
+export function parseEmbed(value: unknown): EmbedInput {
+  const body = record(value, 'Isi permintaan');
+  const embedChain = chain(body.chain);
+  if (!embedChain) throw new ReportInputError('Chain bukti wajib diisi.');
+  return { chain: embedChain, txHash: text(body.txHash, 'Hash bukti', 128), caption: optionalText(body.caption, 'Keterangan bukti', CAPTION_MAX) };
+}

@@ -771,6 +771,20 @@ Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
   `sourceKey`, jadi pilihan yang sudah ada dilewati (`skipped`). Menjawab
   `{ report, addedSubjects, addedFindings, addedBlockIds, skipped }`. Kunci
   tak dikenal `400`, laporan final `409`.
+- `GET /api/reports/:id/evidence?filter=all|not_embedded|no_detail` — semua
+  hash bukti laporan (dari klaim dan bukti tersemat), urut waktu transaksi
+  (yang belum tersimpan di akhir): status tersimpan, rincian perpindahan dana
+  dengan tautan explorer tiap pihak (`/address/` EVM, `/account/` Solana),
+  tautan explorer transaksi, klaim yang mengutipnya, blok sematnya bila ada,
+  dan tangkapan data laporan (waktu snapshot, blok chain itu, provider).
+  `counts` berisi jumlah per saringan.
+- `POST /api/reports/:id/evidence` (`200`), body `{ chain, txHash, caption? }` —
+  sematkan satu hash sebagai blok bukti di bagian "Bukti utama" (dibuat di
+  akhir bila belum ada). Hash dinormalkan sesuai chain; keterangan bawaan
+  menyebut klaim yang mengutipnya. Hash yang sudah tersemat tidak digandakan
+  (`created: false`). Menjawab `{ report, blockId, created }`. Hash atau chain
+  tidak valid `400`, laporan final `409`.
+- Setiap bukti di `GET /api/reports/:id` juga membawa `explorerUrl`.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

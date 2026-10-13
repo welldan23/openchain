@@ -119,7 +119,7 @@ describe('/api/reports', () => {
     expect(evidence).toMatchObject({ kind: 'evidence', chain: 'ethereum', txHash: MISSING_TX });
     expect(body.evidence).toEqual([
       expect.objectContaining({ chain: 'ethereum', txHash: TX, stored: true, blockNumber: 700, movements: [expect.objectContaining({ from: FUNDER, to: WALLET, amount: '5' })] }),
-      { chain: 'ethereum', txHash: MISSING_TX, stored: false, timestamp: null, blockNumber: null, movements: [] },
+      { chain: 'ethereum', txHash: MISSING_TX, stored: false, timestamp: null, blockNumber: null, movements: [], explorerUrl: expect.stringContaining(`/tx/${MISSING_TX}`) },
     ]);
     expect(body.readiness.issues.map((issue: { kind: string; level: string }) => [issue.kind, issue.level])).toEqual([
       ['claim_without_provider', 'blocker'],

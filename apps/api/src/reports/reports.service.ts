@@ -8,6 +8,7 @@ import { BadRequestException, ConflictException, Inject, Injectable, NotFoundExc
 import { storedTxEvidence } from '../cases/case-evidence.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { FlowsRepository } from '../flows/flows.repository.js';
+import { explorerEvidenceUrl } from '../tokens/evidence.view.js';
 import type { NewReportInput, ReportUpdateInput, SectionInput } from './report-input.js';
 import { blockersOf, reportIssues, reportStats } from './report-readiness.js';
 import { ReportsRepository, type Executor, type ReportRow, type ResolvedSection } from './reports.repository.js';
@@ -56,7 +57,12 @@ export class ReportsService {
       const items = block.kind === 'claim' ? block.claim.evidence : block.kind === 'evidence' ? [{ chain: block.chain, txHash: block.txHash }] : [];
       for (const item of items) refs.set(`${item.chain}:${item.txHash}`, item);
     }
-    const evidence = await Promise.all([...refs.values()].map((ref) => storedTxEvidence(this.flows, chainById.get(ref.chain)!, ref.txHash)));
+    const evidence = await Promise.all(
+      [...refs.values()].map(async (ref) => {
+        const chain = chainById.get(ref.chain)!;
+        return { ...(await storedTxEvidence(this.flows, chain, ref.txHash)), explorerUrl: explorerEvidenceUrl(chain, { txHash: ref.txHash, blockNumber: null }) };
+      }),
+    );
     const stored = new Set(evidence.filter((item) => item.stored).map((item) => `${item.chain}:${item.txHash}`));
     const snapshot = {
       fetchedAt: row.snapshotAt.toISOString(),

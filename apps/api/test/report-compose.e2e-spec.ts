@@ -153,6 +153,43 @@ describe('/api/reports/:id/picker dan compose', () => {
     expect(picker.body.analyzed.find((item: { chain: string }) => item.chain === 'robinhood').findings[0].inReport).toBe(true);
   });
 
+  it('bukti: semua hash dengan tautan explorer dan pengutipnya; sematkan sekali, hash tersimpan membawa rinciannya', async () => {
+    const server = app.getHttpServer();
+    const taxHash = testTxHash(`tax-${snapshotId}`);
+    const { body } = await request(server).get(`/api/reports/${reportId}/evidence`).expect(200);
+    expect(body).toMatchObject({ reportId, filter: 'all', total: 2, counts: { all: 2, not_embedded: 2, no_detail: 2 } });
+    expect(body.entries.map((item: { chain: string; txHash: string; citedBy: Array<{ title: string }> }) => [item.chain, item.txHash, item.citedBy.map((cite) => cite.title)])).toEqual([
+      ['robinhood', MISSING_TX, ['Pendana bersama']],
+      ['robinhood', taxHash, ['NBLA: Pajak transaksi berisiko']],
+    ]);
+    expect(body.entries[0]).toMatchObject({ stored: false, detail: null, embeddedBlockId: null, explorerUrl: expect.stringContaining(`/tx/${MISSING_TX}`) });
+    expect(body.caveats.join(' ')).toContain('2 hash belum punya rincian');
+
+    now = new Date('2026-10-03T05:20:00Z');
+    const embedded = await request(server).post(`/api/reports/${reportId}/evidence`).send({ chain: 'robinhood', txHash: MISSING_TX.toUpperCase().replace('0X', '0x') }).expect(200);
+    expect(embedded.body).toMatchObject({ created: true, report: { updatedAt: now.toISOString() } });
+    const sections = embedded.body.report.sections;
+    expect(sections.at(-1)).toMatchObject({ title: 'Bukti utama', blocks: [{ kind: 'evidence', id: embedded.body.blockId, chain: 'robinhood', txHash: MISSING_TX, caption: 'Bukti untuk: Pendana bersama.' }] });
+    const again = await request(server).post(`/api/reports/${reportId}/evidence`).send({ chain: 'robinhood', txHash: MISSING_TX }).expect(200);
+    expect(again.body).toMatchObject({ created: false, blockId: embedded.body.blockId });
+
+    // Hash di luar klaim boleh disematkan; transaksinya tersimpan, jadi rinciannya dan tautan pihaknya ikut.
+    await request(server).post(`/api/reports/${reportId}/evidence`).send({ chain: 'ethereum', txHash: TX, caption: 'Dana masuk ke pendana' }).expect(200);
+    const after = await request(server).get(`/api/reports/${reportId}/evidence?filter=not_embedded`).expect(200);
+    expect(after.body).toMatchObject({ total: 1, counts: { all: 3, not_embedded: 1, no_detail: 2 } });
+    const all = (await request(server).get(`/api/reports/${reportId}/evidence`).expect(200)).body;
+    const stored = all.entries.find((item: { txHash: string }) => item.txHash === TX);
+    expect(stored).toMatchObject({ chain: 'ethereum', stored: true, citedBy: [], capture: { blockNumber: 1_000 } });
+    expect(stored.detail.movements[0]).toMatchObject({ from: FUNDER, fromUrl: expect.stringContaining(`/address/${FUNDER}`), toUrl: expect.stringContaining(`/address/${WALLET}`) });
+    // Laporan juga membawa tautan explorer setiap bukti.
+    const report = (await request(server).get(`/api/reports/${reportId}`).expect(200)).body;
+    expect(report.evidence.every((item: { explorerUrl: string | null }) => item.explorerUrl?.includes('/tx/'))).toBe(true);
+
+    await request(server).get(`/api/reports/${reportId}/evidence?filter=semua`).expect(400);
+    await request(server).post(`/api/reports/${reportId}/evidence`).send({ chain: 'ethereum', txHash: '0x1234' }).expect(400);
+    await request(server).post(`/api/reports/${reportId}/evidence`).send({ chain: 'mars', txHash: TX }).expect(400);
+  });
+
   it('galat: kunci tak dikenal 400, isi kosong 400, laporan tak ada 404, laporan final 409', async () => {
     const server = app.getHttpServer();
     await request(server).post(`/api/reports/${reportId}/compose`).send({ findings: ['case:tidak-ada'] }).expect(400);
@@ -166,5 +203,7 @@ describe('/api/reports/:id/picker dan compose', () => {
     expect(picker.body.caveats.join(' ')).toContain('tidak punya kasus sumber');
     await request(server).patch(`/api/reports/${blank.body.id}`).send({ status: 'final' }).expect(200);
     await request(server).post(`/api/reports/${blank.body.id}/compose`).send({ findings: ['case:x'] }).expect(409);
+    await request(server).post(`/api/reports/${blank.body.id}/evidence`).send({ chain: 'ethereum', txHash: TX }).expect(409);
+    await request(server).get('/api/reports/999/evidence').expect(404);
   });
 });

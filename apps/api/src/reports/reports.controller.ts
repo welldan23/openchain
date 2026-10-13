@@ -1,9 +1,11 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { parsePositiveInteger } from '../common/query-params.js';
 import { ReportComposeService } from './report-compose.service.js';
-import { parseCompose, parseNewReport, parseReportUpdate, ReportInputError } from './report-input.js';
+import { EVIDENCE_FILTERS } from './report-evidence.js';
+import { ReportEvidenceService } from './report-evidence.service.js';
+import { parseCompose, parseEmbed, parseNewReport, parseReportUpdate, ReportInputError } from './report-input.js';
 import { ReportsService } from './reports.service.js';
-import type { ReportComposeResult, ReportPickerResponse, ReportSummaryView, ReportView } from './reports.types.js';
+import type { ReportComposeResult, ReportEmbedResult, ReportEvidenceFilter, ReportEvidenceResponse, ReportPickerResponse, ReportSummaryView, ReportView } from './reports.types.js';
 
 function parsed<T>(parse: () => T): T {
   try {
@@ -27,13 +29,29 @@ function idOf(value: string): number {
  * Laporan final dikunci; finalisasi ditolak `409` selama ada blocker.
  * `GET /:id/picker` memberi kandidat isi dari kasus sumber dan penilaian
  * risiko entitasnya; `POST /:id/compose` memasukkan pilihan sebagai blok.
+ * `GET /:id/evidence` memberi semua hash bukti beserta tautan explorer dan
+ * status semat; `POST /:id/evidence` menyematkan satu hash.
  */
 @Controller('reports')
 export class ReportsController {
   constructor(
     private readonly service: ReportsService,
     private readonly composer: ReportComposeService,
+    private readonly evidence: ReportEvidenceService,
   ) {}
+
+  @Get(':id/evidence')
+  evidenceList(@Param('id') id: string, @Query('filter') filter?: string): Promise<ReportEvidenceResponse> {
+    const value = filter === undefined || filter === '' ? 'all' : filter;
+    if (!(EVIDENCE_FILTERS as readonly string[]).includes(value)) throw new BadRequestException(`Parameter filter harus salah satu dari: ${EVIDENCE_FILTERS.join(', ')}.`);
+    return this.evidence.list(idOf(id), value as ReportEvidenceFilter);
+  }
+
+  @Post(':id/evidence')
+  @HttpCode(200)
+  embed(@Param('id') id: string, @Body() body: unknown): Promise<ReportEmbedResult> {
+    return this.evidence.embed(idOf(id), parsed(() => parseEmbed(body)));
+  }
 
   @Get()
   list(): Promise<ReportSummaryView[]> {

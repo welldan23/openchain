@@ -55,6 +55,12 @@ export function explorerEvidenceUrl(
   return null;
 }
 
+/** URL address di explorer chain: `/account/` untuk Solscan (Solana), `/address/` untuk explorer EVM. */
+export function explorerAddressUrl(chain: Pick<ChainRow, 'explorerUrl' | 'family'>, address: string): string | null {
+  if (!chain.explorerUrl || address === '') return null;
+  return `${chain.explorerUrl.replace(/\/+$/, '')}/${chain.family === 'solana' ? 'account' : 'address'}/${address}`;
+}
+
 export function toEvidenceView(record: EvidenceRecord, chain: ChainRow): EvidenceView {
   const { evidence } = record;
   return {

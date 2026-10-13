@@ -3,7 +3,7 @@
  * frontend (`InvestigationReport`, `ReportSummary`); klasifikasi memakai
  * istilah backend (`verified_fact`, `derived_metric`, …).
  */
-import type { CaseEvidenceView, CaseSnapshotView } from '../cases/cases.types.js';
+import type { CaseEvidenceView, CaseMovementView, CaseSnapshotView } from '../cases/cases.types.js';
 import type { CaseSubjectKind, InfoClassification, RiskLevel, RiskObjectKind, RiskSeverity, ReportStatus } from '../database/schema/enums.js';
 
 export interface ReportClaimView {
@@ -72,7 +72,7 @@ export interface ReportView {
   source: { caseId: string | null; title: string; href: string | null } | null;
   sections: ReportSectionView[];
   /** Bukti transaksi dari klaim dan bukti tersemat; `stored: false` bila belum tersimpan. */
-  evidence: CaseEvidenceView[];
+  evidence: ReportEvidenceView[];
   snapshot: CaseSnapshotView;
   readiness: { ready: boolean; issues: ReportIssue[] };
 }
@@ -145,4 +145,46 @@ export interface ReportComposeResult {
   addedBlockIds: string[];
   /** Kunci yang dilewati karena sudah ada di laporan. */
   skipped: string[];
+}
+
+/** Bukti satu transaksi beserta tautan explorer-nya; `null` bila chain belum punya explorer. */
+export type ReportEvidenceView = CaseEvidenceView & { explorerUrl: string | null };
+
+/** Satu hash bukti di laporan: siapa yang mengutipnya, apakah sudah disematkan, dan tangkapan datanya. */
+export interface ReportEvidenceEntry {
+  chain: string;
+  txHash: string;
+  /** Rincian transaksinya sudah tersimpan. */
+  stored: boolean;
+  explorerUrl: string | null;
+  /** Rincian dari data tersimpan, dengan tautan explorer tiap pihak; `null` bila belum tersimpan. */
+  detail: {
+    timestamp: string;
+    blockNumber: number;
+    movements: Array<CaseMovementView & { fromUrl: string | null; toUrl: string | null }>;
+  } | null;
+  citedBy: Array<{ blockId: string; title: string }>;
+  /** Blok bukti tersemat untuk hash ini, bila ada. */
+  embeddedBlockId: string | null;
+  /** Data yang dipakai laporan: waktu snapshot, blok chain ini, dan provider. */
+  capture: { fetchedAt: string; blockNumber: number | null; sources: string[] };
+}
+
+export type ReportEvidenceFilter = 'all' | 'not_embedded' | 'no_detail';
+
+export interface ReportEvidenceResponse {
+  reportId: string;
+  filter: ReportEvidenceFilter;
+  /** Urut waktu transaksi; hash tanpa rincian di akhir sesuai urutan kemunculan. */
+  entries: ReportEvidenceEntry[];
+  total: number;
+  counts: Record<ReportEvidenceFilter, number>;
+  caveats: string[];
+}
+
+export interface ReportEmbedResult {
+  report: ReportView;
+  blockId: string;
+  /** `false` bila hash itu sudah tersemat sebelumnya. */
+  created: boolean;
 }

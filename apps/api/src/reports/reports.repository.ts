@@ -190,7 +190,7 @@ export class ReportsRepository {
     executor: Executor,
     reportId: number,
     sectionTitle: string,
-    blocks: Array<ResolvedBlock & { sourceKey: string }>,
+    blocks: Array<ResolvedBlock & { sourceKey: string | null }>,
     insertAt: (titles: string[]) => number,
     now: Date,
   ): Promise<number[]> {
