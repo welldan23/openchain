@@ -1066,6 +1066,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Riwayat dan kasus | `investigations`, `cases`, `case_subjects`, `case_findings`, `case_finding_evidence`, `case_notes`, `case_steps`, `case_snapshot_blocks` |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 | Penilaian risiko | `risk_assessments` (+ `risk_assessment_sources`), `risk_reasons` (+ `risk_reason_evidence`), `risk_warnings` (+ `risk_warning_evidence`), `risk_trait_checks` |
+| Laporan bukti | `reports` (+ `report_snapshot_blocks`), `report_sections`, `report_blocks`, `report_claim_evidence` |
 
 Aturan PRD yang dijaga langsung oleh database:
 
@@ -1182,3 +1183,15 @@ Aturan PRD yang dijaga langsung oleh database:
   dari `evidence`. Poin per alasan dibiarkan kosong karena data lama tidak
   menyimpannya; temuan `unavailable` dan bukti tanpa hash transaksi tidak
   disalin. Data lama tidak dihapus, dan migrasi aman dijalankan ulang.
+- `reports` (migrasi `0018`) menyimpan laporan bukti: judul (maks. 160),
+  ringkasan, status `draft`/`review`/`final` (`finalized_at` wajib ada tepat
+  saat final), kasus sumber beserta salinan judulnya (laporan tetap utuh bila
+  kasus dihapus), dan snapshot data seperti kasus (`report_snapshot_blocks`).
+  Bagian (`report_sections`) berisi blok berurutan (`report_blocks`): paragraf,
+  klaim, bukti tersemat, catatan, dan entitas. Constraint menjaga kolom wajib
+  tiap jenis dan mengosongkan kolom jenis lain. Klaim bukan `unavailable`;
+  provider dan waktu datanya boleh kosong supaya ditandai belum siap, tidak
+  ditebak. Hash bukti klaim ada di `report_claim_evidence`. Catatan maksimal
+  280 karakter dan tetap ada bila klaim yang dibahasnya dihapus. Blok hanya
+  bisa masuk bagian di laporan yang sama (foreign key komposit); menghapus
+  laporan menghapus semua isinya.

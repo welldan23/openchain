@@ -211,6 +211,12 @@ export const coordinationKind = pgEnum('coordination_kind', ['funding_burst', 's
 /** Aksi transaksi pendukung temuan koordinasi. */
 export const coordinationAction = pgEnum('coordination_action', ['funding', 'buy', 'sell', 'add_liquidity', 'transfer']);
 
+/** Tahap laporan bukti: draf, ditinjau, final (dikunci). */
+export const reportStatus = pgEnum('report_status', ['draft', 'review', 'final']);
+
+/** Jenis blok isi laporan. */
+export const reportBlockKind = pgEnum('report_block_kind', ['paragraph', 'claim', 'evidence', 'note', 'entity']);
+
 /** Objek yang dinilai risikonya. */
 export const riskObjectKind = pgEnum('risk_object_kind', ['token', 'wallet', 'contract']);
 
@@ -250,6 +256,8 @@ export type SearchEntityKind = (typeof searchEntityKind.enumValues)[number];
 export type InvestigationKind = (typeof investigationKind.enumValues)[number];
 export type CaseStatus = (typeof caseStatus.enumValues)[number];
 export type CaseSubjectKind = (typeof caseSubjectKind.enumValues)[number];
+export type ReportStatus = (typeof reportStatus.enumValues)[number];
+export type ReportBlockKind = (typeof reportBlockKind.enumValues)[number];
 export type NativeTransferKind = (typeof nativeTransferKind.enumValues)[number];
 export type MovementType = (typeof movementType.enumValues)[number];
 export type MapEdgeKind = (typeof mapEdgeKind.enumValues)[number];

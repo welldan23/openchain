@@ -64,6 +64,11 @@ const EXPECTED_TABLES = [
   'multichain_scans',
   'native_transfers',
   'provider_runs',
+  'report_blocks',
+  'report_claim_evidence',
+  'report_sections',
+  'report_snapshot_blocks',
+  'reports',
   'risk_assessment_sources',
   'risk_assessments',
   'risk_finding_evidence',
@@ -1388,6 +1393,99 @@ describe('riwayat investigasi dan kasus', () => {
       expect(await db.select().from(table)).toEqual([]);
     }
     expect(await db.select().from(schema.caseFindingEvidence)).toEqual([]);
+  });
+});
+
+describe('laporan bukti', () => {
+  const HASH = '0x' + 'cd'.repeat(32);
+  const report = { title: 'Laporan NBLA', dataStatus: 'complete' as const, snapshotAt: FETCHED_AT, createdAt: FETCHED_AT, updatedAt: FETCHED_AT };
+
+  async function draft() {
+    const [row] = await db.insert(schema.reports).values(report).returning();
+    const [section] = await db.insert(schema.reportSections).values({ reportId: row.id, title: 'Temuan' }).returning();
+    return { report: row, section, at: { reportId: row.id, sectionId: section.id, createdAt: FETCHED_AT } };
+  }
+
+  it('laporan: data tidak lengkap dijelaskan, waktu final wajib tepat saat final, kasus dihapus tidak menghapus laporan', async () => {
+    await expectConstraintViolation(db.insert(schema.reports).values({ ...report, dataStatus: 'partial' }), 'reports_not_complete_is_explained');
+    await expectConstraintViolation(db.insert(schema.reports).values({ ...report, title: '  ' }), 'reports_title_length');
+    await expectConstraintViolation(db.insert(schema.reports).values({ ...report, status: 'final' }), 'reports_finalized_when_final');
+    await expectConstraintViolation(db.insert(schema.reports).values({ ...report, finalizedAt: FETCHED_AT }), 'reports_finalized_when_final');
+    const [final] = await db.insert(schema.reports).values({ ...report, status: 'final', finalizedAt: FETCHED_AT }).returning();
+    expect(final).toMatchObject({ summary: '', sources: [], caseId: null });
+
+    const [kasus] = await db.insert(schema.cases).values({ title: 'Kasus NBLA', dataStatus: 'complete', snapshotAt: FETCHED_AT, createdAt: FETCHED_AT, updatedAt: FETCHED_AT }).returning();
+    const [fromCase] = await db.insert(schema.reports).values({ ...report, caseId: kasus.id, sourceTitle: kasus.title }).returning();
+    await db.delete(schema.cases).where(eq(schema.cases.id, kasus.id));
+    const [kept] = await db.select().from(schema.reports).where(eq(schema.reports.id, fromCase.id));
+    expect(kept).toMatchObject({ caseId: null, sourceTitle: 'Kasus NBLA' });
+  });
+
+  it('blok: kolom wajib per jenis, kolom jenis lain kosong, klaim bukan "tidak tersedia"', async () => {
+    const { at } = await draft();
+    await db.insert(schema.reportBlocks).values({ ...at, kind: 'paragraph', body: 'Ringkasan temuan.' });
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'paragraph' }), 'report_blocks_paragraph');
+    // Judul klaim kosong (NULL) tidak boleh lolos diam-diam.
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'claim', body: 'x', classification: 'verified_fact' }), 'report_blocks_claim');
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...at, kind: 'claim', title: 'Data kosong', body: 'x', classification: 'unavailable' }),
+      'report_blocks_claim_is_claim',
+    );
+    // Provider dan waktu data boleh kosong: ditandai belum siap, tidak ditebak.
+    const [claim] = await db.insert(schema.reportBlocks).values({ ...at, kind: 'claim', title: 'Pendana bersama', body: '5 wallet', classification: 'heuristic' }).returning();
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...at, kind: 'claim', title: 'x', body: 'x', classification: 'heuristic', provider: ' ' }),
+      'report_blocks_claim_provider_text',
+    );
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'evidence', chainId: 'robinhood', caption: 'x' }), 'report_blocks_evidence');
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...at, kind: 'paragraph', body: 'x', classification: 'verified_fact' }),
+      'report_blocks_claim_fields',
+    );
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'paragraph', body: 'x', txHash: HASH }), 'report_blocks_evidence_fields');
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'note', body: 'x'.repeat(281) }), 'report_blocks_note');
+    await expectConstraintViolation(db.insert(schema.reportBlocks).values({ ...at, kind: 'note' }), 'report_blocks_note');
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...at, kind: 'note', body: 'x', editedAt: new Date(FETCHED_AT.getTime() - 1) }),
+      'report_blocks_edited_order',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...at, kind: 'entity', entityKind: 'address', address: '0xabc', title: 'Pendana', href: '/admin/x' }),
+      'report_blocks_entity',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...at, kind: 'entity', entityKind: 'token', address: '0xabc', title: 'NBLA', href: '/token/robinhood/0xabc' }),
+      'report_blocks_entity_token_has_chain',
+    );
+    await db.insert(schema.reportBlocks).values({ ...at, kind: 'entity', entityKind: 'address', address: '0xabc', title: 'Pendana', href: '/multichain/0xabc' });
+
+    // Catatan bisa membahas klaim; klaim dihapus, catatannya tetap ada.
+    const [note] = await db.insert(schema.reportBlocks).values({ ...at, kind: 'note', body: 'Cek ulang', claimBlockId: claim.id }).returning();
+    await db.insert(schema.reportClaimEvidence).values({ blockId: claim.id, chainId: 'robinhood', txHash: HASH });
+    await expectConstraintViolation(db.insert(schema.reportClaimEvidence).values({ blockId: claim.id, chainId: 'robinhood', txHash: HASH }), 'report_claim_evidence_unique');
+    await db.delete(schema.reportBlocks).where(eq(schema.reportBlocks.id, claim.id));
+    const [orphan] = await db.select().from(schema.reportBlocks).where(eq(schema.reportBlocks.id, note.id));
+    expect(orphan.claimBlockId).toBeNull();
+    expect(await db.select().from(schema.reportClaimEvidence).where(eq(schema.reportClaimEvidence.blockId, claim.id))).toEqual([]);
+  });
+
+  it('blok hanya masuk bagian di laporan yang sama; menghapus laporan menghapus semua isinya', async () => {
+    const first = await draft();
+    const second = await draft();
+    await expectConstraintViolation(
+      db.insert(schema.reportBlocks).values({ ...first.at, sectionId: second.section.id, kind: 'paragraph', body: 'salah tempat' }),
+      'report_blocks_section_fk',
+    );
+    await db.insert(schema.reportBlocks).values({ ...first.at, kind: 'evidence', chainId: 'robinhood', txHash: HASH, caption: 'Kiriman dana' });
+    await db.insert(schema.reportSnapshotBlocks).values({ reportId: first.report.id, chainId: 'robinhood', blockNumber: 900 });
+    await expectConstraintViolation(
+      db.insert(schema.reportSnapshotBlocks).values({ reportId: first.report.id, chainId: 'robinhood', blockNumber: 901 }),
+      'report_snapshot_blocks_unique',
+    );
+    await db.delete(schema.reports).where(eq(schema.reports.id, first.report.id));
+    for (const table of [schema.reportSections, schema.reportBlocks, schema.reportSnapshotBlocks]) {
+      expect(await db.select().from(table).where(eq(table.reportId, first.report.id))).toEqual([]);
+    }
   });
 });
 

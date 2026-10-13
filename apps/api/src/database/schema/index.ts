@@ -6,7 +6,8 @@
  * wallet di `map_clusters`, dan gerak serempak di `coordination_events`.
  * Transfer internal native coin disimpan di `native_transfers` (kind `internal`).
  * Penilaian risiko objek ada di `risk_assessments`; `risk_findings` lama tetap
- * menyimpan temuan per snapshot token.
+ * menyimpan temuan per snapshot token. Laporan bukti ada di `reports`, dengan
+ * bagian (`report_sections`) dan blok isi (`report_blocks`).
  */
 export * from './enums.js';
 export * from './reference.js';
@@ -19,3 +20,4 @@ export * from './multichain.js';
 export * from './search.js';
 export * from './investigations.js';
 export * from './risk.js';
+export * from './reports.js';
