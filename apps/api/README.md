@@ -551,6 +551,27 @@ harus milik address yang diminta; selain itu `404`.
   `404` untuk address yang belum pernah tercatat, atau transfer/bridge yang
   bukan miliknya.
 
+### `GET /api/risk/:chain/:address` dan `GET /api/risk/:address`
+
+Ringkasan skor risiko objek (token, wallet, atau kontrak) dari penilaian
+tersimpan. Kontraknya ada di `src/risk/risk.types.ts`.
+
+- Isinya: jenis objek, judul (nama token, label utama, atau address), skor dan
+  tingkat, asal poin per jenis informasi (`breakdown`), jumlah alasan,
+  peringatan per tingkat, dan ciri per status, tiga alasan terberat,
+  peringatan terbaru, snapshot (blok, waktu data, waktu nilai, provider,
+  kelengkapan beserta alasannya), dan tautan ke halaman investigasinya.
+- Objek yang belum pernah dinilai langsung dinilai dari data tersimpan.
+  `newerDataAvailable: true` berarti ada snapshot atau pemindaian yang lebih
+  baru dari blok penilaian; `?refresh=true` menilai ulang.
+- `GET /api/risk/:address` menilai address di semua chain satu keluarga tempat
+  ia tercatat. Chain tanpa data muncul sebagai `status: "no_data"` beserta
+  alasannya; `highest` adalah chain dengan skor tertinggi. Skor antar chain
+  tidak dijumlahkan.
+- Skor `null` berarti belum bisa dinilai, bukan aman. Chain tak dikenal,
+  address rusak, atau `refresh` salah dijawab `400`; address yang belum
+  tercatat, atau tanpa data yang bisa dinilai di chain itu, dijawab `404`.
+
 ### `GET /api/search`
 
 Pencarian cepat dari data tersimpan. Kontraknya ada di

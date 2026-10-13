@@ -4,7 +4,7 @@
  * bridge, label) dan penyimpanan hasil penilaian. Tidak menghubungi provider.
  */
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
 import type { ChainFamily, CheckStatus, ClusterLabel, ConfidenceLevel, DataStatus, InfoClassification, RiskObjectKind } from '../database/schema/enums.js';
 import {
@@ -211,6 +211,39 @@ export class RiskRepository {
       where l.address_id = ${addressId} and l.label_type = 'bot' and l.source = 'heuristic'
       order by l.confidence desc nulls last, l.id`);
     return rows.map((row) => ({ name: row.name === null ? null : String(row.name), confidence: row.confidence === null ? null : Number(row.confidence) }));
+  }
+
+  /* -------------------------------- Ringkasan ------------------------------- */
+
+  /** Penilaian terbaru objek dengan metode ini (blok tertinggi, lalu waktu nilai terbaru). */
+  async latestAssessment(chainId: string, addressId: number, methodology: string) {
+    const [row] = await this.db
+      .select()
+      .from(riskAssessments)
+      .where(and(eq(riskAssessments.chainId, chainId), eq(riskAssessments.addressId, addressId), eq(riskAssessments.methodology, methodology)))
+      .orderBy(desc(riskAssessments.blockNumber), desc(riskAssessments.assessedAt), desc(riskAssessments.id))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async assessmentParts(assessmentId: number) {
+    const [reasons, warnings, traits, sources] = await Promise.all([
+      this.db.select().from(riskReasons).where(eq(riskReasons.assessmentId, assessmentId)).orderBy(asc(riskReasons.position), asc(riskReasons.id)),
+      this.db.select().from(riskWarnings).where(eq(riskWarnings.assessmentId, assessmentId)).orderBy(desc(riskWarnings.detectedAt), asc(riskWarnings.id)),
+      this.db.select().from(riskTraitChecks).where(eq(riskTraitChecks.assessmentId, assessmentId)),
+      this.rows(sql`
+        select distinct r.provider from risk_assessment_sources s join provider_runs r on r.id = s.provider_run_id
+        where s.assessment_id = ${assessmentId} order by r.provider`),
+    ]);
+    return { reasons, warnings, traits, sources: sources.map((row) => String(row.provider)) };
+  }
+
+  /** Nama dan simbol token, dan apakah token sudah punya peta hubungan. */
+  async tokenInfo(tokenId: number): Promise<{ name: string | null; symbol: string | null; hasMap: boolean }> {
+    const [row] = await this.rows(sql`
+      select t.name, t.symbol, exists (select 1 from wallet_maps m where m.token_id = t.id) as has_map
+      from tokens t where t.id = ${tokenId}`);
+    return { name: row?.name == null ? null : String(row.name), symbol: row?.symbol == null ? null : String(row.symbol), hasMap: Boolean(row?.has_map) };
   }
 
   /* ------------------------------- Penyimpanan ------------------------------ */
