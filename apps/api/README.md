@@ -33,6 +33,7 @@ environment variable dan tidak pernah dicetak ke log.
 | `npm run smoke:chain -- <chain\|all>` | Smoke test adapter chain; `--record` menyimpan status dukungannya |
 | `npm run flows:collect -- <address> [chain ...]` | Kumpulkan aliran dana satu address (semua chain bila tidak disebut); `--halaman=N`, `--tanpa-simpan`, `--json` |
 | `npm run maps:build -- <chain> <token>` | Bentuk Peta Hubungan Wallet dari data tersimpan; `--holder=N`, `--kedalaman=N`, `--blok=N`, `--kumpulkan`, `--halaman=N`, `--json` |
+| `npm run risk:assess -- <address> [chain]` | Nilai risiko address dari data tersimpan (semua chain bila tidak disebut) dan simpan hasilnya; `--json` |
 | `npm test` | Tes unit, termasuk tes skema di PostgreSQL WebAssembly (PGlite) |
 | `npm run test:e2e` | Tes endpoint lewat HTTP dengan database PGlite |
 | `npm run typecheck` / `npm run lint` | Cek tipe dan lint |
@@ -268,6 +269,37 @@ lengkap lewat `FundFlowCollector`.
   `missing_fields` (`holder_history`, `funder_history`, `node_limit`,
   `edge_limit`, `connector_limit`). Snapshot tanpa holder disimpan sebagai
   `unavailable`.
+
+## Menilai risiko objek
+
+`RiskScoringService` (`src/risk`) menilai satu address per chain dengan metode
+`openchain-risk-v1`, hanya dari data tersimpan, lalu menyimpan hasilnya ke
+`risk_assessments` (penilaian lama dengan objek, blok, dan metode yang sama
+diganti). Tanpa chain, address dinilai di semua chain satu keluarga tempat ia
+tercatat; chain tanpa data dilaporkan "tidak dinilai", bukan diberi skor.
+
+- **Jenis objek**: token bila ada di `tokens`; kontrak bila `is_contract` atau
+  berlabel pool, router, bridge, infrastruktur, launchpad, atau faucet; selain
+  itu wallet.
+- **Token** (snapshot terbaru): hasil cek kontrak (honeypot 40/15, pajak,
+  mint, kunci LP 20/10, proxy 15/10, blacklist 12/8, pause 10/6, kepemilikan
+  8/5, verifikasi 10/6 poin untuk gagal/peringatan), konsentrasi 10 holder
+  teratas (≥80% 15 poin, ≥50% 8 poin), dan kelompok terkoordinasi di peta
+  (keyakinan tinggi/sedang/rendah 15/10/5).
+- **Wallet** (pemindaian aliran dana terbaru): setoran ke exchange dan kiriman
+  bridge (masing-masing 5 poin; yang terjadi 7 hari sebelum data diambil juga
+  jadi peringatan dini), mendanai kelompok terkoordinasi, dan label dugaan bot.
+- **Kontrak selain token** belum punya pemeriksaan, jadi skornya kosong
+  dengan alasan.
+- Skor = jumlah poin (maksimal 100), tingkat mengikuti batas yang sama dengan
+  snapshot (<25, 25–49, 50–74, ≥75). Tanpa data yang bisa dinilai, skor kosong
+  dan tingkatnya `unknown`. Asumsi tidak pernah berpoin. Ciri yang belum
+  dipantau (penarikan likuiditas, pendanaan wallet baru) tercatat "belum bisa
+  dicek". Penilaian tanpa skor tidak pernah berstatus data lengkap.
+
+```bash
+npm run risk:assess -- 0x532f27101965dd16442E59d40670FaF5eBB142E4 base
+```
 
 ## Adapter chain
 
