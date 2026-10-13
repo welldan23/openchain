@@ -18,14 +18,10 @@ export class RiskFindingsService {
     private readonly repository: RiskRepository,
   ) {}
 
-  async findings(
-    chainId: string,
-    rawAddress: string,
-    filters: { classification: InfoClassification[]; severity: RiskSeverity[] },
-    refresh = false,
-  ): Promise<RiskFindingsResponse> {
+  /** Semua temuan dan ciri penilaian terbaru objek, belum disaring. */
+  async collect(chainId: string, rawAddress: string, refresh = false) {
     const { object, assessment } = await this.summaries.assessmentFor(chainId, rawAddress, refresh);
-    const [{ reasons, warnings, traits }, labels, explorers] = await Promise.all([
+    const [{ reasons, warnings, traits, sources }, labels, explorers] = await Promise.all([
       this.repository.assessmentParts(assessment.id),
       this.repository.classificationLabels(),
       this.repository.explorerUrls(),
@@ -86,6 +82,16 @@ export class RiskFindingsService {
       }))
       .sort((a, b) => ['detected', 'unknown', 'clear'].indexOf(a.status) - ['detected', 'unknown', 'clear'].indexOf(b.status) || a.trait.localeCompare(b.trait));
 
+    return { object, assessment, all, traits: traitViews, sources, reasons, warnings };
+  }
+
+  async findings(
+    chainId: string,
+    rawAddress: string,
+    filters: { classification: InfoClassification[]; severity: RiskSeverity[] },
+    refresh = false,
+  ): Promise<RiskFindingsResponse> {
+    const { object, assessment, all, traits: traitViews } = await this.collect(chainId, rawAddress, refresh);
     const filtered = sortFindings(filterFindings(all, filters));
     const caveats = ['Temuan dugaan (heuristic) dan label eksternal bisa keliru; cek hash buktinya sebelum menyimpulkan.'];
     if (all.some((item) => item.evidence.some((evidence) => !evidence.stored))) {

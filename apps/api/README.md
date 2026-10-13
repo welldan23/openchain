@@ -580,6 +580,16 @@ tersimpan. Kontraknya ada di `src/risk/risk.types.ts`.
   `facets` berisi pilihan dan jumlahnya, `traits` berisi ciri yang dipantau
   (terdeteksi dulu) beserta temuan dasarnya. Temuan tanpa hash (cek keadaan
   kontrak, hitungan, label) disebut di `caveats`.
+- `GET /api/risk/:chain/:address/reasons/:code` dan
+  `.../warnings/:code` merinci satu temuan untuk laci "alasan & bukti": poin
+  dan porsinya dari total poin terhitung (`shareOfCountedPoints`), jenis
+  informasi, ciri yang dasarnya temuan ini, provider penilaian, dan setiap hash
+  bukti beserta catatan buktinya (`record`) dan isi transaksinya dari data
+  tersimpan (perpindahan dana dengan label pihak, seperti
+  `GET /api/transactions/:chain/:hash`). Hash yang belum tersimpan dijawab
+  `stored: false` dan `transaction: null` dengan tautan explorer, tidak
+  dikarang. `navigation` memberi temuan sebelum/sesudahnya dalam urutan daftar.
+  Kode yang tidak ada di penilaian terbaru dijawab `404`.
 
 ### `GET /api/search`
 

@@ -5,9 +5,12 @@
  */
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DATABASE, type Database } from '../database/database.module.js';
 import type { ChainFamily, CheckStatus, ClusterLabel, ConfidenceLevel, DataStatus, InfoClassification, RiskObjectKind } from '../database/schema/enums.js';
 import {
+  addresses,
+  evidence,
   riskAssessments,
   riskAssessmentSources,
   riskReasonEvidence,
@@ -16,6 +19,7 @@ import {
   riskWarningEvidence,
   riskWarnings,
 } from '../database/schema/index.js';
+import type { EvidenceRecord } from '../tokens/evidence.view.js';
 import type { AssessmentDraft, CheckFact, ClusterFact, EvidenceRef, MovementFact } from './risk-rules.js';
 
 type Raw = Record<string, unknown>;
@@ -254,6 +258,22 @@ export class RiskRepository {
   async warningEvidence(warningIds: number[]) {
     if (warningIds.length === 0) return [];
     return this.db.select().from(riskWarningEvidence).where(inArray(riskWarningEvidence.warningId, warningIds)).orderBy(asc(riskWarningEvidence.id));
+  }
+
+  /** Catatan bukti lengkap (penjelasan, metode, address) menurut id, beserta id-nya. */
+  async evidenceRecords(ids: number[]): Promise<Map<number, EvidenceRecord>> {
+    if (ids.length === 0) return new Map();
+    const source = alias(addresses, 'source');
+    const destination = alias(addresses, 'destination');
+    const contract = alias(addresses, 'contract');
+    const rows = await this.db
+      .select({ evidence, sourceAddress: source.address, destinationAddress: destination.address, contractAddress: contract.address })
+      .from(evidence)
+      .leftJoin(source, eq(evidence.sourceAddressId, source.id))
+      .leftJoin(destination, eq(evidence.destinationAddressId, destination.id))
+      .leftJoin(contract, eq(evidence.contractAddressId, contract.id))
+      .where(inArray(evidence.id, ids));
+    return new Map(rows.map((row) => [row.evidence.id, row]));
   }
 
   /** Nama dan arti tiap jenis informasi. */

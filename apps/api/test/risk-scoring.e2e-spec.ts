@@ -5,7 +5,12 @@ import * as schema from '../src/database/schema/index.js';
 import { FundFlowIngestionService } from '../src/flows/fund-flow-ingestion.service.js';
 import type { AddressFlowCollection, KindCoverage } from '../src/flows/fund-flow.types.js';
 import { RISK_METHODOLOGY } from '../src/risk/risk-rules.js';
+import { FlowsRepository } from '../src/flows/flows.repository.js';
+import { TransactionEvidenceService } from '../src/flows/transaction-evidence.service.js';
+import { RiskFindingDetailService } from '../src/risk/risk-finding-detail.service.js';
+import { RiskFindingsService } from '../src/risk/risk-findings.service.js';
 import { RiskScoringError, RiskScoringService } from '../src/risk/risk-scoring.service.js';
+import { RiskSummaryService } from '../src/risk/risk-summary.service.js';
 import { RiskRepository } from '../src/risk/risk.repository.js';
 import { createTestDatabase, seedContractChecks, seedToken, testTxHash, type TestDatabase } from './support/database.js';
 
@@ -152,6 +157,32 @@ describe('skoring risiko objek multichain', () => {
     const warnings = await db.select().from(schema.riskWarnings).where(eq(schema.riskWarnings.assessmentId, ethereum.assessmentId));
     const warningEvidence = await db.select().from(schema.riskWarningEvidence).where(eq(schema.riskWarningEvidence.warningId, warnings[0].id));
     expect(warningEvidence.map((row) => row.txHash)).toEqual([testTxHash('setoran-exchange')]);
+  });
+
+  it('rincian peringatan dini: isi transaksi bukti dengan label exchange penerimanya', async () => {
+    const repository = new RiskRepository(db as unknown as Database);
+    const flows = new FlowsRepository(db as unknown as Database);
+    const findings = new RiskFindingsService(new RiskSummaryService(repository, service, flows), repository);
+    const detail = new RiskFindingDetailService(findings, repository, flows, new TransactionEvidenceService(flows));
+
+    const warning = await detail.detail('ethereum', WALLET, 'warning', 'recent_exchange_cashout');
+    expect(warning).toMatchObject({
+      objectKind: 'wallet',
+      score: 15,
+      finding: { kind: 'warning', trait: 'exchange_cashout', points: null },
+      shareOfCountedPoints: null,
+      // Setoran baru: ciri ditautkan ke peringatannya, bukan ke alasan berpoinnya.
+      traits: [{ trait: 'exchange_cashout', status: 'detected', finding: { kind: 'warning', id: 'recent_exchange_cashout' } }],
+      countedPoints: 15,
+      evidence: [{ chain: 'ethereum', txHash: testTxHash('setoran-exchange'), stored: true, record: null }],
+    });
+    const [movement] = warning.evidence[0].transaction!.movements;
+    expect(movement).toMatchObject({ from: { address: WALLET }, to: { address: EXCHANGE, labels: [expect.objectContaining({ type: 'exchange', name: 'Bybit' })] }, amountRaw: '3' });
+    expect(warning.caveats).toContain('Peringatan dini tidak menambah skor; ini pola baru yang perlu dipantau.');
+
+    const reason = await detail.detail('ethereum', WALLET, 'reason', 'exchange_cashout');
+    expect(reason).toMatchObject({ finding: { points: 5 }, shareOfCountedPoints: 33.3, traits: [] });
+    await expect(detail.detail('ethereum', WALLET, 'reason', 'recent_exchange_cashout')).rejects.toThrow('tidak ada di penilaian terbaru');
   });
 
   it('kontrak selain token: tersimpan tanpa skor dengan alasan; menilai ulang mengganti penilaian yang sama', async () => {

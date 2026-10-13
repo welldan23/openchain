@@ -18,7 +18,7 @@ const WALLET = '0x' + 'c1'.repeat(20);
 const NOW = new Date('2026-10-03T05:00:00Z');
 const covered: KindCoverage = { failure: null, exhausted: true, pages: 1, oldest: null, skipped: null };
 
-function scan(chainId: string, blockTo: number): AddressFlowCollection {
+function scan(chainId: string, blockTo: number, txHash = testTxHash(`masuk-${blockTo}`)): AddressFlowCollection {
   const at = new Date('2026-10-03T04:00:00Z');
   return {
     chainId,
@@ -27,7 +27,7 @@ function scan(chainId: string, blockTo: number): AddressFlowCollection {
     runs: [],
     head: { blockNumber: blockTo, timestamp: at },
     nativeTransfers: [
-      { txHash: testTxHash(`masuk-${blockTo}`), kind: 'transaction', tracePath: '', from: '0x' + 'f1'.repeat(20), to: WALLET, amountRaw: '1', blockNumber: blockTo - 10, timestamp: new Date('2026-09-20T00:00:00Z') },
+      { txHash, kind: 'transaction', tracePath: '', from: '0x' + 'f1'.repeat(20), to: WALLET, amountRaw: '1', blockNumber: blockTo - 10, timestamp: new Date('2026-09-20T00:00:00Z') },
     ],
     tokenTransfers: [],
     coverage: { native: covered, internal: covered, tokens: covered },
@@ -53,11 +53,13 @@ describe('/api/risk', () => {
   let db: TestDatabase;
   let app: INestApplication<App>;
   let ingestion: FundFlowIngestionService;
+  let snapshotId: number;
 
   beforeAll(async () => {
     ({ client, db } = await createTestDatabase());
     const { snapshots } = await seedToken(db, { address: TOKEN });
-    await seedContractChecks(db, 'robinhood', snapshots[1].id);
+    snapshotId = snapshots[1].id;
+    await seedContractChecks(db, 'robinhood', snapshotId);
     ingestion = new FundFlowIngestionService(db as unknown as Database);
     await ingestion.persist(scan('ethereum', 1_000), 'evm');
     await db.insert(schema.addresses).values({ chainId: 'base', address: WALLET, addressNormalized: WALLET });
@@ -166,6 +168,50 @@ describe('/api/risk', () => {
     await request(server).get(`/api/risk/robinhood/${TOKEN}/findings?classification=rumor`).expect(400);
     await request(server).get(`/api/risk/robinhood/${TOKEN}/findings?severity=parah`).expect(400);
     await request(server).get(`/api/risk/base/${WALLET}/findings`).expect(404);
+  });
+
+  it('rincian alasan: poin dan porsinya, ciri, catatan bukti, isi transaksi bila tersimpan, dan tetangga', async () => {
+    const server = app.getHttpServer();
+    const { body } = await request(server).get(`/api/risk/robinhood/${TOKEN}/reasons/check_tax`).expect(200);
+    expect(body).toMatchObject({
+      chain: 'robinhood',
+      objectKind: 'token',
+      score: 33,
+      finding: { id: 'check_tax', kind: 'reason', points: 20, classification: 'verified_fact', trait: 'tax_change', classificationInfo: { name: 'Fakta on-chain' } },
+      shareOfCountedPoints: 60.6,
+      countedPoints: 33,
+      traits: [{ trait: 'tax_change', status: 'detected', finding: { kind: 'reason', id: 'check_tax' } }],
+      sources: ['blockscout', 'robinhood-rpc'],
+      navigation: { previous: null, next: { kind: 'reason', id: 'holder_concentration' }, position: 1, total: 3 },
+    });
+    expect(body.finding).not.toHaveProperty('evidence');
+    const taxHash = testTxHash(`tax-${snapshotId}`);
+    // Belum tersimpan: isi transaksi kosong, catatan bukti tetap ada, dan ditunjuk ke explorer.
+    expect(body.evidence).toEqual([
+      expect.objectContaining({ chain: 'robinhood', txHash: taxHash, stored: false, transaction: null, explorerUrl: expect.stringContaining(`/tx/${taxHash}`) }),
+    ]);
+    expect(body.evidence[0].record).toMatchObject({ classification: 'verified_fact', txHash: taxHash });
+    expect(body.caveats.join(' ')).toContain('1 hash bukti belum tersimpan');
+
+    // Setelah transaksinya tersimpan, rinciannya ikut tampil.
+    await ingestion.persist(scan('robinhood', 3_000, taxHash), 'evm');
+    const stored = await request(server).get(`/api/risk/robinhood/${TOKEN}/reasons/check_tax`).expect(200);
+    expect(stored.body.evidence[0]).toMatchObject({ stored: true, transaction: { blockNumber: 2_990 } });
+    expect(stored.body.evidence[0].transaction.movements[0]).toMatchObject({
+      from: { address: '0x' + 'f1'.repeat(20), labels: [] },
+      to: { address: WALLET },
+      amountRaw: '1',
+      classification: 'verified_fact',
+    });
+    expect(stored.body.caveats.join(' ')).not.toContain('belum tersimpan');
+
+    const metric = await request(server).get(`/api/risk/robinhood/${TOKEN}/reasons/holder_concentration`).expect(200);
+    expect(metric.body).toMatchObject({ evidence: [], navigation: { previous: { id: 'check_tax' }, next: { id: 'check_ownership' }, position: 2 } });
+    expect(metric.body.caveats.join(' ')).toContain('tidak punya hash transaksi');
+
+    await request(server).get(`/api/risk/robinhood/${TOKEN}/reasons/tidak_ada`).expect(404);
+    await request(server).get(`/api/risk/robinhood/${TOKEN}/warnings/check_tax`).expect(404);
+    await request(server).get(`/api/risk/robinhood/${TOKEN}/reasons/check_tax?refresh=ya`).expect(400);
   });
 
   it('galat: chain tak dikenal 400, address rusak 400, belum tercatat atau tanpa data 404, refresh salah 400', async () => {

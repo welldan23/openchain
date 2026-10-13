@@ -1,8 +1,9 @@
 import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { infoClassification, riskSeverity, type InfoClassification, type RiskSeverity } from '../database/schema/enums.js';
+import { RiskFindingDetailService } from './risk-finding-detail.service.js';
 import { RiskFindingsService } from './risk-findings.service.js';
 import { RiskSummaryService } from './risk-summary.service.js';
-import type { MultichainRiskResponse, RiskFindingsResponse, RiskSummaryView } from './risk.types.js';
+import type { MultichainRiskResponse, RiskFindingDetailResponse, RiskFindingsResponse, RiskSummaryView } from './risk.types.js';
 
 function parseRefresh(value: string | undefined): boolean {
   if (value === undefined || value === '' || value === 'false') return false;
@@ -24,14 +25,26 @@ function parseList<T extends string>(value: string | undefined, allowed: readonl
  * Objek yang belum pernah dinilai langsung dinilai dari data tersimpan;
  * `?refresh=true` menilai ulang. `findings` memberi semua temuan dengan jenis
  * informasi dan bukti hash, bisa disaring `?classification=` dan `?severity=`.
- * Tidak menghubungi provider.
+ * `reasons/:code` dan `warnings/:code` merinci satu temuan beserta isi
+ * transaksi setiap hash buktinya. Tidak menghubungi provider.
  */
 @Controller('risk')
 export class RiskController {
   constructor(
     private readonly service: RiskSummaryService,
     private readonly findingsService: RiskFindingsService,
+    private readonly detailService: RiskFindingDetailService,
   ) {}
+
+  @Get(':chain/:address/reasons/:code')
+  reason(@Param('chain') chain: string, @Param('address') address: string, @Param('code') code: string, @Query('refresh') refresh?: string): Promise<RiskFindingDetailResponse> {
+    return this.detailService.detail(chain, address, 'reason', code, parseRefresh(refresh));
+  }
+
+  @Get(':chain/:address/warnings/:code')
+  warning(@Param('chain') chain: string, @Param('address') address: string, @Param('code') code: string, @Query('refresh') refresh?: string): Promise<RiskFindingDetailResponse> {
+    return this.detailService.detail(chain, address, 'warning', code, parseRefresh(refresh));
+  }
 
   @Get(':chain/:address/findings')
   findings(

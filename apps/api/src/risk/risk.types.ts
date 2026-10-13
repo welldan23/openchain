@@ -12,6 +12,8 @@ import type {
   RiskSeverity,
 } from '../database/schema/enums.js';
 import type { FlowLabelView } from '../flows/flow-summary.types.js';
+import type { TransactionEvidenceResponse } from '../flows/transaction-evidence.types.js';
+import type { EvidenceView } from '../tokens/evidence.view.js';
 
 export interface RiskScorePart {
   classification: InfoClassification;
@@ -116,5 +118,44 @@ export interface RiskFindingsResponse {
     severity: Array<{ severity: RiskSeverity; count: number }>;
   };
   traits: RiskTraitView[];
+  caveats: string[];
+}
+
+/** Satu hash bukti beserta isi transaksinya dari data tersimpan. */
+export interface RiskEvidenceDetail {
+  chain: string;
+  txHash: string;
+  /** `false` bila transaksinya belum tersimpan; isinya tidak dikarang, buka di explorer. */
+  stored: boolean;
+  explorerUrl: string | null;
+  /** Catatan bukti yang menjelaskan kenapa hash ini dipakai, bila tersimpan. */
+  record: EvidenceView | null;
+  /** Isi transaksi: perpindahan dana dengan label pihaknya; `null` bila belum tersimpan. */
+  transaction: Pick<TransactionEvidenceResponse, 'blockNumber' | 'timestamp' | 'transaction' | 'movements' | 'sources'> | null;
+}
+
+/** Rincian satu alasan penilaian atau peringatan dini, untuk laci "alasan & bukti". */
+export interface RiskFindingDetailResponse {
+  chain: string;
+  address: string;
+  objectKind: RiskObjectKind;
+  assessmentId: string;
+  methodology: string;
+  score: number | null;
+  level: RiskLevel;
+  finding: Omit<RiskFindingView, 'evidence'>;
+  /**
+   * Porsi poin temuan ini dari total poin yang dihitung, dalam persen (satu
+   * desimal); `null` bila temuan tidak berpoin atau belum ada poin dihitung.
+   */
+  shareOfCountedPoints: number | null;
+  countedPoints: number;
+  /** Ciri berbahaya yang dasarnya temuan ini. */
+  traits: RiskTraitView[];
+  evidence: RiskEvidenceDetail[];
+  /** Provider snapshot yang dipakai penilaian. */
+  sources: string[];
+  /** Temuan sebelum/sesudahnya dalam urutan daftar temuan (terberat dulu). */
+  navigation: { previous: { kind: 'reason' | 'warning'; id: string } | null; next: { kind: 'reason' | 'warning'; id: string } | null; position: number; total: number };
   caveats: string[];
 }
