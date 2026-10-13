@@ -796,6 +796,16 @@ Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
   280 karakter dan tidak dipotong diam-diam; klaim yang dikaitkan harus klaim
   di laporan yang sama (`400`); id yang bukan catatan `404`; laporan final
   `409`.
+- `GET /api/reports/:id/export?format=csv|pdf` — unduh laporan sebagai berkas
+  (`Content-Disposition: attachment`, nama `laporan-<judul>-<YYYYMMDD>.<ext>`).
+  CSV (UTF-8 dengan BOM) berisi baris status laporan, snapshot, satu baris per
+  hash bukti klaim (jenis informasi, provider, waktu data, chain, hash, tautan
+  explorer), bukti tersemat, entitas, catatan, dan masalah kesiapan; sel yang
+  bisa dibaca sebagai rumus spreadsheet diawali `'`. PDF berisi dokumen
+  lengkap dengan hash yang bisa diklik ke explorer, dibuat tanpa dependency
+  tambahan (font standar Helvetica; karakter di luar WinAnsi diganti padanan
+  ASCII). Nilai kosong ditulis "belum ada", laporan dengan blocker ditandai
+  DRAF, dan waktu ditulis dalam UTC. Format lain `400`.
 - Saat isi laporan disimpan utuh lewat `PATCH`, klaim yang membawa `evidence`
   (ber-chain) memakai itu, bukan `evidenceTxHashes`, jadi isi dari `GET` bisa
   dikirim balik apa adanya. Catatan yang merujuk id klaim tersimpan yang tidak

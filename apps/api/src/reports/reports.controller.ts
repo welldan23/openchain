@@ -1,8 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, StreamableFile } from '@nestjs/common';
 import { parsePositiveInteger } from '../common/query-params.js';
 import { ReportComposeService } from './report-compose.service.js';
 import { EVIDENCE_FILTERS } from './report-evidence.js';
 import { ReportEvidenceService } from './report-evidence.service.js';
+import { REPORT_EXPORT_FORMATS, type ReportExportFormat } from './report-export.js';
+import { ReportExportService } from './report-export.service.js';
 import { parseCompose, parseEmbed, parseNewReport, parseNoteCreate, parseNoteUpdate, parseReportUpdate, ReportInputError } from './report-input.js';
 import { ReportNotesService } from './report-notes.service.js';
 import { ReportsService } from './reports.service.js';
@@ -43,6 +45,7 @@ function idOf(value: string, what = 'id'): number {
  * `GET /:id/evidence` memberi semua hash bukti beserta tautan explorer dan
  * status semat; `POST /:id/evidence` menyematkan satu hash. `/:id/notes`
  * mengelola catatan investigasi (daftar, tambah, ubah, hapus).
+ * `GET /:id/export?format=csv|pdf` mengunduh laporan sebagai berkas.
  */
 @Controller('reports')
 export class ReportsController {
@@ -51,7 +54,17 @@ export class ReportsController {
     private readonly composer: ReportComposeService,
     private readonly evidence: ReportEvidenceService,
     private readonly notes: ReportNotesService,
+    private readonly exporter: ReportExportService,
   ) {}
+
+  @Get(':id/export')
+  async export(@Param('id') id: string, @Query('format') format?: string): Promise<StreamableFile> {
+    if (format === undefined || !Object.hasOwn(REPORT_EXPORT_FORMATS, format)) {
+      throw new BadRequestException(`Parameter format harus salah satu dari: ${Object.keys(REPORT_EXPORT_FORMATS).join(', ')}.`);
+    }
+    const file = await this.exporter.export(idOf(id), format as ReportExportFormat);
+    return new StreamableFile(file.content, { type: file.mime, disposition: `attachment; filename="${file.fileName}"`, length: file.content.length });
+  }
 
   @Get(':id/notes')
   noteList(@Param('id') id: string): Promise<ReportNotesResponse> {

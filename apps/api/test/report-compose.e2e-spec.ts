@@ -190,6 +190,30 @@ describe('/api/reports/:id/picker dan compose', () => {
     await request(server).post(`/api/reports/${reportId}/evidence`).send({ chain: 'mars', txHash: TX }).expect(400);
   });
 
+  it('ekspor: CSV dan PDF diunduh sebagai berkas dengan nama, jenis, dan tanda draf', async () => {
+    const server = app.getHttpServer();
+    const csv = await request(server).get(`/api/reports/${reportId}/export?format=csv`).expect(200);
+    expect(csv.headers['content-type']).toBe('text/csv; charset=utf-8');
+    expect(csv.headers['content-disposition']).toBe('attachment; filename="laporan-nbla-20261003.csv"');
+    const lines = csv.text.replace(/^\ufeff/, '').trimEnd().split('\r\n');
+    expect(lines[0]).toBe('jenis_baris,bagian,judul,jenis_informasi,provider,waktu_data,chain,tx_hash,explorer,keterangan');
+    expect(lines[1]).toMatch(/^status_laporan,,Laporan NBLA,.*Draf — siap dibagikan$/);
+    expect(lines.some((line) => line.startsWith('klaim,Temuan,NBLA: Pajak transaksi berisiko,Fakta on-chain,"blockscout, robinhood-rpc",2026-10-03T04:30:00.000Z,robinhood,'))).toBe(true);
+    expect(lines.some((line) => line.startsWith('entitas,Entitas yang diselidiki,NBLA,,,,robinhood,,,'))).toBe(true);
+
+    const pdf = await request(server).get(`/api/reports/${reportId}/export?format=pdf`).responseType('blob').expect(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.headers['content-disposition']).toBe('attachment; filename="laporan-nbla-20261003.pdf"');
+    const body = (pdf.body as Buffer).toString('latin1');
+    expect(body.startsWith('%PDF-1.4')).toBe(true);
+    expect(body).toContain('(NBLA: Pajak transaksi berisiko)');
+    expect(body.trimEnd().endsWith('%%EOF')).toBe(true);
+
+    await request(server).get(`/api/reports/${reportId}/export?format=docx`).expect(400);
+    await request(server).get(`/api/reports/${reportId}/export`).expect(400);
+    await request(server).get('/api/reports/999/export?format=pdf').expect(404);
+  });
+
   it('galat: kunci tak dikenal 400, isi kosong 400, laporan tak ada 404, laporan final 409', async () => {
     const server = app.getHttpServer();
     await request(server).post(`/api/reports/${reportId}/compose`).send({ findings: ['case:tidak-ada'] }).expect(400);

@@ -6,7 +6,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
-import { cases, caseSnapshotBlocks, reportBlocks, reportClaimEvidence, reports, reportSections, reportSnapshotBlocks } from '../database/schema/index.js';
+import type { InfoClassification } from '../database/schema/enums.js';
+import { cases, caseSnapshotBlocks, infoClassificationLabels, reportBlocks, reportClaimEvidence, reports, reportSections, reportSnapshotBlocks } from '../database/schema/index.js';
 import type { BlockInput, SectionInput } from './report-input.js';
 import type { ReportBlockView, ReportSectionView } from './reports.types.js';
 
@@ -244,6 +245,12 @@ export class ReportsRepository {
 
   async deleteBlock(executor: Executor, blockId: number): Promise<void> {
     await executor.delete(reportBlocks).where(eq(reportBlocks.id, blockId));
+  }
+
+  /** Nama tiap jenis informasi dari `info_classification_labels`. */
+  async classificationLabels(): Promise<Map<InfoClassification, string>> {
+    const rows = await this.db.select({ classification: infoClassificationLabels.classification, name: infoClassificationLabels.name }).from(infoClassificationLabels);
+    return new Map(rows.map((row) => [row.classification, row.name]));
   }
 
   /** Kunci asal blok yang sudah ada di laporan. */
