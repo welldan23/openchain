@@ -4,10 +4,10 @@
  * yang baru ditambahkan, yang tidak dikirim lagi dihapus.
  */
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
 import type { InfoClassification } from '../database/schema/enums.js';
-import { cases, caseSnapshotBlocks, infoClassificationLabels, reportBlocks, reportClaimEvidence, reports, reportSections, reportSnapshotBlocks } from '../database/schema/index.js';
+import { cases, caseSnapshotBlocks, infoClassificationLabels, reportBlocks, reportShareLinks, reportClaimEvidence, reports, reportSections, reportSnapshotBlocks } from '../database/schema/index.js';
 import type { BlockInput, SectionInput } from './report-input.js';
 import type { ReportBlockView, ReportSectionView } from './reports.types.js';
 
@@ -251,6 +251,42 @@ export class ReportsRepository {
   async classificationLabels(): Promise<Map<InfoClassification, string>> {
     const rows = await this.db.select({ classification: infoClassificationLabels.classification, name: infoClassificationLabels.name }).from(infoClassificationLabels);
     return new Map(rows.map((row) => [row.classification, row.name]));
+  }
+
+  /* ------------------------------ Tautan publik ----------------------------- */
+
+  async insertShareLink(values: typeof reportShareLinks.$inferInsert) {
+    const [row] = await this.db.insert(reportShareLinks).values(values).returning();
+    return row;
+  }
+
+  async shareLinks(reportId: number) {
+    return this.db.select().from(reportShareLinks).where(eq(reportShareLinks.reportId, reportId)).orderBy(desc(reportShareLinks.createdAt), desc(reportShareLinks.id));
+  }
+
+  async findShareLink(reportId: number, linkId: number) {
+    const [row] = await this.db
+      .select()
+      .from(reportShareLinks)
+      .where(and(eq(reportShareLinks.reportId, reportId), eq(reportShareLinks.id, linkId)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async findShareLinkByHash(tokenHash: string) {
+    const [row] = await this.db.select().from(reportShareLinks).where(eq(reportShareLinks.tokenHash, tokenHash)).limit(1);
+    return row ?? null;
+  }
+
+  async revokeShareLink(linkId: number, at: Date): Promise<void> {
+    await this.db.update(reportShareLinks).set({ revokedAt: at }).where(eq(reportShareLinks.id, linkId));
+  }
+
+  async recordShareView(linkId: number, at: Date): Promise<void> {
+    await this.db
+      .update(reportShareLinks)
+      .set({ viewCount: sql`${reportShareLinks.viewCount} + 1`, lastViewedAt: at })
+      .where(eq(reportShareLinks.id, linkId));
   }
 
   /** Kunci asal blok yang sudah ada di laporan. */

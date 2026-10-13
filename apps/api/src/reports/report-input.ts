@@ -323,3 +323,18 @@ export function parseNoteUpdate(value: unknown): NoteUpdateInput {
   if (Object.keys(update).length === 0) throw new ReportInputError('Tidak ada yang diubah.');
   return update;
 }
+
+export interface ShareInput {
+  /** Masa berlaku dalam hari; `null` tidak kedaluwarsa. */
+  expiresInDays: number | null;
+}
+
+export function parseShare(value: unknown): ShareInput {
+  const body = value === undefined || value === null ? {} : record(value, 'Isi permintaan');
+  const days = body.expiresInDays;
+  if (days === undefined || days === null) return { expiresInDays: null };
+  if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > 365) {
+    throw new ReportInputError('Masa berlaku tautan harus bilangan bulat 1–365 hari, atau kosong untuk tanpa batas.');
+  }
+  return { expiresInDays: days };
+}

@@ -5,7 +5,8 @@ import { EVIDENCE_FILTERS } from './report-evidence.js';
 import { ReportEvidenceService } from './report-evidence.service.js';
 import { REPORT_EXPORT_FORMATS, type ReportExportFormat } from './report-export.js';
 import { ReportExportService } from './report-export.service.js';
-import { parseCompose, parseEmbed, parseNewReport, parseNoteCreate, parseNoteUpdate, parseReportUpdate, ReportInputError } from './report-input.js';
+import { parseCompose, parseEmbed, parseNewReport, parseNoteCreate, parseNoteUpdate, parseReportUpdate, parseShare, ReportInputError } from './report-input.js';
+import { ReportShareService } from './report-share.service.js';
 import { ReportNotesService } from './report-notes.service.js';
 import { ReportsService } from './reports.service.js';
 import type {
@@ -16,6 +17,8 @@ import type {
   ReportNoteResult,
   ReportNotesResponse,
   ReportPickerResponse,
+  ReportShareCreated,
+  ReportSharesResponse,
   ReportSummaryView,
   ReportView,
 } from './reports.types.js';
@@ -46,6 +49,7 @@ function idOf(value: string, what = 'id'): number {
  * status semat; `POST /:id/evidence` menyematkan satu hash. `/:id/notes`
  * mengelola catatan investigasi (daftar, tambah, ubah, hapus).
  * `GET /:id/export?format=csv|pdf` mengunduh laporan sebagai berkas.
+ * `/:id/share` membuat, mendaftar, dan mencabut tautan berbagi publik.
  */
 @Controller('reports')
 export class ReportsController {
@@ -55,7 +59,24 @@ export class ReportsController {
     private readonly evidence: ReportEvidenceService,
     private readonly notes: ReportNotesService,
     private readonly exporter: ReportExportService,
+    private readonly shares: ReportShareService,
   ) {}
+
+  @Get(':id/share')
+  shareList(@Param('id') id: string): Promise<ReportSharesResponse> {
+    return this.shares.list(idOf(id));
+  }
+
+  @Post(':id/share')
+  share(@Param('id') id: string, @Body() body: unknown): Promise<ReportShareCreated> {
+    return this.shares.create(idOf(id), parsed(() => parseShare(body)));
+  }
+
+  @Delete(':id/share/:linkId')
+  @HttpCode(204)
+  revokeShare(@Param('id') id: string, @Param('linkId') linkId: string): Promise<void> {
+    return this.shares.revoke(idOf(id), idOf(linkId, 'linkId'));
+  }
 
   @Get(':id/export')
   async export(@Param('id') id: string, @Query('format') format?: string): Promise<StreamableFile> {

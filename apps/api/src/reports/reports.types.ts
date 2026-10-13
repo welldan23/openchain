@@ -213,3 +213,40 @@ export interface ReportNoteResult {
   report: ReportView;
   note: ReportNoteView;
 }
+
+/** Tautan berbagi publik; token mentah tidak pernah ditampilkan lagi setelah dibuat. */
+export interface ReportShareLinkView {
+  id: string;
+  /** Beberapa karakter awal token, untuk mengenali tautan. */
+  prefix: string;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  lastViewedAt: string | null;
+  viewCount: number;
+  status: 'active' | 'expired' | 'revoked';
+}
+
+export interface ReportShareCreated extends ReportShareLinkView {
+  /** Token mentah; hanya ditunjukkan sekali ini. */
+  token: string;
+  /** Halaman publik di frontend. */
+  path: string;
+  /** Endpoint publik di API (tanpa awalan `/api`). */
+  apiPath: string;
+}
+
+export interface ReportSharesResponse {
+  reportId: string;
+  /** Laporan bisa dibagikan publik (sudah final). */
+  shareable: boolean;
+  /** Kenapa belum bisa atau tautannya tidak tampil; `null` bila bisa. */
+  reason: string | null;
+  links: ReportShareLinkView[];
+}
+
+/** Laporan untuk pembaca publik: tanpa tautan internal ke kasus dan kunci asal blok. */
+export type PublicReportView = Omit<ReportView, 'source'> & {
+  source: { title: string } | null;
+  share: { createdAt: string; expiresAt: string | null };
+};

@@ -185,3 +185,36 @@ export const reportClaimEvidence = pgTable(
   },
   (t) => [unique('report_claim_evidence_unique').on(t.blockId, t.chainId, t.txHash), index('report_claim_evidence_tx_idx').on(t.chainId, t.txHash)],
 );
+
+/**
+ * Tautan berbagi publik laporan. Token mentah hanya ditunjukkan sekali saat
+ * dibuat; yang disimpan hanya hash SHA-256-nya dan awalan pendek untuk
+ * dikenali. Tautan bisa kedaluwarsa atau dicabut.
+ */
+export const reportShareLinks = pgTable(
+  'report_share_links',
+  {
+    id: idColumn(),
+    reportId: refId('report_id')
+      .notNull()
+      .references(() => reports.id, { onDelete: 'cascade' }),
+    /** SHA-256 heksadesimal dari token. */
+    tokenHash: text('token_hash').notNull(),
+    /** Beberapa karakter awal token, untuk mengenali tautan di daftar. */
+    tokenPrefix: text('token_prefix').notNull(),
+    createdAt: timestampTz('created_at').notNull(),
+    expiresAt: timestampTz('expires_at'),
+    revokedAt: timestampTz('revoked_at'),
+    lastViewedAt: timestampTz('last_viewed_at'),
+    viewCount: integer('view_count').notNull().default(0),
+  },
+  (t) => [
+    unique('report_share_links_token_unique').on(t.tokenHash),
+    index('report_share_links_report_idx').on(t.reportId),
+    check('report_share_links_hash_format', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check('report_share_links_prefix_length', sql`length(${t.tokenPrefix}) between 4 and 12`),
+    check('report_share_links_expiry_order', sql`${t.expiresAt} is null or ${t.expiresAt} > ${t.createdAt}`),
+    check('report_share_links_revoked_order', sql`${t.revokedAt} is null or ${t.revokedAt} >= ${t.createdAt}`),
+    check('report_share_links_views', sql`${t.viewCount} >= 0`),
+  ],
+);

@@ -806,6 +806,21 @@ Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
   tambahan (font standar Helvetica; karakter di luar WinAnsi diganti padanan
   ASCII). Nilai kosong ditulis "belum ada", laporan dengan blocker ditandai
   DRAF, dan waktu ditulis dalam UTC. Format lain `400`.
+- Tautan berbagi publik: `POST /api/reports/:id/share` (`201`), body
+  `{ expiresInDays? }` (1–365, kosong = tanpa batas), hanya untuk laporan
+  final (`409` bila belum). Menjawab token acak 32 karakter beserta `path`
+  halaman publik (`/publik/laporan/<token>`) dan `apiPath`; token hanya
+  ditunjukkan sekali ini, yang disimpan hanya hash SHA-256 dan awalan 6
+  karakternya. `GET /api/reports/:id/share` mendaftar tautan (awalan, status
+  `active`/`expired`/`revoked`, jumlah dan waktu dilihat) tanpa token, beserta
+  `shareable`. `DELETE /api/reports/:id/share/:linkId` mencabut (`204`).
+- Pembaca publik: `GET /api/public/reports/:token` dan
+  `…/:token/export?format=csv|pdf` — laporan hanya-baca tanpa tautan internal
+  ke kasus (`source` hanya judul) dan tanpa kunci asal blok, dengan
+  `Cache-Control: no-store` dan `X-Robots-Tag: noindex`. Setiap tampilan
+  dihitung. Token tak dikenal `404`; tautan dicabut, kedaluwarsa, atau laporan
+  yang sedang direvisi (bukan final lagi) `410` dengan alasannya. Laporan yang
+  difinalkan lagi tampil kembali lewat tautan yang sama.
 - Saat isi laporan disimpan utuh lewat `PATCH`, klaim yang membawa `evidence`
   (ber-chain) memakai itu, bukan `evidenceTxHashes`, jadi isi dari `GET` bisa
   dikirim balik apa adanya. Catatan yang merujuk id klaim tersimpan yang tidak
@@ -1157,7 +1172,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Riwayat dan kasus | `investigations`, `cases`, `case_subjects`, `case_findings`, `case_finding_evidence`, `case_notes`, `case_steps`, `case_snapshot_blocks` |
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 | Penilaian risiko | `risk_assessments` (+ `risk_assessment_sources`), `risk_reasons` (+ `risk_reason_evidence`), `risk_warnings` (+ `risk_warning_evidence`), `risk_trait_checks` |
-| Laporan bukti | `reports` (+ `report_snapshot_blocks`), `report_sections`, `report_blocks`, `report_claim_evidence` |
+| Laporan bukti | `reports` (+ `report_snapshot_blocks`), `report_sections`, `report_blocks`, `report_claim_evidence`, `report_share_links` |
 
 Aturan PRD yang dijaga langsung oleh database:
 
@@ -1288,3 +1303,7 @@ Aturan PRD yang dijaga langsung oleh database:
   laporan menghapus semua isinya.
 - Migrasi `0019` menambah `report_blocks.source_key`: asal klaim atau entitas
   yang disusun otomatis (`case:…`, `risk:…`, `subject:…`), unik per laporan.
+- `report_share_links` (migrasi `0020`) menyimpan tautan berbagi publik: hanya
+  hash SHA-256 token (unik, dijaga formatnya) dan awalan pendeknya, waktu
+  dibuat, kedaluwarsa (harus setelah dibuat), dicabut, dan hitungan dilihat.
+  Menghapus laporan menghapus tautannya.

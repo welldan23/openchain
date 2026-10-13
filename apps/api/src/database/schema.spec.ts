@@ -67,6 +67,7 @@ const EXPECTED_TABLES = [
   'report_blocks',
   'report_claim_evidence',
   'report_sections',
+  'report_share_links',
   'report_snapshot_blocks',
   'reports',
   'risk_assessment_sources',
@@ -1474,6 +1475,18 @@ describe('laporan bukti', () => {
     expect(await db.select().from(schema.reportClaimEvidence).where(eq(schema.reportClaimEvidence.blockId, claim.id))).toEqual([]);
   });
 
+  it('tautan berbagi: hanya hash token yang disimpan, unik, waktu kedaluwarsa setelah dibuat', async () => {
+    const { report: row } = await draft();
+    const link = { reportId: row.id, tokenHash: 'a'.repeat(64), tokenPrefix: 'AbCdEf', createdAt: FETCHED_AT };
+    await db.insert(schema.reportShareLinks).values(link);
+    await expectConstraintViolation(db.insert(schema.reportShareLinks).values(link), 'report_share_links_token_unique');
+    await expectConstraintViolation(db.insert(schema.reportShareLinks).values({ ...link, tokenHash: 'token-mentah' }), 'report_share_links_hash_format');
+    await expectConstraintViolation(
+      db.insert(schema.reportShareLinks).values({ ...link, tokenHash: 'b'.repeat(64), expiresAt: FETCHED_AT }),
+      'report_share_links_expiry_order',
+    );
+  });
+
   it('blok hanya masuk bagian di laporan yang sama; menghapus laporan menghapus semua isinya', async () => {
     const first = await draft();
     const second = await draft();
@@ -1488,7 +1501,7 @@ describe('laporan bukti', () => {
       'report_snapshot_blocks_unique',
     );
     await db.delete(schema.reports).where(eq(schema.reports.id, first.report.id));
-    for (const table of [schema.reportSections, schema.reportBlocks, schema.reportSnapshotBlocks]) {
+    for (const table of [schema.reportSections, schema.reportBlocks, schema.reportSnapshotBlocks, schema.reportShareLinks]) {
       expect(await db.select().from(table).where(eq(table.reportId, first.report.id))).toEqual([]);
     }
   });
