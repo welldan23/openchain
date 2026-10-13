@@ -229,6 +229,23 @@ export class ReportsRepository {
     return ids;
   }
 
+  async findBlock(reportId: number, blockId: number, executor: Executor = this.db) {
+    const [row] = await executor
+      .select()
+      .from(reportBlocks)
+      .where(and(eq(reportBlocks.reportId, reportId), eq(reportBlocks.id, blockId)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async updateBlock(executor: Executor, blockId: number, values: Partial<typeof reportBlocks.$inferInsert>): Promise<void> {
+    await executor.update(reportBlocks).set(values).where(eq(reportBlocks.id, blockId));
+  }
+
+  async deleteBlock(executor: Executor, blockId: number): Promise<void> {
+    await executor.delete(reportBlocks).where(eq(reportBlocks.id, blockId));
+  }
+
   /** Kunci asal blok yang sudah ada di laporan. */
   async sourceKeys(reportId: number): Promise<Set<string>> {
     const rows = await this.db.select({ sourceKey: reportBlocks.sourceKey }).from(reportBlocks).where(eq(reportBlocks.reportId, reportId));

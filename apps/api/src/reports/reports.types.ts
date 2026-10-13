@@ -188,3 +188,28 @@ export interface ReportEmbedResult {
   /** `false` bila hash itu sudah tersemat sebelumnya. */
   created: boolean;
 }
+
+/** Catatan investigasi di laporan beserta klaim yang dibahasnya. */
+export interface ReportNoteView {
+  id: string;
+  body: string;
+  createdAt: string;
+  editedAt: string | null;
+  sectionId: string;
+  sectionTitle: string;
+  /** Klaim yang dibahas; `null` bila catatan umum atau klaimnya sudah dihapus. */
+  claim: { blockId: string; title: string } | null;
+}
+
+export interface ReportNotesResponse {
+  reportId: string;
+  /** Urut sesuai letaknya di laporan. */
+  notes: ReportNoteView[];
+  /** Klaim yang bisa dipilih sebagai kaitan catatan, urut sesuai laporan. */
+  claimOptions: Array<{ blockId: string; title: string }>;
+}
+
+export interface ReportNoteResult {
+  report: ReportView;
+  note: ReportNoteView;
+}

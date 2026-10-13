@@ -130,8 +130,10 @@ function parseClaim(value: unknown): ClaimInput {
   const classification = CLASSIFICATIONS[String(body.classification)];
   if (!classification) throw new ReportInputError(`Klasifikasi klaim tidak dikenal: ${String(body.classification)}.`);
   const claimChain = chain(body.chain);
-  // Hash boleh dikirim sebagai teks (bentuk frontend) atau { chain, txHash }.
-  const raw = [...list(body.evidence, 'Bukti klaim'), ...list(body.evidenceTxHashes, 'Bukti klaim')];
+  // Hash boleh dikirim sebagai { chain, txHash } (`evidence`) atau teks saja
+  // (`evidenceTxHashes`, bentuk frontend). Bila keduanya ada, seperti isi
+  // laporan yang dikirim balik apa adanya, `evidence` dipakai karena membawa chain.
+  const raw = body.evidence !== undefined && body.evidence !== null ? list(body.evidence, 'Bukti klaim') : list(body.evidenceTxHashes, 'Bukti klaim');
   if (raw.length > MAX_EVIDENCE_PER_CLAIM) throw new ReportInputError(`Bukti per klaim maksimal ${MAX_EVIDENCE_PER_CLAIM} hash.`);
   const seen = new Set<string>();
   const evidence: EvidenceRefInput[] = [];
@@ -204,9 +206,13 @@ export function parseSections(value: unknown): SectionInput[] {
   unique(sections.map((section) => section.id), 'bagian');
   unique(blocks.map((block) => block.id), 'blok');
   const claims = new Set(blocks.flatMap((block) => (block.kind === 'claim' && block.id !== null ? [block.id] : [])));
+  // Id tersimpan (angka) yang klaimnya tidak dikirim lagi berarti klaim itu
+  // dihapus: kaitannya dilepas, sama seperti di database. Id sementara yang
+  // tidak cocok ditolak supaya salah ketik tidak hilang diam-diam.
   for (const block of blocks) {
     if (block.kind === 'note' && block.claimBlockId !== null && !claims.has(block.claimBlockId)) {
-      throw new ReportInputError('Catatan merujuk klaim yang tidak ada di laporan ini.');
+      if (!/^\d+$/.test(block.claimBlockId)) throw new ReportInputError('Catatan merujuk klaim yang tidak ada di laporan ini.');
+      block.claimBlockId = null;
     }
   }
   return sections;
@@ -279,4 +285,41 @@ export function parseEmbed(value: unknown): EmbedInput {
   const embedChain = chain(body.chain);
   if (!embedChain) throw new ReportInputError('Chain bukti wajib diisi.');
   return { chain: embedChain, txHash: text(body.txHash, 'Hash bukti', 128), caption: optionalText(body.caption, 'Keterangan bukti', CAPTION_MAX) };
+}
+
+export interface NoteCreateInput {
+  body: string;
+  claimBlockId: number | null;
+}
+
+export interface NoteUpdateInput {
+  body?: string;
+  /** `null` melepas kaitan klaim. */
+  claimBlockId?: number | null;
+}
+
+function blockRef(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  const id = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 1) throw new ReportInputError('Id klaim yang dibahas tidak valid.');
+  return id;
+}
+
+/** Isi catatan: tidak boleh kosong, maksimal 280 karakter, tidak dipotong diam-diam. */
+function noteBody(value: unknown): string {
+  return text(value, 'Catatan', NOTE_MAX);
+}
+
+export function parseNoteCreate(value: unknown): NoteCreateInput {
+  const body = record(value, 'Isi permintaan');
+  return { body: noteBody(body.body), claimBlockId: blockRef(body.claimBlockId) };
+}
+
+export function parseNoteUpdate(value: unknown): NoteUpdateInput {
+  const body = record(value, 'Isi permintaan');
+  const update: NoteUpdateInput = {};
+  if (body.body !== undefined) update.body = noteBody(body.body);
+  if (body.claimBlockId !== undefined) update.claimBlockId = blockRef(body.claimBlockId);
+  if (Object.keys(update).length === 0) throw new ReportInputError('Tidak ada yang diubah.');
+  return update;
 }

@@ -785,6 +785,21 @@ Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
   (`created: false`). Menjawab `{ report, blockId, created }`. Hash atau chain
   tidak valid `400`, laporan final `409`.
 - Setiap bukti di `GET /api/reports/:id` juga membawa `explorerUrl`.
+- `GET /api/reports/:id/notes` — catatan investigasi urut letaknya (bagian,
+  waktu dibuat dan diubah, klaim yang dibahas) dan `claimOptions` (klaim yang
+  bisa dikaitkan). `POST /api/reports/:id/notes` (`201`), body `{ body,
+  claimBlockId? }`, menambah catatan di bagian "Catatan investigasi" (dibuat
+  sebelum "Batasan", atau di akhir). `PATCH …/notes/:noteId` mengubah `body`
+  dan/atau `claimBlockId` (`null` melepas kaitan); waktu dibuat tetap dan
+  `editedAt` diisi hanya bila ada yang berubah. `DELETE …/notes/:noteId`
+  (`204`). Keduanya menjawab `{ report, note }`. Catatan wajib diisi, maksimal
+  280 karakter dan tidak dipotong diam-diam; klaim yang dikaitkan harus klaim
+  di laporan yang sama (`400`); id yang bukan catatan `404`; laporan final
+  `409`.
+- Saat isi laporan disimpan utuh lewat `PATCH`, klaim yang membawa `evidence`
+  (ber-chain) memakai itu, bukan `evidenceTxHashes`, jadi isi dari `GET` bisa
+  dikirim balik apa adanya. Catatan yang merujuk id klaim tersimpan yang tidak
+  dikirim lagi dilepas kaitannya, sama seperti klaim yang dihapus.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

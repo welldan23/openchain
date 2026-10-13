@@ -3,9 +3,20 @@ import { parsePositiveInteger } from '../common/query-params.js';
 import { ReportComposeService } from './report-compose.service.js';
 import { EVIDENCE_FILTERS } from './report-evidence.js';
 import { ReportEvidenceService } from './report-evidence.service.js';
-import { parseCompose, parseEmbed, parseNewReport, parseReportUpdate, ReportInputError } from './report-input.js';
+import { parseCompose, parseEmbed, parseNewReport, parseNoteCreate, parseNoteUpdate, parseReportUpdate, ReportInputError } from './report-input.js';
+import { ReportNotesService } from './report-notes.service.js';
 import { ReportsService } from './reports.service.js';
-import type { ReportComposeResult, ReportEmbedResult, ReportEvidenceFilter, ReportEvidenceResponse, ReportPickerResponse, ReportSummaryView, ReportView } from './reports.types.js';
+import type {
+  ReportComposeResult,
+  ReportEmbedResult,
+  ReportEvidenceFilter,
+  ReportEvidenceResponse,
+  ReportNoteResult,
+  ReportNotesResponse,
+  ReportPickerResponse,
+  ReportSummaryView,
+  ReportView,
+} from './reports.types.js';
 
 function parsed<T>(parse: () => T): T {
   try {
@@ -16,9 +27,9 @@ function parsed<T>(parse: () => T): T {
   }
 }
 
-function idOf(value: string): number {
-  const id = parsePositiveInteger(value, 'id');
-  if (id === undefined) throw new BadRequestException('Parameter id wajib diisi.');
+function idOf(value: string, what = 'id'): number {
+  const id = parsePositiveInteger(value, what);
+  if (id === undefined) throw new BadRequestException(`Parameter ${what} wajib diisi.`);
   return id;
 }
 
@@ -30,7 +41,8 @@ function idOf(value: string): number {
  * `GET /:id/picker` memberi kandidat isi dari kasus sumber dan penilaian
  * risiko entitasnya; `POST /:id/compose` memasukkan pilihan sebagai blok.
  * `GET /:id/evidence` memberi semua hash bukti beserta tautan explorer dan
- * status semat; `POST /:id/evidence` menyematkan satu hash.
+ * status semat; `POST /:id/evidence` menyematkan satu hash. `/:id/notes`
+ * mengelola catatan investigasi (daftar, tambah, ubah, hapus).
  */
 @Controller('reports')
 export class ReportsController {
@@ -38,7 +50,29 @@ export class ReportsController {
     private readonly service: ReportsService,
     private readonly composer: ReportComposeService,
     private readonly evidence: ReportEvidenceService,
+    private readonly notes: ReportNotesService,
   ) {}
+
+  @Get(':id/notes')
+  noteList(@Param('id') id: string): Promise<ReportNotesResponse> {
+    return this.notes.list(idOf(id));
+  }
+
+  @Post(':id/notes')
+  createNote(@Param('id') id: string, @Body() body: unknown): Promise<ReportNoteResult> {
+    return this.notes.create(idOf(id), parsed(() => parseNoteCreate(body)));
+  }
+
+  @Patch(':id/notes/:noteId')
+  updateNote(@Param('id') id: string, @Param('noteId') noteId: string, @Body() body: unknown): Promise<ReportNoteResult> {
+    return this.notes.update(idOf(id), idOf(noteId, 'noteId'), parsed(() => parseNoteUpdate(body)));
+  }
+
+  @Delete(':id/notes/:noteId')
+  @HttpCode(204)
+  removeNote(@Param('id') id: string, @Param('noteId') noteId: string): Promise<void> {
+    return this.notes.remove(idOf(id), idOf(noteId, 'noteId'));
+  }
 
   @Get(':id/evidence')
   evidenceList(@Param('id') id: string, @Query('filter') filter?: string): Promise<ReportEvidenceResponse> {

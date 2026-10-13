@@ -36,6 +36,18 @@ describe('validasi laporan', () => {
     expect(section.blocks[0]).toMatchObject({ id: null, claim: { provider: null, observedAt: null, evidence: [], detail: '' } });
   });
 
+  it('klaim yang dikirim balik dari GET memakai evidence ber-chain, bukan evidenceTxHashes', () => {
+    const [section] = parseSections([
+      { title: 'A', blocks: [{ kind: 'claim', claim: { title: 'x', classification: 'heuristic', evidence: [{ chain: 'base', txHash: HASH }], evidenceTxHashes: [HASH] } }] },
+    ]);
+    expect(section.blocks[0]).toMatchObject({ claim: { evidence: [{ chain: 'base', txHash: HASH.toLowerCase() }] } });
+  });
+
+  it('catatan yang klaimnya tidak dikirim lagi dilepas kaitannya (klaim dihapus)', () => {
+    const [section] = parseSections([{ title: 'A', blocks: [{ kind: 'note', id: '5', body: 'Cek', claimBlockId: '4' }] }]);
+    expect(section.blocks[0]).toMatchObject({ kind: 'note', claimBlockId: null });
+  });
+
   it('menolak isi yang salah dengan pesan yang jelas', () => {
     const bad: Array<[unknown, string]> = [
       [{ title: '' }, 'Judul laporan wajib diisi'],
