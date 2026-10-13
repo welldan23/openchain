@@ -9,23 +9,20 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { and, asc, desc, eq, max } from 'drizzle-orm';
 import { EVM_CHAIN_DEFINITIONS, PHASE_4_CHAINS } from '../chains/chain-definitions.js';
 import { CLOCK, type Clock } from '../common/clock.js';
-import { formatUnits, numericToNumber } from '../common/units.js';
 import { DATABASE, type Database } from '../database/database.module.js';
 import { InvalidIdentifierError, normalizeAddress, normalizeTxHash } from '../database/identifiers.js';
 import type { CaseSubjectKind } from '../database/schema/enums.js';
 import { caseFindingEvidence, caseFindings, caseNotes, cases, caseSnapshotBlocks, caseSteps, caseSubjects } from '../database/schema/index.js';
-import { nativeAssetOf } from '../flows/flow-summary.mapper.js';
-import type { FlowAsset } from '../flows/flow-summary.types.js';
 import { FlowsRepository } from '../flows/flows.repository.js';
 import { sortLabels, toLabelView } from '../tokens/holders.mapper.js';
 import type { CaseItemsInput, CaseUpdateInput, FindingInput, NewCaseInput, StepInput } from './case-input.js';
+import { storedTxEvidence, type ChainRow } from './case-evidence.js';
 import { caseSnapshot, type CaseSnapshot, type SubjectSnapshotInput } from './case-snapshot.js';
 import { CasesRepository } from './cases.repository.js';
 import type { CaseEvidenceView, CaseSummaryView, CaseView, SaveToCaseResult } from './cases.types.js';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 type CaseRow = typeof cases.$inferSelect;
-type ChainRow = Awaited<ReturnType<FlowsRepository['listChains']>>[number];
 
 const CHAIN_ORDER = [...EVM_CHAIN_DEFINITIONS.map((definition) => definition.id), ...PHASE_4_CHAINS];
 const chainRank = (chainId: string) => (CHAIN_ORDER.includes(chainId) ? CHAIN_ORDER.indexOf(chainId) : CHAIN_ORDER.length);
@@ -367,36 +364,8 @@ export class CasesService {
   }
 
   /** Bukti satu hash dari data tersimpan; kosong dan `stored: false` bila belum tercatat. */
-  private async evidence(chain: ChainRow, txHash: string): Promise<CaseEvidenceView> {
-    const movements = await this.flows.movementsByTx(chain.id, txHash);
-    const transaction = movements.length === 0 ? await this.flows.findTransaction(chain.id, txHash) : null;
-    if (movements.length === 0 && !transaction) return { chain: chain.id, txHash, stored: false, timestamp: null, blockNumber: null, movements: [] };
-
-    const [addressById, tokensById] = await Promise.all([
-      this.flows.addressesByIds([...new Set(movements.flatMap((move) => [move.fromId, move.toId]))]),
-      this.flows.tokensByIds([...new Set(movements.flatMap((move) => (move.tokenId === null ? [] : [move.tokenId])))]),
-    ]);
-    const native = nativeAssetOf(chain);
-    const first = movements[0];
-    return {
-      chain: chain.id,
-      txHash,
-      stored: true,
-      timestamp: (first?.timestamp ?? transaction!.transaction.blockTimestamp).toISOString(),
-      blockNumber: first?.blockNumber ?? transaction!.transaction.blockNumber,
-      movements: movements.map((move) => {
-        const token = move.tokenId === null ? null : tokensById.get(move.tokenId);
-        const asset: FlowAsset = token ? { type: 'token', address: token.address, symbol: token.symbol, name: token.name, decimals: token.decimals } : native;
-        return {
-          from: addressById.get(move.fromId) ?? '',
-          to: addressById.get(move.toId) ?? '',
-          asset,
-          amountRaw: move.amountRaw,
-          amount: asset.decimals === null ? null : formatUnits(move.amountRaw, asset.decimals),
-          amountUsd: numericToNumber(move.amountUsd),
-        };
-      }),
-    };
+  private evidence(chain: ChainRow, txHash: string): Promise<CaseEvidenceView> {
+    return storedTxEvidence(this.flows, chain, txHash);
   }
 }
 

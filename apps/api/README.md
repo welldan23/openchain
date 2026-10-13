@@ -720,6 +720,41 @@ bisa direproduksi. Satu workspace, belum ada akun pengguna. Kontraknya ada di
 - Isian yang salah, chain tak dikenal, dan address atau hash yang tidak cocok
   dengan chain-nya dijawab `400`.
 
+### `/api/reports` (laporan bukti)
+
+Laporan investigasi berbasis bukti, biasanya disusun dari satu kasus.
+Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
+`InvestigationReport` dan `ReportSummary` di frontend.
+
+- `GET /api/reports` — ringkasan semua laporan, terbaru diperbarui dulu:
+  status, judul kasus sumber, jumlah bagian, klaim, hash bukti unik, dan
+  jumlah masalah `blocker`.
+- `GET /api/reports/:id` — laporan lengkap: bagian berisi blok (`paragraph`,
+  `claim`, `evidence`, `note`, `entity`), bukti transaksi dari klaim dan bukti
+  tersemat (seperti di kasus; hash yang belum tercatat `stored: false`), snapshot
+  data, dan `readiness` (`ready` dan daftar masalah). Kasus sumber yang sudah
+  dihapus tetap disebut judulnya dengan `caseId: null`.
+- `POST /api/reports` — laporan baru (`201`), body `{ title, summary?, caseId?,
+  sections? }`. Dengan `caseId`, judul dan snapshot kasus (blok per chain,
+  provider, kelengkapan) disalin; tanpa kasus snapshot-nya `unavailable`
+  beserta alasannya. Kasus yang tidak ada dijawab `404`.
+- `PATCH /api/reports/:id` — ubah `title`, `summary`, `status` (`draft`,
+  `review`, `final`), dan/atau `sections` (isi utuh). Bagian dan blok dengan
+  `id` tersimpan diperbarui di tempat (id dan waktu dibuat tetap; catatan yang
+  isinya berubah mendapat `editedAt`), id lain dianggap baru, dan yang tidak
+  dikirim lagi dihapus. `claimBlockId` catatan boleh memakai id sementara klaim
+  di permintaan yang sama.
+- Klaim boleh belum punya provider, waktu data, atau hash bukti; kekurangannya
+  ditandai di `readiness`, tidak ditolak dan tidak ditebak. Hash bukti klaim
+  boleh teks saja (bentuk frontend): chain-nya `chain` klaim, atau satu-satunya
+  chain di snapshot laporan; bila tidak bisa dipastikan dijawab `400`.
+- Finalisasi (`status: "final"`) ditolak `409` selama masih ada blocker (klaim
+  tanpa provider atau waktu data, klaim fakta/kalkulasi tanpa hash); perubahan
+  lain di permintaan yang sama ikut dibatalkan. Laporan final dikunci: ubahan
+  apa pun dijawab `409` sampai statusnya dibuka lagi ke `review` atau `draft`.
+- `DELETE /api/reports/:id` — `204`, atau `404` bila sudah tidak ada.
+- Isian yang salah dan chain tak dikenal dijawab `400`.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,

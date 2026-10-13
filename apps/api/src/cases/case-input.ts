@@ -61,7 +61,7 @@ export interface CaseUpdateInput {
 }
 
 /** Istilah frontend diterima juga: `fact` dan `calculation`. */
-const CLASSIFICATIONS: Record<string, InfoClassification> = {
+export const CLASSIFICATIONS: Record<string, InfoClassification> = {
   verified_fact: 'verified_fact',
   fact: 'verified_fact',
   derived_metric: 'derived_metric',
@@ -110,7 +110,7 @@ export function parseTags(value: unknown): string[] {
   return tags;
 }
 
-function parseSubject(value: unknown): SubjectInput | null {
+export function parseSubject(value: unknown): SubjectInput | null {
   if (value === undefined || value === null) return null;
   const body = record(value, 'Subjek');
   if (body.kind !== 'token' && body.kind !== 'address') throw new CaseInputError('Jenis subjek harus token atau address.');
