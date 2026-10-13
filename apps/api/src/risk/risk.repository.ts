@@ -21,6 +21,7 @@ import {
 } from '../database/schema/index.js';
 import type { EvidenceRecord } from '../tokens/evidence.view.js';
 import type { AssessmentDraft, CheckFact, ClusterFact, EvidenceRef, MovementFact } from './risk-rules.js';
+import type { FundingFact } from './risk-warnings.js';
 
 type Raw = Record<string, unknown>;
 
@@ -63,6 +64,8 @@ export interface PersistInput {
   assessedAt: Date;
 }
 
+export type TokenSnapshotPoint = DataPoint & { snapshotId: number; top10Pct: number | null; liquidityUsd: number | null; priceUsd: number | null };
+
 @Injectable()
 export class RiskRepository {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -92,17 +95,29 @@ export class RiskRepository {
     }));
   }
 
+  /** Objek yang punya data untuk dinilai: token bersnapshot dan address yang sudah dipindai, opsional per chain. */
+  async assessableObjects(chainId?: string): Promise<Array<{ chainId: string; address: string }>> {
+    const where = chainId === undefined ? sql`` : sql`and a.chain_id = ${chainId}`;
+    const rows = await this.rows(sql`
+      select distinct a.chain_id, a.address from addresses a
+      where (exists (select 1 from tokens t join token_snapshots s on s.token_id = t.id where t.address_id = a.id)
+        or exists (select 1 from address_flow_scans f where f.address_id = a.id and f.status <> 'unavailable')) ${where}
+      order by a.chain_id, a.address`);
+    return rows.map((row) => ({ chainId: String(row.chain_id), address: String(row.address) }));
+  }
+
   /* --------------------------------- Token -------------------------------- */
 
-  /** Snapshot token terbaru beserta provider dan alasan provider yang gagal. */
-  async latestTokenSnapshot(tokenId: number): Promise<(DataPoint & { snapshotId: number; top10Pct: number | null }) | null> {
+  /** Snapshot token terbaru (atau terbaru sebelum blok tertentu) beserta provider dan alasan provider yang gagal. */
+  async latestTokenSnapshot(tokenId: number, beforeBlock?: number): Promise<TokenSnapshotPoint | null> {
     const [row] = await this.rows(sql`
       select s.id, s.block_number, s.fetched_at, s.data_status, s.top10_pct::float8 as top10_pct,
+        s.liquidity_usd::float8 as liquidity_usd, s.price_usd::float8 as price_usd,
         coalesce(array(select ss.provider_run_id from token_snapshot_sources ss where ss.snapshot_id = s.id order by 1), '{}') as runs,
         (select string_agg(distinct r.provider || ': ' || coalesce(r.error_reason, 'data belum lengkap (' || array_to_string(r.missing_fields, ', ') || ')'), '; ')
           from token_snapshot_sources ss join provider_runs r on r.id = ss.provider_run_id
           where ss.snapshot_id = s.id and (r.error_reason is not null or cardinality(r.missing_fields) > 0)) as reason
-      from token_snapshots s where s.token_id = ${tokenId}
+      from token_snapshots s where s.token_id = ${tokenId} ${beforeBlock === undefined ? sql`` : sql`and s.block_number < ${beforeBlock}`}
       order by s.block_number desc, s.id desc limit 1`);
     if (!row) return null;
     return {
@@ -113,6 +128,8 @@ export class RiskRepository {
       statusReason: row.reason === null ? null : String(row.reason),
       providerRunIds: ((row.runs as Array<string | number>) ?? []).map(Number),
       top10Pct: row.top10_pct === null ? null : Number(row.top10_pct),
+      liquidityUsd: row.liquidity_usd === null ? null : Number(row.liquidity_usd),
+      priceUsd: row.price_usd === null ? null : Number(row.price_usd),
     };
   }
 
@@ -192,6 +209,36 @@ export class RiskRepository {
       classification: row.classification as InfoClassification,
       at: new Date(row.at as string | Date),
       evidence: { chainId: String(row.chain_id), txHash: String(row.tx_hash), evidenceId: null },
+    }));
+  }
+
+  /**
+   * Kiriman native terbaru dari address ini ke wallet lain (bukan kontrak,
+   * tanpa label eksternal) sampai blok tertentu, beserta riwayat penerimanya:
+   * `fresh` hanya bila pemindaian terbaru penerima sudah membaca seluruh
+   * riwayatnya (blok 0, lengkap, mencakup kiriman ini) dan tidak ada transaksi
+   * sebelum kiriman ini.
+   */
+  async walletFundings(chainId: string, addressId: number, blockTo: number): Promise<FundingFact[]> {
+    const rows = await this.rows(sql`
+      select n.chain_id, n.tx_hash, n.block_timestamp as at, r.address as recipient,
+        (select f.block_from = 0 and f.status = 'complete' and f.native_scanned and f.tokens_scanned and f.block_to >= n.block_number
+          from address_flow_scans f where f.chain_id = n.chain_id and f.address_id = n.to_address_id and f.status <> 'unavailable'
+          order by f.scanned_at desc, f.id desc limit 1) as full_history,
+        (exists (select 1 from native_transfers p where p.chain_id = n.chain_id and p.block_number < n.block_number
+            and (p.to_address_id = n.to_address_id or p.from_address_id = n.to_address_id))
+          or exists (select 1 from token_transfers p where p.chain_id = n.chain_id and p.block_number < n.block_number
+            and (p.to_address_id = n.to_address_id or p.from_address_id = n.to_address_id))) as earlier
+      from native_transfers n join addresses r on r.id = n.to_address_id
+      where n.chain_id = ${chainId} and n.from_address_id = ${addressId} and n.to_address_id <> ${addressId}
+        and n.block_number <= ${blockTo} and n.amount_raw > 0 and r.is_contract is not true
+        and not exists (select 1 from labels l where l.address_id = r.id and l.source = 'external')
+      order by n.block_number desc, n.id desc limit 500`);
+    return rows.map((row) => ({
+      recipient: String(row.recipient),
+      at: new Date(row.at as string | Date),
+      evidence: { chainId: String(row.chain_id), txHash: String(row.tx_hash), evidenceId: null },
+      recipientHistory: row.full_history !== true ? 'unknown' : row.earlier ? 'has_history' : 'fresh',
     }));
   }
 

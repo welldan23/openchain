@@ -27,7 +27,8 @@
     "smoke:chain": "tsx src/cli/smoke-chain.ts",
     "flows:collect": "tsx src/cli/collect-flow.ts",
     "maps:build": "tsx src/cli/build-map.ts",
-    "risk:assess": "tsx src/cli/assess-risk.ts"
+    "risk:assess": "tsx src/cli/assess-risk.ts",
+    "risk:warnings": "tsx src/cli/detect-risk-warnings.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

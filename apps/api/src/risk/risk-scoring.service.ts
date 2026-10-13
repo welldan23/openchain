@@ -9,6 +9,8 @@ import { CLOCK, type Clock } from '../common/clock.js';
 import { InvalidIdentifierError, normalizeAddress } from '../database/identifiers.js';
 import type { ChainFamily, DataStatus, RiskObjectKind } from '../database/schema/enums.js';
 import { RISK_METHODOLOGY, scoreContract, scoreToken, scoreWallet, type AssessmentDraft } from './risk-rules.js';
+import { RiskWarningService } from './risk-warning.service.js';
+import { withWarnings } from './risk-warnings.js';
 import { RiskRepository, type DataPoint, type RiskObjectRow } from './risk.repository.js';
 
 export class RiskScoringError extends Error {
@@ -52,6 +54,7 @@ export function assessmentStatus(data: Pick<DataPoint, 'dataStatus' | 'statusRea
 export class RiskScoringService {
   constructor(
     private readonly repository: RiskRepository,
+    private readonly warnings: RiskWarningService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -97,7 +100,7 @@ export class RiskScoringService {
       const snapshot = await this.repository.latestTokenSnapshot(object.tokenId!);
       if (!snapshot) return { ...base, status: 'no_data', reason: 'Token ini belum punya snapshot. Ambil datanya dulu sebelum dinilai.' };
       const [checks, clusters] = await Promise.all([this.repository.contractChecks(snapshot.snapshotId), this.repository.tokenClusters(object.tokenId!)]);
-      draft = scoreToken({ checks, top10Pct: snapshot.top10Pct, clusters });
+      draft = withWarnings(scoreToken({ checks, top10Pct: snapshot.top10Pct, clusters }), await this.warnings.forToken(object.tokenId!, snapshot, checks));
       data = snapshot;
       tokenSnapshotId = snapshot.snapshotId;
     } else {
@@ -115,7 +118,7 @@ export class RiskScoringService {
           this.repository.fundedClusters(object.chainId, object.addressId),
           this.repository.botLabels(object.addressId),
         ]);
-        draft = scoreWallet({ movements, fundedClusters, botLabels }, data.fetchedAt);
+        draft = withWarnings(scoreWallet({ movements, fundedClusters, botLabels }, data.fetchedAt), await this.warnings.forWallet(object.chainId, object.addressId, data));
       } else {
         draft = scoreContract();
       }

@@ -34,6 +34,7 @@ environment variable dan tidak pernah dicetak ke log.
 | `npm run flows:collect -- <address> [chain ...]` | Kumpulkan aliran dana satu address (semua chain bila tidak disebut); `--halaman=N`, `--tanpa-simpan`, `--json` |
 | `npm run maps:build -- <chain> <token>` | Bentuk Peta Hubungan Wallet dari data tersimpan; `--holder=N`, `--kedalaman=N`, `--blok=N`, `--kumpulkan`, `--halaman=N`, `--json` |
 | `npm run risk:assess -- <address> [chain]` | Nilai risiko address dari data tersimpan (semua chain bila tidak disebut) dan simpan hasilnya; `--json` |
+| `npm run risk:warnings -- [chain]` | Nilai ulang semua objek yang punya data tersimpan dan cetak peringatan dininya; `--json` |
 | `npm test` | Tes unit, termasuk tes skema di PostgreSQL WebAssembly (PGlite) |
 | `npm run test:e2e` | Tes endpoint lewat HTTP dengan database PGlite |
 | `npm run typecheck` / `npm run lint` | Cek tipe dan lint |
@@ -293,13 +294,43 @@ tercatat; chain tanpa data dilaporkan "tidak dinilai", bukan diberi skor.
   dengan alasan.
 - Skor = jumlah poin (maksimal 100), tingkat mengikuti batas yang sama dengan
   snapshot (<25, 25–49, 50–74, ≥75). Tanpa data yang bisa dinilai, skor kosong
-  dan tingkatnya `unknown`. Asumsi tidak pernah berpoin. Ciri yang belum
-  dipantau (penarikan likuiditas, pendanaan wallet baru) tercatat "belum bisa
-  dicek". Penilaian tanpa skor tidak pernah berstatus data lengkap.
+  dan tingkatnya `unknown`. Asumsi tidak pernah berpoin. Ciri yang belum bisa
+  dipantau tercatat "belum bisa dicek" beserta alasannya. Penilaian tanpa skor
+  tidak pernah berstatus data lengkap.
 
 ```bash
 npm run risk:assess -- 0x532f27101965dd16442E59d40670FaF5eBB142E4 base
 ```
+
+### Peringatan dini
+
+`RiskWarningService` mendeteksi pola BARU setiap kali objek dinilai.
+Peringatan tidak menambah skor; ciri yang dipicunya ditautkan ke
+peringatannya. Aturan murninya ada di `src/risk/risk-warnings.ts`.
+
+- **Token**: snapshot terbaru dibandingkan snapshot sebelumnya. Cek kontrak
+  yang terkait ciri berbahaya yang memburuk (lolos → peringatan → gagal; `unknown` tidak
+  dianggap berubah), nilai pajak yang berubah, likuiditas yang turun ≥50%
+  (≤20% tersisa = tinggi; hanya bila likuiditas sebelumnya ≥ $1.000, beserta
+  perubahan harga di rentang yang sama karena penurunan bisa karena harga), dan
+  porsi 10 holder teratas yang naik ≥10 poin persen. Tanpa snapshot
+  sebelumnya, penarikan likuiditas tetap "belum bisa dicek"; likuiditas yang
+  stabil juga tidak disebut aman.
+- **Wallet**: kiriman native ke wallet lain (bukan kontrak, tanpa label
+  eksternal) yang penerimanya belum pernah bertransaksi. "Wallet baru" hanya
+  disebut bila pemindaian penerima sudah membaca seluruh riwayatnya (dari blok
+  0, lengkap) dan tidak ada transaksi sebelum kiriman itu; penerima yang belum
+  dipindai disebut jumlahnya. Yang terjadi dalam 7 hari sebelum data diambil
+  jadi peringatan (≥3 wallet = sedang); yang lebih lama tetap menandai ciri.
+- Setoran exchange dan kiriman bridge dalam 7 hari tetap jadi peringatan
+  seperti di atas.
+
+```bash
+npm run risk:warnings -- [chain] [--json]
+```
+
+menilai ulang semua objek yang punya data tersimpan (token bersnapshot,
+address yang sudah dipindai) lalu mencetak peringatannya.
 
 ## Adapter chain
 

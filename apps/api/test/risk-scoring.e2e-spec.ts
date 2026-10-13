@@ -11,6 +11,7 @@ import { RiskFindingDetailService } from '../src/risk/risk-finding-detail.servic
 import { RiskFindingsService } from '../src/risk/risk-findings.service.js';
 import { RiskScoringError, RiskScoringService } from '../src/risk/risk-scoring.service.js';
 import { RiskSummaryService } from '../src/risk/risk-summary.service.js';
+import { RiskWarningService } from '../src/risk/risk-warning.service.js';
 import { RiskRepository } from '../src/risk/risk.repository.js';
 import { createTestDatabase, seedContractChecks, seedToken, testTxHash, type TestDatabase } from './support/database.js';
 
@@ -19,6 +20,8 @@ const WALLET = '0x' + 'c1'.repeat(20);
 const EXCHANGE = '0x' + 'e1'.repeat(20);
 const BRIDGE = '0x' + 'b1'.repeat(20);
 const POOL = '0x' + 'f0'.repeat(20);
+const FRESH = '0x' + 'a7'.repeat(20);
+const UNSCANNED = '0x' + 'a8'.repeat(20);
 const SCANNED_AT = new Date('2026-10-03T04:00:00Z');
 const NOW = new Date('2026-10-03T05:00:00Z');
 const covered: KindCoverage = { failure: null, exhausted: true, pages: 1, oldest: null, skipped: null };
@@ -54,13 +57,16 @@ describe('skoring risiko objek multichain', () => {
   let client: PGlite;
   let db: TestDatabase;
   let service: RiskScoringService;
+  let ingestion: FundFlowIngestionService;
+  let tokenId: number;
 
   beforeAll(async () => {
     ({ client, db } = await createTestDatabase());
     const { snapshots } = await seedToken(db, { address: TOKEN });
+    tokenId = snapshots[1].tokenId;
     await seedContractChecks(db, 'robinhood', snapshots[1].id);
 
-    const ingestion = new FundFlowIngestionService(db as unknown as Database);
+    ingestion = new FundFlowIngestionService(db as unknown as Database);
     const depositTx = testTxHash('setoran-exchange');
     const bridgeTx = testTxHash('kirim-bridge');
     await ingestion.persist(
@@ -105,7 +111,8 @@ describe('skoring risiko objek multichain', () => {
       updatedAt: NOW,
     });
 
-    service = new RiskScoringService(new RiskRepository(db as unknown as Database), { now: () => NOW });
+    const repository = new RiskRepository(db as unknown as Database);
+    service = new RiskScoringService(repository, new RiskWarningService(repository), { now: () => NOW });
   }, 60_000);
 
   afterAll(async () => {
@@ -195,6 +202,60 @@ describe('skoring risiko objek multichain', () => {
     const rows = await db.select().from(schema.riskAssessments).where(eq(schema.riskAssessments.objectKind, 'contract'));
     expect(rows).toHaveLength(1);
     expect(second.status === 'assessed' && second.assessmentId).toBe(rows[0].id);
+  });
+
+  it('peringatan dini token: snapshot baru dibandingkan snapshot sebelumnya, tersimpan dan ditautkan ke ciri', async () => {
+    const [snapshot] = await db
+      .insert(schema.tokenSnapshots)
+      .values({ tokenId, blockNumber: 23_513_000, fetchedAt: NOW, dataStatus: 'complete', liquidityUsd: '100000', priceUsd: '0.004', top10Pct: '75' })
+      .returning();
+    const { checks } = await seedContractChecks(db, 'robinhood', snapshot.id);
+    await db.update(schema.contractChecks).set({ value: 'Beli 2% · Jual 25%, bisa diubah owner' }).where(eq(schema.contractChecks.id, checks.find((row) => row.code === 'tax')!.id));
+    await db.update(schema.contractChecks).set({ status: 'fail', value: 'Owner bisa mencetak supply' }).where(eq(schema.contractChecks.id, checks.find((row) => row.code === 'mint')!.id));
+
+    const [result] = await service.assessAddress(TOKEN, 'robinhood');
+    if (result.status !== 'assessed') throw new Error(result.reason);
+    expect(result.draft.warnings.map((warning) => [warning.code, warning.trait, warning.severity, warning.classification])).toEqual([
+      ['changed_tax', 'tax_change', 'high', 'verified_fact'],
+      ['liquidity_drop', 'liquidity_pulled', 'high', 'derived_metric'],
+      ['worsened_mint', 'mint_active', 'high', 'verified_fact'],
+      ['concentration_rising', 'holder_concentration', 'medium', 'derived_metric'],
+    ]);
+    expect(result.draft.warnings[1].description).toContain('$612,400 ke $100,000');
+    // Peringatan tidak menambah skor: tax fail 20 + mint fail 20 + ownership 5 + top10 75% 8.
+    expect(result.draft.score).toBe(53);
+
+    const warnings = await db.select().from(schema.riskWarnings).where(eq(schema.riskWarnings.assessmentId, result.assessmentId));
+    const taxWarning = warnings.find((row) => row.code === 'changed_tax')!;
+    expect(await db.select().from(schema.riskWarningEvidence).where(eq(schema.riskWarningEvidence.warningId, taxWarning.id))).toEqual([
+      expect.objectContaining({ txHash: testTxHash(`tax-${snapshot.id}`), evidenceId: expect.any(Number) }),
+    ]);
+    const traits = new Map((await db.select().from(schema.riskTraitChecks).where(eq(schema.riskTraitChecks.assessmentId, result.assessmentId))).map((row) => [row.trait, row]));
+    expect(traits.get('tax_change')).toMatchObject({ status: 'detected', warningId: taxWarning.id, reasonId: null });
+    expect(traits.get('liquidity_pulled')).toMatchObject({ status: 'detected', warningId: warnings.find((row) => row.code === 'liquidity_drop')!.id });
+  });
+
+  it('peringatan dini wallet: mendanai wallet yang seluruh riwayatnya dipindai dan belum pernah bertransaksi', async () => {
+    const fundTx = testTxHash('dana-wallet-baru');
+    const funding = { txHash: fundTx, kind: 'transaction' as const, tracePath: '', from: WALLET, to: FRESH, amountRaw: '1', blockNumber: 950, timestamp: new Date('2026-10-02T12:00:00Z') };
+    await ingestion.persist(
+      scan('ethereum', WALLET, [
+        funding,
+        { txHash: testTxHash('dana-belum-dipindai'), kind: 'transaction', tracePath: '', from: WALLET, to: UNSCANNED, amountRaw: '1', blockNumber: 960, timestamp: new Date('2026-10-02T13:00:00Z') },
+      ]),
+      'evm',
+    );
+    // Seluruh riwayat penerima dipindai (dari blok 0): kiriman ini transaksi pertamanya.
+    await ingestion.persist(scan('ethereum', FRESH, [funding]), 'evm');
+
+    const [result] = await service.assessAddress(WALLET, 'ethereum');
+    if (result.status !== 'assessed') throw new Error(result.reason);
+    const fresh = result.draft.warnings.find((warning) => warning.code === 'fresh_wallet_funding');
+    expect(fresh).toMatchObject({ trait: 'fresh_wallet_funding', title: 'Mendanai 1 wallet baru', severity: 'low', evidence: [{ chainId: 'ethereum', txHash: fundTx }] });
+    // Penerima yang belum dipindai (termasuk kontrak bridge tanpa label) tidak disebut wallet baru.
+    expect(fresh!.description).toContain('2 penerima lain belum dipindai');
+    expect(result.draft.score).toBe(15);
+    expect(result.draft.traits.find((item) => item.trait === 'fresh_wallet_funding')).toMatchObject({ status: 'detected', warningCode: 'fresh_wallet_funding' });
   });
 
   it('galat yang jelas untuk chain tak dikenal, address rusak, dan address yang belum tercatat', async () => {

@@ -15,6 +15,7 @@ import { loadDotEnv } from '../common/env.js';
 import type { Database } from '../database/database.module.js';
 import * as schema from '../database/schema/index.js';
 import { RiskScoringError, RiskScoringService } from '../risk/risk-scoring.service.js';
+import { RiskWarningService } from '../risk/risk-warning.service.js';
 import { RiskRepository } from '../risk/risk.repository.js';
 import { formatInteger, parseArgs } from './cli-format.js';
 
@@ -38,7 +39,8 @@ async function main() {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
     const db = drizzle(pool, { schema }) as unknown as Database;
-    const service = new RiskScoringService(new RiskRepository(db), systemClock);
+    const repository = new RiskRepository(db);
+    const service = new RiskScoringService(repository, new RiskWarningService(repository), systemClock);
     const results = await service.assessAddress(address, chainId);
     if (flags.has('json')) {
       console.log(JSON.stringify(results, null, 2));
@@ -55,7 +57,7 @@ async function main() {
         for (const reason of draft.reasons) {
           console.log(`   + ${reason.points ?? '·'} ${reason.title} [${reason.classification}, ${reason.evidence.length} hash]`);
         }
-        for (const warning of draft.warnings) console.log(`   ! ${warning.title}`);
+        for (const warning of draft.warnings) console.log(`   ! ${warning.title} [${warning.severity}, ${warning.classification}, ${warning.evidence.length} hash]`);
         const counts = { detected: 0, clear: 0, unknown: 0 };
         for (const item of draft.traits) counts[item.status] += 1;
         console.log(`   ciri: ${counts.detected} terdeteksi · ${counts.unknown} belum bisa dicek · ${counts.clear} tidak terdeteksi`);
