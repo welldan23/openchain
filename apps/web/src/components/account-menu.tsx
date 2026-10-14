@@ -2,12 +2,13 @@
 
 import { LogIn, LogOut, Settings, UserPlus, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { sessionLabel } from "@/lib/session";
 import { endSession, useMockSession } from "@/lib/session-store";
+import { authHref } from "@/lib/return-to";
 import { initials } from "@/lib/settings";
 
 const ITEM = "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-foreground/90 transition hover:bg-surface-raised hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent";
@@ -20,6 +21,7 @@ const ITEM = "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left te
 export function AccountMenu() {
   const session = useMockSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -95,12 +97,12 @@ export function AccountMenu() {
             {session ? null : (
               <>
                 <li>
-                  <Link href="/masuk" onClick={() => setOpen(false)} className={ITEM}>
+                  <Link href={authHref("/masuk", pathname)} onClick={() => setOpen(false)} className={ITEM}>
                     <LogIn className="size-4 text-accent" aria-hidden /> Masuk
                   </Link>
                 </li>
                 <li>
-                  <Link href="/daftar" onClick={() => setOpen(false)} className={ITEM}>
+                  <Link href={authHref("/daftar", pathname)} onClick={() => setOpen(false)} className={ITEM}>
                     <UserPlus className="size-4 text-accent" aria-hidden /> Daftar
                   </Link>
                 </li>

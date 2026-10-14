@@ -12,6 +12,8 @@ import { formatRelativeTime, shortenHash } from "@/lib/format";
 import { NOTE_MAX_LENGTH, validateNote } from "@/lib/history";
 import type { CaseFinding, CaseSubject, CaseSummary } from "@/lib/types";
 import { CaseStatusBadge } from "./case-badges";
+import { currentLocation, LoginGate } from "@/components/auth/login-gate";
+import { useMockSession } from "@/lib/session-store";
 
 const NEW_CASE = "__baru__";
 
@@ -47,6 +49,9 @@ export function SaveToCaseButton({ subject, findings = [], suggestedTitle }: Sav
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SaveToCaseResult | null>(null);
   const [saving, startSaving] = useTransition();
+  // Menyimpan investigasi butuh akun; tanpa sesi, modal berisi ajakan masuk.
+  const session = useMockSession();
+  const [returnTo, setReturnTo] = useState<string | null>(null);
 
   function loadCases() {
     setCases({ status: "loading" });
@@ -61,6 +66,11 @@ export function SaveToCaseButton({ subject, findings = [], suggestedTitle }: Sav
   }
 
   function open() {
+    if (!session) {
+      setReturnTo(currentLocation());
+      dialogRef.current?.showModal();
+      return;
+    }
     setError(null);
     setResult(null);
     setTarget(NEW_CASE);
@@ -157,7 +167,9 @@ export function SaveToCaseButton({ subject, findings = [], suggestedTitle }: Sav
           </button>
         </header>
 
-        {result ? (
+        {!session ? (
+          <LoginGate action="menyimpan ke kasus" returnTo={returnTo} className="px-4 py-5 sm:px-5" />
+        ) : result ? (
           <SaveResult result={result} onClose={close} />
         ) : (
           <form

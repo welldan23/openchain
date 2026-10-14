@@ -6,6 +6,8 @@ import { saveInvestigationNote } from "@/lib/api/search";
 import { cn } from "@/lib/cn";
 import { NOTE_MAX_LENGTH, validateNote } from "@/lib/history";
 import type { InvestigationEntry } from "@/lib/types";
+import { currentLocation, LoginGate } from "@/components/auth/login-gate";
+import { useMockSession } from "@/lib/session-store";
 
 const LINK_BUTTON =
   "inline-flex items-center gap-1 rounded text-[11px] text-muted underline-offset-2 transition hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50";
@@ -40,8 +42,15 @@ export function NoteEditor({ entry, onSaved }: NoteEditorProps) {
     editButtonRef.current?.focus();
   }, [editing, saving, entry.note]);
   const tooLong = length > NOTE_MAX_LENGTH;
+  // Catatan tersimpan di akun; tanpa sesi, yang tampil ajakan masuk.
+  const session = useMockSession();
+  const [gateReturnTo, setGateReturnTo] = useState<string | null>(null);
 
   function startEditing() {
+    if (!session) {
+      setGateReturnTo(currentLocation());
+      return;
+    }
     setDraft(entry.note ?? "");
     setError(null);
     setStatus("");
@@ -79,7 +88,14 @@ export function NoteEditor({ entry, onSaved }: NoteEditorProps) {
       <p role="status" aria-live="polite" className="sr-only">
         {status}
       </p>
-      {editing ? (
+      {gateReturnTo !== null && !session ? (
+        <div className="rounded-lg border border-line bg-surface-raised p-3">
+          <LoginGate action="menyimpan catatan" returnTo={gateReturnTo} />
+          <button type="button" onClick={() => setGateReturnTo(null)} className={cn(LINK_BUTTON, "mt-2")}>
+            Nanti saja
+          </button>
+        </div>
+      ) : editing ? (
         <form
           onSubmit={(event) => {
             event.preventDefault();
