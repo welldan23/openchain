@@ -36,3 +36,14 @@ export function initials(name: string): string {
   if (parts.length === 0) return "?";
   return (parts.length === 1 ? parts[0].slice(0, 2) : `${parts[0][0]}${parts[parts.length - 1][0]}`).toUpperCase();
 }
+
+/** Nyalakan/matikan satu sumber di daftar (untuk tampilan langsung); sumber lain tidak berubah. */
+export function withSourceEnabled(sources: DataSourceSetting[], id: string, enabled: boolean, statusWhenOn: DataSourceStatus): DataSourceSetting[] {
+  return sources.map((source) => (source.id === id ? { ...source, enabled, status: enabled ? statusWhenOn : "disabled" } : source));
+}
+
+/** Sumber aktif yang datanya ikut analisis, per jenis; jenis tanpa sumber aktif berarti datanya tidak tersedia. */
+export function inactiveKinds(sources: DataSourceSetting[]): DataSourceSetting["kind"][] {
+  const kinds = [...new Set(sources.map((source) => source.kind))];
+  return kinds.filter((kind) => !sources.some((source) => source.kind === kind && source.enabled));
+}

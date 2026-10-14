@@ -5,11 +5,13 @@
  * siap, ganti isinya dengan pemanggilan API (asumsi kontrak: `GET /settings`
  * → `AccountSettings`; `PATCH /settings/profile` multipart berisi
  * `displayName` dan `avatar` → `UserProfile`; `PATCH /settings/preferences`
- * → `DisplayPreferences`) tanpa mengubah komponen yang memakainya.
+ * → `DisplayPreferences`; `PATCH /settings/data-sources/:id` berisi
+ * `{ enabled }` → `DataSourceSetting`, `409` untuk sumber terkunci) tanpa
+ * mengubah komponen yang memakainya.
  */
 import { MOCK_SETTINGS } from "../mock/settings";
 import { validateAvatarFile, validateDisplayName, type AvatarChange } from "../profile";
-import type { AccountSettings, DisplayPreferences, UserProfile } from "../types";
+import type { AccountSettings, DataSourceSetting, DisplayPreferences, UserProfile } from "../types";
 
 const MOCK_LATENCY_MS = 400;
 
@@ -42,4 +44,19 @@ export async function updateProfile(profile: UserProfile, input: { displayName: 
 export async function updateDisplayPreferences(current: DisplayPreferences, changes: Partial<DisplayPreferences>): Promise<DisplayPreferences> {
   await delay(MOCK_LATENCY_MS);
   return { ...current, ...changes };
+}
+
+/** Id sumber yang mensimulasikan penyimpanan gagal, untuk mencoba tampilan galat. */
+export const MOCK_FAILING_SOURCE_ID = "simulasi-gagal";
+
+/**
+ * Simulasi nyalakan/matikan sumber data untuk akun ini. Sumber terkunci
+ * ditolak. Status "Dimatikan" dipakai saat mati; saat dinyalakan lagi,
+ * kondisinya kembali ke hasil pemeriksaan terakhir.
+ */
+export async function setDataSourceEnabled(source: DataSourceSetting, enabled: boolean, previousStatus: DataSourceSetting["status"]): Promise<DataSourceSetting> {
+  if (source.lockedReason) throw new Error(`${source.name} tidak bisa diubah. ${source.lockedReason}`);
+  await delay(MOCK_LATENCY_MS);
+  if (source.id === MOCK_FAILING_SOURCE_ID && !enabled) throw new Error(`Simulasi: pengaturan ${source.name} gagal disimpan. Coba lagi.`);
+  return { ...source, enabled, status: enabled ? previousStatus : "disabled" };
 }

@@ -956,6 +956,12 @@ export interface DataSourceSetting {
   /** Environment variable yang mengatur provider ini. */
   envVars: Array<{ name: string; purpose: string; required: boolean; configured: boolean }>;
   lastCheckedAt: string | null;
+  /** Dipakai untuk analisis akun ini. Sumber yang dimatikan datanya ditandai tidak tersedia, tidak dikarang. */
+  enabled: boolean;
+  /** Alasan sumber tidak bisa dimatikan atau dinyalakan; `null` bila bebas diatur. */
+  lockedReason: string | null;
+  /** Akibat bila sumber ini dimatikan, dalam bahasa sederhana. */
+  offEffect: string;
 }
 
 /**

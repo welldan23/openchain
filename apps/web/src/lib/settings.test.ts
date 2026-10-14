@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SETTINGS } from "./mock/settings";
-import { dataSourceCounts, initials, settingsTabFromPath, SETTINGS_TABS, sortDataSources } from "./settings";
+import { dataSourceCounts, inactiveKinds, initials, settingsTabFromPath, SETTINGS_TABS, sortDataSources, withSourceEnabled } from "./settings";
 
 describe("pengaturan", () => {
   it("tiga tab dengan alamat sendiri; tab aktif dibaca dari path", () => {
@@ -28,5 +28,24 @@ describe("pengaturan", () => {
     expect(initials("  budi ")).toBe("BU");
     expect(initials("Andi Budi Citra")).toBe("AC");
     expect(initials("")).toBe("?");
+  });
+
+  it("saklar sumber: hanya sumber itu berubah; mati jadi Dimatikan, nyala kembali ke kondisi terakhir", () => {
+    const off = withSourceEnabled(MOCK_SETTINGS.dataSources, "goplus", false, "ok");
+    expect(off.find((source) => source.id === "goplus")).toMatchObject({ enabled: false, status: "disabled" });
+    expect(off.filter((source) => source.id !== "goplus")).toEqual(MOCK_SETTINGS.dataSources.filter((source) => source.id !== "goplus"));
+    expect(withSourceEnabled(off, "goplus", true, "degraded").find((source) => source.id === "goplus")?.status).toBe("degraded");
+  });
+
+  it("jenis data tanpa sumber aktif ditandai", () => {
+    expect(inactiveKinds(MOCK_SETTINGS.dataSources)).toEqual(["label"]);
+    const noSecurity = withSourceEnabled(withSourceEnabled(MOCK_SETTINGS.dataSources, "goplus", false, "ok"), "honeypotis", false, "down");
+    expect(inactiveKinds(noSecurity)).toEqual(["security", "label"]);
+  });
+
+  it("mock: sumber wajib dan yang belum terhubung terkunci dengan alasan", () => {
+    const locked = MOCK_SETTINGS.dataSources.filter((source) => source.lockedReason !== null).map((source) => source.id);
+    expect(locked).toEqual(["rpc", "blockscout", "arkham"]);
+    for (const source of MOCK_SETTINGS.dataSources) expect(source.offEffect.length).toBeGreaterThan(10);
   });
 });
