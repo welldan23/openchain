@@ -20,6 +20,8 @@ export const MOCK_SETTINGS: AccountSettings = {
     language: "id",
     numberLocale: "id",
     timeDisplay: "local",
+    compactNumbers: true,
+    valueUnit: "usd",
     defaultChain: "base",
     density: "comfortable",
   },

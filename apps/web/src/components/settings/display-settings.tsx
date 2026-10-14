@@ -1,21 +1,13 @@
 import { MonitorCog } from "lucide-react";
 import { ChainBadge } from "@/components/badges";
 import { Panel } from "@/components/ui/panel";
-import { DENSITY_META, NUMBER_LOCALE_META, TIME_DISPLAY_META } from "@/lib/labels";
-import type { DisplayPreferences, UserProfile } from "@/lib/types";
+import { DENSITY_META } from "@/lib/labels";
+import type { DisplayPreferences } from "@/lib/types";
 
-export function DisplaySettings({ preferences, profile }: { preferences: DisplayPreferences; profile: UserProfile }) {
-  const rows = [
-    { label: "Format angka", value: NUMBER_LOCALE_META[preferences.numberLocale].label, hint: `Contoh: ${NUMBER_LOCALE_META[preferences.numberLocale].example}` },
-    {
-      label: "Waktu ditampilkan dalam",
-      value: TIME_DISPLAY_META[preferences.timeDisplay],
-      hint: preferences.timeDisplay === "local" ? profile.timezone : "Sama untuk semua pembaca laporan.",
-    },
-    { label: "Kerapatan tampilan", value: DENSITY_META[preferences.density], hint: null },
-  ];
+export function DisplaySettings({ preferences }: { preferences: DisplayPreferences }) {
+  const rows = [{ label: "Kerapatan tampilan", value: DENSITY_META[preferences.density], hint: null as string | null }];
   return (
-    <Panel id="preferensi-tampilan" title="Format dan tampilan lain" description="Cara angka, waktu, dan halaman ditampilkan untukmu." icon={MonitorCog}>
+    <Panel id="preferensi-tampilan" title="Tampilan lain" description="Kerapatan halaman dan chain bawaan pencarian." icon={MonitorCog}>
       <dl className="divide-y divide-line">
         {rows.map((row) => (
           <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5 first:pt-0 last:pb-0">

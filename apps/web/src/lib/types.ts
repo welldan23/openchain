@@ -920,6 +920,8 @@ export type LanguagePreference = "id" | "en";
 export type NumberLocale = "id" | "en";
 export type TimeDisplay = "local" | "utc";
 export type DensityPreference = "comfortable" | "compact";
+/** Satuan nilai transfer: dolar AS, atau koin native chain-nya (mis. ETH). */
+export type ValueUnit = "usd" | "native";
 
 export interface DisplayPreferences {
   theme: ThemePreference;
@@ -928,6 +930,9 @@ export interface DisplayPreferences {
   numberLocale: NumberLocale;
   /** Waktu ditampilkan di zona waktu profil atau UTC. */
   timeDisplay: TimeDisplay;
+  /** Angka besar diringkas (1,2 jt) atau ditulis penuh (1.234.567). */
+  compactNumbers: boolean;
+  valueUnit: ValueUnit;
   defaultChain: ChainId;
   density: DensityPreference;
 }

@@ -7,6 +7,7 @@ import type {
   NumberLocale,
   ThemePreference,
   TimeDisplay,
+  ValueUnit,
   CaseDataStatus,
   CaseStatus,
   DangerCategory,
@@ -495,4 +496,8 @@ export const NUMBER_LOCALE_META: Record<NumberLocale, { label: string; example: 
   en: { label: "Internasional", example: "1,234,567.89" },
 };
 export const TIME_DISPLAY_META: Record<TimeDisplay, string> = { local: "Zona waktu profil", utc: "UTC" };
+export const VALUE_UNIT_META: Record<ValueUnit, { label: string; description: string }> = {
+  usd: { label: "Dolar AS (USD)", description: "Nilai saat transaksi, mudah dibandingkan antar chain." },
+  native: { label: "Koin native chain", description: "Mis. ETH atau BNB. Transfer token tanpa jumlah koin native tetap memakai USD dan diberi tanda." },
+};
 export const DENSITY_META: Record<DensityPreference, string> = { comfortable: "Lega", compact: "Rapat" };
