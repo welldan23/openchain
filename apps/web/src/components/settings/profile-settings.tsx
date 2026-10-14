@@ -19,7 +19,17 @@ export function ProfileSettings({ profile, storage }: Pick<AccountSettings, "pro
   ];
   return (
     <div className="space-y-5">
-      <Panel id="profil-pengguna" title="Profil pengguna" description="Identitas akun untuk kasus dan laporan yang kamu simpan." icon={UserRound}>
+      <Panel
+        id="profil-pengguna"
+        title="Profil pengguna"
+        description="Identitas akun untuk kasus dan laporan yang kamu simpan."
+        icon={UserRound}
+        action={
+          <Link href="/masuk" className="text-xs font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent">
+            Ganti akun
+          </Link>
+        }
+      >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <span aria-hidden className="grid size-14 shrink-0 place-items-center rounded-full bg-accent/15 text-lg font-semibold text-accent ring-1 ring-accent/30">
             {initials(profile.displayName)}
