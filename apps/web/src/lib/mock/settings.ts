@@ -17,6 +17,7 @@ export const MOCK_SETTINGS: AccountSettings = {
   },
   preferences: {
     theme: "dark",
+    language: "id",
     numberLocale: "id",
     timeDisplay: "local",
     defaultChain: "base",

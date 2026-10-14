@@ -33,7 +33,7 @@ import { COORDINATION_KIND_META } from "@/lib/labels";
 import { formatDateTime, formatPct, formatTokenAmount, formatUsdCompact, shortenHash } from "@/lib/format";
 import { addressKey, addressTitle } from "@/lib/fund-flow";
 import type { ChainId, CoordinationEvent, MapEdge, MapNode } from "@/lib/types";
-import { CHART_SURFACE } from "@/lib/chart-colors";
+import { CHART_SURFACE_VAR } from "@/lib/chart-colors";
 import { fitBounds, INITIAL_VIEWPORT, MAX_SCALE, MIN_SCALE, toViewportPercent, viewBoxOf, type Viewport } from "@/lib/map-viewport";
 import {
   clusterHull,
@@ -87,10 +87,11 @@ const LABEL_CHAR_WIDTH = 6.2;
 /** Kedalaman awal saat wallet pusat pertama kali dipilih. */
 const DEFAULT_DEPTH = 2;
 
-const EDGE_COLOR = "#3a4a63";
-const EDGE_ACTIVE_COLOR = "#8b9bb2";
+/** Warna garis dari variabel CSS supaya ikut tema terang atau gelap. */
+const EDGE_COLOR = "var(--map-edge)";
+const EDGE_ACTIVE_COLOR = "var(--map-edge-active)";
 /** Garis yang dipilih memakai warna teks, bukan warna klaster, supaya tidak tertukar. */
-const EDGE_SELECTED_COLOR = "#e6edf6";
+const EDGE_SELECTED_COLOR = "var(--map-edge-selected)";
 /** Lebar area klik garis (px layar), jauh lebih lebar dari garisnya. */
 const EDGE_HIT_WIDTH = 14;
 /** Gelembung sebesar ini atau lebih diberi label langsung di dalamnya. */
@@ -486,7 +487,7 @@ export function WalletMapExplorer({
               >
                 <defs>
                   <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M0 0 L10 5 L0 10 z" fill={EDGE_ACTIVE_COLOR} />
+                    <path d="M0 0 L10 5 L0 10 z" style={{ fill: EDGE_ACTIVE_COLOR }} />
                   </marker>
                 </defs>
                 {showGroups ? (
@@ -513,7 +514,7 @@ export function WalletMapExplorer({
                             x={group.label.x}
                             y={group.label.y}
                             textAnchor="middle"
-                            stroke={CHART_SURFACE}
+                            stroke={CHART_SURFACE_VAR}
                             strokeWidth={3}
                             strokeOpacity={0.8}
                             vectorEffect="non-scaling-stroke"
@@ -539,7 +540,7 @@ export function WalletMapExplorer({
                       <g key={edge.id} opacity={highlight && !active ? 0.25 : 1}>
                         <line
                           {...ends}
-                          stroke={isSelected ? EDGE_SELECTED_COLOR : active ? EDGE_ACTIVE_COLOR : EDGE_COLOR}
+                          style={{ stroke: isSelected ? EDGE_SELECTED_COLOR : active ? EDGE_ACTIVE_COLOR : EDGE_COLOR }}
                           strokeWidth={isSelected ? 2.5 : active ? 2 : 1.5}
                           strokeDasharray={edge.kind === "funding" ? "5 4" : undefined}
                           strokeLinecap="round"
@@ -589,9 +590,9 @@ export function WalletMapExplorer({
                         cx={item.x}
                         cy={item.y}
                         r={item.r}
-                        fill={holder ? item.color : CHART_SURFACE}
+                        fill={holder ? item.color : CHART_SURFACE_VAR}
                         fillOpacity={holder ? 0.9 : 1}
-                        stroke={holder ? CHART_SURFACE : item.color}
+                        stroke={holder ? CHART_SURFACE_VAR : item.color}
                         strokeWidth={2}
                         vectorEffect="non-scaling-stroke"
                       />
@@ -622,7 +623,7 @@ export function WalletMapExplorer({
                           y={item.y}
                           textAnchor="middle"
                           dominantBaseline="central"
-                          stroke={CHART_SURFACE}
+                          stroke={CHART_SURFACE_VAR}
                           strokeWidth={3}
                           strokeOpacity={0.6}
                           vectorEffect="non-scaling-stroke"
@@ -888,7 +889,7 @@ function EntityMarker({
         cx={cx}
         cy={cy}
         r={7.5}
-        fill={CHART_SURFACE}
+        fill={CHART_SURFACE_VAR}
         stroke="var(--foreground)"
         strokeOpacity={0.55}
         strokeWidth={1}
@@ -906,7 +907,7 @@ function CoordinationMarker({ x, y, r }: { x: number; y: number; r: number }) {
   const cy = y + r * Math.SQRT1_2;
   return (
     <g pointerEvents="none" aria-hidden>
-      <circle cx={cx} cy={cy} r={7.5} fill={CHART_SURFACE} stroke="var(--foreground)" strokeOpacity={0.55} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      <circle cx={cx} cy={cy} r={7.5} fill={CHART_SURFACE_VAR} stroke="var(--foreground)" strokeOpacity={0.55} strokeWidth={1} vectorEffect="non-scaling-stroke" />
       <Zap x={cx - 4.5} y={cy - 4.5} width={9} height={9} strokeWidth={2.4} className="text-foreground/85" />
     </g>
   );

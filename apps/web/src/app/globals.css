@@ -5,6 +5,10 @@
 :root {
   --background: #070b12;
   --foreground: #e6edf6;
+  /* Garis peta hubungan; garis terpilih memakai warna teks. */
+  --map-edge: #3a4a63;
+  --map-edge-active: #8b9bb2;
+  --map-edge-selected: #e6edf6;
   color-scheme: dark;
 }
 
@@ -26,6 +30,92 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/*
+ * Tema terang: dipilih di Pengaturan → Tampilan (atribut data-theme di
+ * <html>), atau mengikuti perangkat bila pilihannya "system". Token dasar
+ * diganti, dan shade terang (50–400) yang dipakai untuk teks status di tema
+ * gelap dipetakan ke padanan gelapnya (950–600) dari palet Tailwind supaya
+ * tetap terbaca di latar putih.
+ */
+:root[data-theme="light"] {
+  --background: #f5f7fa;
+  --foreground: #0f172a;
+  --color-surface: #ffffff;
+  --color-surface-raised: #eef2f7;
+  --color-line: #d5dde8;
+  --color-muted: #55657c;
+  --color-accent: #0f766e;
+  --map-edge: #b4c0d0;
+  --map-edge-active: #55657c;
+  --map-edge-selected: #0f172a;
+  color-scheme: light;
+  --color-amber-50: oklch(27.9% 0.077 45.635);
+  --color-amber-100: oklch(41.4% 0.112 45.904);
+  --color-amber-200: oklch(47.3% 0.137 46.201);
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+  --color-amber-400: oklch(66.6% 0.179 58.318);
+  --color-blue-50: oklch(28.2% 0.091 267.935);
+  --color-blue-100: oklch(37.9% 0.146 265.522);
+  --color-blue-200: oklch(42.4% 0.199 265.638);
+  --color-blue-300: oklch(48.8% 0.243 264.376);
+  --color-blue-400: oklch(54.6% 0.245 262.881);
+  --color-cyan-50: oklch(30.2% 0.056 229.695);
+  --color-cyan-100: oklch(39.8% 0.07 227.392);
+  --color-cyan-200: oklch(45% 0.085 224.283);
+  --color-cyan-300: oklch(52% 0.105 223.128);
+  --color-cyan-400: oklch(60.9% 0.126 221.723);
+  --color-emerald-50: oklch(26.2% 0.051 172.552);
+  --color-emerald-100: oklch(37.8% 0.077 168.94);
+  --color-emerald-200: oklch(43.2% 0.095 166.913);
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-emerald-400: oklch(59.6% 0.145 163.225);
+  --color-fuchsia-50: oklch(29.3% 0.136 325.661);
+  --color-fuchsia-100: oklch(40.1% 0.17 325.612);
+  --color-fuchsia-200: oklch(45.2% 0.211 324.591);
+  --color-fuchsia-300: oklch(51.8% 0.253 323.949);
+  --color-fuchsia-400: oklch(59.1% 0.293 322.896);
+  --color-indigo-50: oklch(25.7% 0.09 281.288);
+  --color-indigo-100: oklch(35.9% 0.144 278.697);
+  --color-indigo-200: oklch(39.8% 0.195 277.366);
+  --color-indigo-300: oklch(45.7% 0.24 277.023);
+  --color-indigo-400: oklch(51.1% 0.262 276.966);
+  --color-orange-50: oklch(26.6% 0.079 36.259);
+  --color-orange-100: oklch(40.8% 0.123 38.172);
+  --color-orange-200: oklch(47% 0.157 37.304);
+  --color-orange-300: oklch(55.3% 0.195 38.402);
+  --color-orange-400: oklch(64.6% 0.222 41.116);
+  --color-rose-50: oklch(27.1% 0.105 12.094);
+  --color-rose-100: oklch(41% 0.159 10.272);
+  --color-rose-200: oklch(45.5% 0.188 13.697);
+  --color-rose-300: oklch(51.4% 0.222 16.935);
+  --color-rose-400: oklch(58.6% 0.253 17.585);
+  --color-sky-50: oklch(29.3% 0.066 243.157);
+  --color-sky-100: oklch(39.1% 0.09 240.876);
+  --color-sky-200: oklch(44.3% 0.11 240.79);
+  --color-sky-300: oklch(50% 0.134 242.749);
+  --color-sky-400: oklch(58.8% 0.158 241.966);
+  --color-slate-50: oklch(12.9% 0.042 264.695);
+  --color-slate-100: oklch(20.8% 0.042 265.755);
+  --color-slate-200: oklch(27.9% 0.041 260.031);
+  --color-slate-300: oklch(37.2% 0.044 257.287);
+  --color-slate-400: oklch(44.6% 0.043 257.281);
+  --color-teal-50: oklch(27.7% 0.046 192.524);
+  --color-teal-100: oklch(38.6% 0.063 188.416);
+  --color-teal-200: oklch(43.7% 0.078 188.216);
+  --color-teal-300: oklch(51.1% 0.096 186.391);
+  --color-teal-400: oklch(60% 0.118 184.704);
+  --color-violet-50: oklch(28.3% 0.141 291.089);
+  --color-violet-100: oklch(38% 0.189 293.745);
+  --color-violet-200: oklch(43.2% 0.232 292.759);
+  --color-violet-300: oklch(49.1% 0.27 292.581);
+  --color-violet-400: oklch(54.1% 0.281 293.009);
+  --color-yellow-50: oklch(28.6% 0.066 53.813);
+  --color-yellow-100: oklch(42.1% 0.095 57.708);
+  --color-yellow-200: oklch(47.6% 0.114 61.907);
+  --color-yellow-300: oklch(55.4% 0.135 66.442);
+  --color-yellow-400: oklch(68.1% 0.162 75.834);
 }
 
 /* Scroll halus untuk tautan lompat di halaman, kecuali user minta gerak dikurangi. */

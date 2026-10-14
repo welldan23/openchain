@@ -915,12 +915,15 @@ export interface UserProfile {
 }
 
 export type ThemePreference = "system" | "dark" | "light";
+/** Bahasa antarmuka; saat ini baru Bahasa Indonesia yang lengkap. */
+export type LanguagePreference = "id" | "en";
 export type NumberLocale = "id" | "en";
 export type TimeDisplay = "local" | "utc";
 export type DensityPreference = "comfortable" | "compact";
 
 export interface DisplayPreferences {
   theme: ThemePreference;
+  language: LanguagePreference;
   /** Format angka: `id` = 1.234,5; `en` = 1,234.5. */
   numberLocale: NumberLocale;
   /** Waktu ditampilkan di zona waktu profil atau UTC. */

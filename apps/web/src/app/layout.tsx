@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
 import { SearchOriginBar } from "@/components/search/search-origin-bar";
+import { ThemeSync } from "@/components/theme-sync";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,10 +30,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="id"
+      // Atribut data-theme dipasang skrip tema sebelum hidrasi.
+      suppressHydrationWarning
       data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
+        {/* Dijalankan sebelum isi halaman tampil supaya tema terang tidak berkedip. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <ThemeSync />
         <AppHeader />
         {/* Membaca ?cari= di browser; Suspense supaya halaman statis tetap bisa dirender saat build. */}
         <Suspense fallback={null}>

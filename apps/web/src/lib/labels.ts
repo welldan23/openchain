@@ -3,6 +3,7 @@ import type {
   DataSourceKind,
   DataSourceStatus,
   DensityPreference,
+  LanguagePreference,
   NumberLocale,
   ThemePreference,
   TimeDisplay,
@@ -480,6 +481,15 @@ export const DATA_SOURCE_KIND_META: Record<DataSourceKind, { label: string; desc
 };
 
 export const THEME_META: Record<ThemePreference, string> = { system: "Ikuti perangkat", dark: "Gelap", light: "Terang" };
+export const LANGUAGE_META: Record<LanguagePreference, { label: string; nativeLabel: string; available: boolean; note: string }> = {
+  id: { label: "Bahasa Indonesia", nativeLabel: "Bahasa Indonesia", available: true, note: "Semua halaman, label, dan ekspor laporan." },
+  en: {
+    label: "Bahasa Inggris",
+    nativeLabel: "English",
+    available: false,
+    note: "Belum tersedia: teks antarmuka belum diterjemahkan, jadi pilihan ini belum bisa dipakai.",
+  },
+};
 export const NUMBER_LOCALE_META: Record<NumberLocale, { label: string; example: string }> = {
   id: { label: "Indonesia", example: "1.234.567,89" },
   en: { label: "Internasional", example: "1,234,567.89" },

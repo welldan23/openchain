@@ -8,6 +8,9 @@
  */
 export const CHART_SURFACE = "#0d1420";
 
+/** Warna panel yang mengikuti tema aktif, untuk halo teks dan pemisah mark di SVG. */
+export const CHART_SURFACE_VAR = "var(--color-surface)";
+
 export const SERIES_1 = "#3987e5";
 
 export const ORDINAL_BLUE = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab"] as const;
