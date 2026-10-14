@@ -1,5 +1,6 @@
-import { FileText, FolderOpen, History, Radar, Search, Settings } from "lucide-react";
+import { FileText, FolderOpen, History, Radar, Search } from "lucide-react";
 import Link from "next/link";
+import { AccountMenu } from "./account-menu";
 import { HeaderSearch } from "./search/header-search";
 
 export function AppHeader() {
@@ -44,20 +45,13 @@ export function AppHeader() {
             <History className="size-4" aria-hidden />
           </Link>
           <Link
-            href="/pengaturan"
-            aria-label="Pengaturan"
-            title="Pengaturan"
-            className="grid size-8 place-items-center rounded-lg text-muted ring-1 ring-line transition hover:text-accent hover:ring-accent/50 focus-visible:outline-2 focus-visible:outline-accent"
-          >
-            <Settings className="size-4" aria-hidden />
-          </Link>
-          <Link
             href="/cari"
             aria-label="Cari"
             className="grid size-8 place-items-center rounded-lg text-muted ring-1 ring-line transition hover:text-accent hover:ring-accent/50 focus-visible:outline-2 focus-visible:outline-accent md:hidden"
           >
             <Search className="size-4" aria-hidden />
           </Link>
+          <AccountMenu />
           <span
             title="Data tiruan"
             className="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-400/30 sm:px-2.5"

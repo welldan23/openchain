@@ -9,6 +9,7 @@ import { MOCK_DEMO_ACCOUNT } from "@/lib/mock/auth";
 import { AuthField } from "./auth-field";
 import { FormAlert, SUBMIT_CLASS } from "./form-parts";
 import { useAuthForm } from "./use-auth-form";
+import { startSession } from "@/lib/session-store";
 
 const ORDER: readonly SignInField[] = ["email", "password"];
 
@@ -24,6 +25,7 @@ export function SignInForm({ next = "/pengaturan/profil" }: { next?: string }) {
         event.preventDefault();
         form.submit(async (values) => {
           const account = await signIn(values);
+          startSession(account);
           setStatus(`Berhasil masuk sebagai ${account.displayName}. Mengalihkan…`);
           router.push(next);
         });

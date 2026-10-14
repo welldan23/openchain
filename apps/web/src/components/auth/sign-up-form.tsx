@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { AuthField } from "./auth-field";
 import { FormAlert, SUBMIT_CLASS } from "./form-parts";
 import { useAuthForm } from "./use-auth-form";
+import { startSession } from "@/lib/session-store";
 
 const ORDER: readonly SignUpField[] = ["name", "email", "password", "confirm"];
 
@@ -25,6 +26,7 @@ export function SignUpForm({ next = "/pengaturan/profil" }: { next?: string }) {
         event.preventDefault();
         form.submit(async (values) => {
           const account = await signUp(values);
+          startSession(account);
           setStatus(`Akun ${account.email} dibuat. Mengalihkan…`);
           router.push(next);
         });
