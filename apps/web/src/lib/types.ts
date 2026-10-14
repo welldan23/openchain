@@ -910,6 +910,8 @@ export interface UserProfile {
   /** Zona waktu IANA, mis. `Asia/Jakarta`. */
   timezone: string;
   joinedAt: string;
+  /** Foto profil; `null` memakai inisial nama. */
+  avatarUrl: string | null;
 }
 
 export type ThemePreference = "system" | "dark" | "light";

@@ -57,6 +57,12 @@ export function startSession(account: { displayName: string; email: string }, at
   writeRaw(serializeSession({ displayName: account.displayName, email: account.email, signedInAt: at.toISOString() }));
 }
 
+/** Samakan nama di sesi yang sedang berjalan setelah profil diubah; tanpa sesi tidak melakukan apa-apa. */
+export function renameSession(displayName: string): void {
+  const current = parseSession(readRaw());
+  if (current) writeRaw(serializeSession({ ...current, displayName }));
+}
+
 export function endSession(): void {
   writeRaw(null);
 }

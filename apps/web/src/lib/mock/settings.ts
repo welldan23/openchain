@@ -13,6 +13,7 @@ export const MOCK_SETTINGS: AccountSettings = {
     email: "rina@contoh.id",
     timezone: "Asia/Jakarta",
     joinedAt: "2026-06-12T03:20:00.000Z",
+    avatarUrl: null,
   },
   preferences: {
     theme: "dark",
