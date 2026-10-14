@@ -1,5 +1,11 @@
 import type {
   ActivityType,
+  DataSourceKind,
+  DataSourceStatus,
+  DensityPreference,
+  NumberLocale,
+  ThemePreference,
+  TimeDisplay,
   CaseDataStatus,
   CaseStatus,
   DangerCategory,
@@ -442,3 +448,41 @@ export const REPORT_STATUS_META: Record<ReportStatus, Meta & { description: stri
     className: "bg-teal-500/15 text-teal-300 ring-teal-400/30",
   },
 };
+
+/* ------------------------------- Pengaturan ------------------------------- */
+
+export const DATA_SOURCE_STATUS_META: Record<DataSourceStatus, Meta & { description: string }> = {
+  ok: { label: "Normal", description: "Provider menjawab normal saat terakhir diperiksa.", className: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30" },
+  degraded: {
+    label: "Terganggu",
+    description: "Provider menjawab tapi lambat atau dibatasi; sebagian data bisa tidak lengkap.",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-400/30",
+  },
+  down: {
+    label: "Gagal",
+    description: "Provider tidak bisa dihubungi; datanya ditandai tidak tersedia, tidak dikarang.",
+    className: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
+  },
+  disabled: { label: "Dimatikan", description: "Provider dimatikan lewat environment variable.", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
+  not_integrated: {
+    label: "Belum terhubung",
+    description: "Belum dipakai OpenChain; datanya tidak muncul di analisis.",
+    className: "bg-slate-500/10 text-muted ring-line",
+  },
+};
+
+export const DATA_SOURCE_KIND_META: Record<DataSourceKind, { label: string; description: string }> = {
+  rpc: { label: "RPC chain", description: "Blok, transaksi, dan log langsung dari node." },
+  explorer: { label: "Explorer", description: "Riwayat transfer, holder, dan kode kontrak terverifikasi." },
+  market: { label: "Data pasar", description: "Harga, likuiditas, dan volume pair DEX." },
+  security: { label: "Keamanan kontrak", description: "Pemeriksaan honeypot, pajak, dan fungsi berbahaya." },
+  label: { label: "Label entitas", description: "Nama exchange, bridge, dan entitas lain dari pihak ketiga." },
+};
+
+export const THEME_META: Record<ThemePreference, string> = { system: "Ikuti perangkat", dark: "Gelap", light: "Terang" };
+export const NUMBER_LOCALE_META: Record<NumberLocale, { label: string; example: string }> = {
+  id: { label: "Indonesia", example: "1.234.567,89" },
+  en: { label: "Internasional", example: "1,234,567.89" },
+};
+export const TIME_DISPLAY_META: Record<TimeDisplay, string> = { local: "Zona waktu profil", utc: "UTC" };
+export const DENSITY_META: Record<DensityPreference, string> = { comfortable: "Lega", compact: "Rapat" };

@@ -898,3 +898,64 @@ export interface ReportSummary {
   /** Masalah yang menghalangi laporan dianggap siap. */
   blockerCount: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Akun & Pengaturan                                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface UserProfile {
+  id: string;
+  displayName: string;
+  email: string;
+  /** Zona waktu IANA, mis. `Asia/Jakarta`. */
+  timezone: string;
+  joinedAt: string;
+}
+
+export type ThemePreference = "system" | "dark" | "light";
+export type NumberLocale = "id" | "en";
+export type TimeDisplay = "local" | "utc";
+export type DensityPreference = "comfortable" | "compact";
+
+export interface DisplayPreferences {
+  theme: ThemePreference;
+  /** Format angka: `id` = 1.234,5; `en` = 1,234.5. */
+  numberLocale: NumberLocale;
+  /** Waktu ditampilkan di zona waktu profil atau UTC. */
+  timeDisplay: TimeDisplay;
+  defaultChain: ChainId;
+  density: DensityPreference;
+}
+
+export type DataSourceKind = "rpc" | "explorer" | "market" | "security" | "label";
+export type DataSourceStatus = "ok" | "degraded" | "down" | "disabled" | "not_integrated";
+
+/**
+ * Sumber data (provider) beserta kondisinya. API key hanya lewat environment
+ * variable di server: yang tampil hanya nama variabel dan apakah sudah diisi,
+ * tidak pernah nilainya.
+ */
+export interface DataSourceSetting {
+  id: string;
+  name: string;
+  kind: DataSourceKind;
+  chains: ChainId[];
+  status: DataSourceStatus;
+  /** Penjelasan status dalam bahasa sederhana. */
+  statusNote: string;
+  /** Environment variable yang mengatur provider ini. */
+  envVars: Array<{ name: string; purpose: string; required: boolean; configured: boolean }>;
+  lastCheckedAt: string | null;
+}
+
+/**
+ * Pengaturan akun lengkap.
+ * Asumsi kontrak API: `GET /settings` → `AccountSettings`.
+ */
+export interface AccountSettings {
+  profile: UserProfile;
+  preferences: DisplayPreferences;
+  dataSources: DataSourceSetting[];
+  /** Isi yang tersimpan untuk akun ini. */
+  storage: { cases: number; reports: number; history: number };
+}
