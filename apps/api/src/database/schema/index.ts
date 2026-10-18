@@ -9,7 +9,8 @@
  * menyimpan temuan per snapshot token. Laporan bukti ada di `reports`, dengan
  * bagian (`report_sections`) dan blok isi (`report_blocks`). Akun pengguna ada di
  * `users`, profil dan preferensinya di `user_profiles` dan `user_preferences`,
- * dan sesi masuknya di `user_sessions`.
+ * dan sesi masuknya di `user_sessions`. Katalog sumber data ada di `data_sources`,
+ * dan saklarnya per akun di `user_data_source_settings`.
  */
 export * from './enums.js';
 export * from './reference.js';
@@ -24,3 +25,4 @@ export * from './investigations.js';
 export * from './risk.js';
 export * from './reports.js';
 export * from './accounts.js';
+export * from './data-sources.js';

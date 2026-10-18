@@ -45,6 +45,7 @@ const EXPECTED_TABLES = [
   'coordination_event_members',
   'coordination_events',
   'coordination_txs',
+  'data_sources',
   'evidence',
   'holders',
   'info_classification_labels',
@@ -86,6 +87,7 @@ const EXPECTED_TABLES = [
   'tokens',
   'trading_events',
   'transactions',
+  'user_data_source_settings',
   'user_preferences',
   'user_profiles',
   'user_sessions',
@@ -1567,6 +1569,49 @@ describe('akun pengguna dan sesi', () => {
     await expectConstraintViolation(db.insert(schema.userPreferences).values({ userId: row.id, updatedAt: FETCHED_AT }), 'user_preferences_pkey');
     await db.delete(schema.users).where(eq(schema.users.id, row.id));
     expect(await db.select().from(schema.userPreferences)).toEqual([]);
+  });
+
+  it('sumber data: seed hanya provider yang dipanggil API, tiap catatan pengambilan cocok dengan satu sumber', async () => {
+    const sources = await db.select().from(schema.dataSources).orderBy(schema.dataSources.position);
+    expect(sources.map((source) => [source.id, source.integrated, source.required])).toEqual([
+      ['rpc', true, true],
+      ['blockscout', true, true],
+      ['dexscreener', true, false],
+      ['goplus', true, false],
+      ['honeypotis', true, false],
+      ['insightx', false, false],
+    ]);
+    expect(sources.find((source) => source.id === 'goplus')?.attribution).toBe('Powered by GoPlus');
+    expect(sources.find((source) => source.id === 'insightx')?.lockedReason).toContain('Belum terhubung');
+    // Nama provider seperti yang dicatat di provider_runs oleh kelas provider.
+    for (const provider of ['robinhood-rpc', 'ethereum-rpc', 'blockscout', 'dexscreener', 'goplus', 'honeypot.is']) {
+      const matches = await client.query(`SELECT id FROM data_sources WHERE $1 LIKE run_provider_pattern`, [provider]);
+      expect(matches.rows, provider).toHaveLength(1);
+    }
+    // Isi environment variable tidak pernah ada di katalog, hanya nama dan kegunaannya.
+    for (const source of sources) for (const envVar of source.envVars) expect(Object.keys(envVar).sort()).toEqual(['name', 'purpose', 'required']);
+
+    const base = { id: 'uji', name: 'Uji', kind: 'market_data' as const, description: 'Sumber uji.', offEffect: 'Tidak ada.' };
+    await expectConstraintViolation(db.insert(schema.dataSources).values({ ...base, integrated: true }), 'data_sources_pattern_when_integrated');
+    await expectConstraintViolation(db.insert(schema.dataSources).values({ ...base, integrated: false, required: true, lockedReason: 'x' }), 'data_sources_required_is_integrated');
+    await expectConstraintViolation(db.insert(schema.dataSources).values({ ...base, integrated: false }), 'data_sources_locked_is_explained');
+    await expectConstraintViolation(db.insert(schema.dataSources).values({ ...base, integrated: true, runProviderPattern: 'uji', lockedReason: 'x' }), 'data_sources_locked_is_explained');
+    await expectConstraintViolation(db.insert(schema.dataSources).values({ ...base, id: 'Uji Besar', integrated: true, runProviderPattern: 'uji' }), 'data_sources_id_format');
+  });
+
+  it('saklar sumber data per akun: satu baris per sumber, terhapus bersama akun', async () => {
+    const [row] = await db.insert(schema.users).values({ ...user, email: 'dewi@contoh.id', emailNormalized: 'dewi@contoh.id' }).returning();
+    await db.insert(schema.userDataSourceSettings).values({ userId: row.id, sourceId: 'dexscreener', enabled: false, updatedAt: FETCHED_AT });
+    await expectConstraintViolation(
+      db.insert(schema.userDataSourceSettings).values({ userId: row.id, sourceId: 'dexscreener', enabled: true, updatedAt: FETCHED_AT }),
+      'user_data_source_settings_user_id_source_id_pk',
+    );
+    await expectConstraintViolation(
+      db.insert(schema.userDataSourceSettings).values({ userId: row.id, sourceId: 'arkham', enabled: true, updatedAt: FETCHED_AT }),
+      'user_data_source_settings_source_id_data_sources_id_fk',
+    );
+    await db.delete(schema.users).where(eq(schema.users.id, row.id));
+    expect(await db.select().from(schema.userDataSourceSettings)).toEqual([]);
   });
 
   it('sesi hanya menyimpan hash token, kedaluwarsa setelah dibuat, dan terhapus bersama akunnya', async () => {

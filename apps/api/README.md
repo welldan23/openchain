@@ -1241,7 +1241,8 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 | Penilaian risiko | `risk_assessments` (+ `risk_assessment_sources`), `risk_reasons` (+ `risk_reason_evidence`), `risk_warnings` (+ `risk_warning_evidence`), `risk_trait_checks` |
 | Laporan bukti | `reports` (+ `report_snapshot_blocks`), `report_sections`, `report_blocks`, `report_claim_evidence`, `report_share_links` |
-| Akun | `users`, `user_profiles`, `user_preferences`, `user_sessions` |
+| Akun | `users`, `user_profiles`, `user_preferences`, `user_sessions`, `user_data_source_settings` |
+| Sumber data | `data_sources` (katalog, di-seed migrasi) |
 
 Aturan PRD yang dijaga langsung oleh database:
 
@@ -1405,3 +1406,17 @@ Aturan PRD yang dijaga langsung oleh database:
   berarti belum dipilih, bukan klaim chain tertentu didukung. Pendaftaran
   membuat barisnya bersama akun; migrasi `0023` membuatkan baris bawaan untuk
   akun yang sudah ada. Menghapus akun menghapus preferensinya.
+- `data_sources` (migrasi `0024`, sekaligus seed) adalah katalog sumber data
+  untuk halaman pengaturan: RPC chain, Blockscout, Dexscreener, GoPlus
+  Security, dan honeypot.is (semuanya memang dipanggil API), plus InsightX
+  yang sudah diaudit tapi belum terhubung. Tiap baris berisi jenis provider,
+  kegunaan, akibat bila dimatikan, atribusi wajib (mis. "Powered by GoPlus"),
+  nama dan kegunaan environment variable-nya (tidak pernah nilainya), dan pola
+  `run_provider_pattern` untuk mencocokkan `provider_runs.provider` (mis.
+  `%-rpc`). Kondisi sumber dihitung dari `provider_runs`, bukan disimpan;
+  chain yang dicakup dibaca dari definisi adapter. RPC dan Blockscout wajib
+  (tidak bisa dimatikan), dan sumber yang belum terhubung harus punya alasan
+  terkunci; keduanya dijaga constraint. `user_data_source_settings`
+  menyimpan saklar per akun, hanya untuk pilihan yang diubah; tanpa baris
+  berarti nyala bila sumbernya sudah terhubung. Menghapus akun menghapus
+  saklarnya.
