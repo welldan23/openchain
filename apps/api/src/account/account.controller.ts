@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Delete, Get, Headers, Patch, Put, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Put, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CurrentAccount, SessionGuard, type SignedInRequest } from '../auth/session.guard.js';
 import { AVATAR_MAX_BYTES } from '../database/schema/accounts.js';
 import { AccountService } from './account.service.js';
-import type { PreferencesView, ProfileView } from './account.types.js';
+import type { DataSourcesResponse, DataSourceView, PreferencesView, ProfileView } from './account.types.js';
+import { DataSourcesService } from './data-sources.service.js';
 import { parsePreferencesUpdate } from './preferences-input.js';
 import { parseProfileUpdate, ProfileInputError, validateAvatar } from './profile-input.js';
 
@@ -23,12 +24,17 @@ function parsed<T>(parse: () => T): T {
  * Profil pengguna yang sedang masuk. `GET`/`PATCH /account/profile`,
  * `PUT /account/avatar` (multipart, kolom `avatar`, maks. 2 MB),
  * `DELETE /account/avatar`, `GET /account/avatar` untuk gambarnya, serta
- * `GET`/`PATCH /account/preferences` untuk preferensi tampilan.
+ * `GET`/`PATCH /account/preferences` untuk preferensi tampilan, dan
+ * `GET /account/data-sources` serta `PATCH /account/data-sources/:id` untuk
+ * saklar sumber data.
  */
 @Controller('account')
 @UseGuards(SessionGuard)
 export class AccountController {
-  constructor(private readonly service: AccountService) {}
+  constructor(
+    private readonly service: AccountService,
+    private readonly dataSources: DataSourcesService,
+  ) {}
 
   @Get('profile')
   profile(@CurrentAccount() account: Account, @Res({ passthrough: true }) res: Response): Promise<ProfileView> {
@@ -77,5 +83,18 @@ export class AccountController {
   @Patch('preferences')
   updatePreferences(@CurrentAccount() account: Account, @Body() body: unknown): Promise<PreferencesView> {
     return this.service.updatePreferences(account.userId, parsed(() => parsePreferencesUpdate(body)));
+  }
+
+  @Get('data-sources')
+  listDataSources(@CurrentAccount() account: Account, @Res({ passthrough: true }) res: Response): Promise<DataSourcesResponse> {
+    res.setHeader('Cache-Control', 'no-store');
+    return this.dataSources.list(account.userId);
+  }
+
+  @Patch('data-sources/:id')
+  setDataSource(@CurrentAccount() account: Account, @Param('id') id: string, @Body() body: unknown): Promise<DataSourceView> {
+    const enabled = (body as { enabled?: unknown } | null)?.enabled;
+    if (typeof enabled !== 'boolean') throw new BadRequestException('Isi permintaan harus { "enabled": true } atau { "enabled": false }.');
+    return this.dataSources.setEnabled(account.userId, id, enabled);
   }
 }

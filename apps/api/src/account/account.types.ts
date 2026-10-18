@@ -1,5 +1,6 @@
-/** Kontrak `/api/account`: profil dan preferensi tampilan pengguna yang sedang masuk. */
+/** Kontrak `/api/account`: profil, preferensi tampilan, dan sumber data pengguna yang sedang masuk. */
 import type { DensityPreference, LanguagePreference, NumberLocale, ThemePreference, TimeDisplay, ValueUnit } from '../database/schema/enums.js';
+import type { DataSourceView } from './data-source-view.js';
 import type { DefaultChainSource } from './preferences-input.js';
 
 export interface ProfileView {
@@ -28,4 +29,13 @@ export interface PreferencesView {
   defaultChainNote: string | null;
   density: DensityPreference;
   updatedAt: string;
+}
+
+export type { DataSourceView } from './data-source-view.js';
+
+export interface DataSourcesResponse {
+  /** Rentang waktu `provider_runs` yang dipakai menghitung kondisi. */
+  window: { from: string; to: string; hours: number };
+  sources: DataSourceView[];
+  caveats: string[];
 }

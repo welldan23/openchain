@@ -857,7 +857,7 @@ Kontraknya ada di `src/auth/auth.types.ts`.
   `401`. Waktu terakhir dipakai sesi diperbarui paling sering sekali per 5
   menit.
 
-### `/api/account` (profil dan preferensi)
+### `/api/account` (profil, preferensi, dan sumber data)
 
 Semua endpoint di sini perlu sesi (`401` tanpa sesi). Kontraknya ada di
 `src/account/account.types.ts`.
@@ -893,6 +893,31 @@ Semua endpoint di sini perlu sesi (`401` tanpa sesi). Kontraknya ada di
   Bahasa Inggris belum tersedia. `defaultChain` harus chain `validated`
   (chain eksperimental, terencana, atau tak dikenal `400`); `null`
   mengosongkan pilihan. Menjawab preferensi terbaru.
+- `GET /api/account/data-sources` — `{ window, sources, caveats }`. Tiap
+  sumber dari katalog `data_sources` berisi `kind` (`rpc`, `explorer`,
+  `market`, `security`, `label`), kegunaan, `chains`, `status`, `statusNote`,
+  `health`, `envVars`, `lastCheckedAt`, `enabled`, `lockedReason`,
+  `offEffect`, dan `attribution`.
+  - Kondisi (`health`) dihitung dari `provider_runs` 24 jam terakhir dengan
+    aturan yang sama seperti `/api/chains/availability`: `ok`, `degraded`,
+    `down`, atau `unknown` bila belum ada pengambilan (bukan berarti normal).
+  - `status` adalah kondisi yang berlaku untuk akun ini: kondisi di atas,
+    `disabled` bila dimatikan akun atau server, atau `not_integrated` bila
+    belum terhubung.
+  - `chains` hanya chain yang dilayani sumber itu menurut definisi adapter
+    dan sudah lolos smoke test.
+  - `envVars` hanya melaporkan `configured: true/false`; nilai environment
+    variable tidak pernah dikirim. Variabel ber-`<CHAIN>` dianggap terisi bila
+    diisi untuk salah satu chain.
+  - `Cache-Control: no-store`.
+- `PATCH /api/account/data-sources/:id`, body `{ enabled }` — menyimpan
+  saklar akun dan menjawab sumber itu. Sumber wajib (RPC, Blockscout), yang
+  belum terhubung, atau penyedia keamanan yang dimatikan server lewat
+  `SECURITY_PROVIDERS` ditolak `409` beserta alasannya. Id tak dikenal `404`,
+  body selain boolean `400`.
+- Saklar ini baru disimpan per akun; halaman analisis belum memakainya, jadi
+  data dari sumber yang dimatikan masih bisa tampil di sana. Ini juga
+  dicantumkan di `caveats`.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

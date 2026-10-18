@@ -5,6 +5,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
+import { SERVER_ENV } from '../src/account/data-sources.service.js';
 import { SESSION_COOKIE } from '../src/auth/session-token.js';
 import { CLOCK } from '../src/common/clock.js';
 import { DATABASE } from '../src/database/database.module.js';
@@ -27,6 +28,8 @@ describe('/api/account', () => {
       .useValue(db)
       .overrideProvider(CLOCK)
       .useValue({ now: () => now })
+      .overrideProvider(SERVER_ENV)
+      .useValue({ SECURITY_PROVIDERS: 'goplus', BLOCKSCOUT_API_KEY: 'kunci-uji-rahasia' })
       .compile();
     app = configureApp(moduleRef.createNestApplication());
     await app.init();
@@ -48,6 +51,8 @@ describe('/api/account', () => {
     await request(server).get('/api/account/avatar').expect(401);
     await request(server).get('/api/account/preferences').expect(401);
     await request(server).patch('/api/account/preferences').send({ theme: 'light' }).expect(401);
+    await request(server).get('/api/account/data-sources').expect(401);
+    await request(server).patch('/api/account/data-sources/dexscreener').send({ enabled: false }).expect(401);
   });
 
   it('baca dan ubah profil: nama dan zona waktu; respons sesi ikut berubah', async () => {
@@ -146,5 +151,49 @@ describe('/api/account', () => {
 
     const cleared = await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ defaultChain: null }).expect(200);
     expect(cleared.body).toMatchObject({ theme: 'light', defaultChain: 'ethereum', defaultChainSource: 'fallback' });
+  });
+
+  it('sumber data: kondisi dari pengambilan data, saklar per akun, sumber terkunci 409', async () => {
+    const server = app.getHttpServer();
+    now = new Date('2026-10-03T10:00:00Z');
+    await client.query(`UPDATE chains SET support_status = 'planned', support_check_id = NULL`);
+    const check = await client.query<{ id: number }>(`INSERT INTO chain_smoke_checks (chain_id, status, checks, tested_at) VALUES ('base', 'validated', '[]', now()) RETURNING id`);
+    await client.query(`UPDATE chains SET support_status = 'validated', support_check_id = $1 WHERE id = 'base'`, [check.rows[0].id]);
+    const run = `INSERT INTO provider_runs (provider, kind, chain_id, operation, status, error_reason, started_at) VALUES ($1, $2, 'base', 'uji', $3, $4, $5)`;
+    await client.query(run, ['dexscreener', 'market_data', 'complete', null, '2026-10-03T09:00:00Z']);
+    await client.query(run, ['dexscreener', 'market_data', 'unavailable', 'HTTP 429 dari provider', '2026-10-03T09:30:00Z']);
+    await client.query(run, ['base-rpc', 'rpc', 'complete', null, '2026-10-03T09:10:00Z']);
+    // Di luar rentang 24 jam: tidak dihitung.
+    await client.query(run, ['goplus', 'security', 'complete', null, '2026-10-01T09:00:00Z']);
+
+    const { body, headers } = await request(server).get('/api/account/data-sources').set('Cookie', cookie).expect(200);
+    expect(headers['cache-control']).toBe('no-store');
+    expect(body.window).toEqual({ from: '2026-10-02T10:00:00.000Z', to: now.toISOString(), hours: 24 });
+    expect(JSON.stringify(body)).not.toContain('kunci-uji-rahasia');
+    const byId = Object.fromEntries((body.sources as Array<{ id: string }>).map((item) => [item.id, item])) as Record<string, Record<string, unknown>>;
+    expect(Object.keys(byId)).toEqual(['rpc', 'blockscout', 'dexscreener', 'goplus', 'honeypotis', 'insightx']);
+    expect(byId.rpc).toMatchObject({ kind: 'rpc', status: 'ok', enabled: true, chains: ['base'], lastCheckedAt: '2026-10-03T09:10:00.000Z' });
+    expect(byId.dexscreener).toMatchObject({ kind: 'market', status: 'degraded', enabled: true, lockedReason: null, health: { runs: 2, failures: 1, lastFailureReason: 'HTTP 429 dari provider' } });
+    expect(byId.goplus).toMatchObject({ status: 'unknown', attribution: 'Powered by GoPlus', health: { runs: 0 } });
+    expect(byId.honeypotis).toMatchObject({ status: 'disabled', enabled: false, chains: [] });
+    expect(byId.insightx).toMatchObject({ kind: 'label', status: 'not_integrated', enabled: false, health: null });
+    expect(byId.blockscout.envVars).toEqual([
+      { name: 'BLOCKSCOUT_API_KEY', purpose: expect.any(String), required: false, configured: true },
+      { name: 'BLOCKSCOUT_URL_<CHAIN>', purpose: expect.any(String), required: false, configured: false },
+    ]);
+
+    const off = await request(server).patch('/api/account/data-sources/dexscreener').set('Cookie', cookie).send({ enabled: false }).expect(200);
+    expect(off.body).toMatchObject({ id: 'dexscreener', status: 'disabled', enabled: false, health: { status: 'degraded' } });
+    const reread = await request(server).get('/api/account/data-sources').set('Cookie', cookie).expect(200);
+    expect(reread.body.sources.find((item: { id: string }) => item.id === 'dexscreener')).toMatchObject({ enabled: false, status: 'disabled' });
+    const on = await request(server).patch('/api/account/data-sources/dexscreener').set('Cookie', cookie).send({ enabled: true }).expect(200);
+    expect(on.body).toMatchObject({ enabled: true, status: 'degraded' });
+
+    const rpc = await request(server).patch('/api/account/data-sources/rpc').set('Cookie', cookie).send({ enabled: false }).expect(409);
+    expect(rpc.body.message).toBe('RPC chain tidak bisa diubah. Wajib: blok, transaksi, dan log on-chain berasal dari sini.');
+    await request(server).patch('/api/account/data-sources/insightx').set('Cookie', cookie).send({ enabled: true }).expect(409);
+    await request(server).patch('/api/account/data-sources/honeypotis').set('Cookie', cookie).send({ enabled: true }).expect(409);
+    await request(server).patch('/api/account/data-sources/arkham').set('Cookie', cookie).send({ enabled: true }).expect(404);
+    await request(server).patch('/api/account/data-sources/goplus').set('Cookie', cookie).send({ enabled: 'tidak' }).expect(400);
   });
 });
