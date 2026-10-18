@@ -826,6 +826,30 @@ Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
   dikirim balik apa adanya. Catatan yang merujuk id klaim tersimpan yang tidak
   dikirim lagi dilepas kaitannya, sama seperti klaim yang dihapus.
 
+### `/api/auth` (akun dan sesi)
+
+Kontraknya ada di `src/auth/auth.types.ts`.
+
+- `POST /api/auth/sign-up` (`201`), body `{ name, email, password }` — akun
+  baru langsung masuk. Aturan sama dengan form frontend: nama 2–60 karakter,
+  email valid, kata sandi 8–72 karakter berisi huruf dan angka, tidak sama
+  dengan email. Email yang sudah terdaftar (tanpa beda huruf besar-kecil)
+  `409`.
+- `POST /api/auth/sign-in` (`200`), body `{ email, password }`. Email tak
+  dikenal dan kata sandi salah dijawab `401` dengan pesan yang sama; email tak
+  dikenal tetap menjalankan verifikasi hash supaya lama respons tidak
+  membocorkan email terdaftar. Setelah 5 kali gagal berturut-turut akun
+  dikunci 15 menit (`429` dengan `Retry-After`, juga untuk kata sandi benar).
+  Hash lama yang lebih lemah diperbarui saat berhasil masuk.
+- Keduanya menjawab `{ user, session: { expiresAt } }` dan memasang cookie
+  `openchain_session` (`HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` di
+  produksi atau lewat HTTPS, berlaku 30 hari). Token sesi tidak pernah ada di
+  body; database hanya menyimpan hash SHA-256-nya.
+- `GET /api/auth/session` — pengguna yang sedang masuk dari cookie, atau
+  `401` bila tidak ada, rusak, dicabut, atau kedaluwarsa. Respons akun selalu
+  `Cache-Control: no-store`.
+- Kata sandi lebih dari 72 karakter ditolak `400` sebelum di-hash.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,
