@@ -86,6 +86,7 @@ const EXPECTED_TABLES = [
   'tokens',
   'trading_events',
   'transactions',
+  'user_profiles',
   'user_sessions',
   'users',
   'wallet_maps',
@@ -1511,19 +1512,36 @@ describe('laporan bukti', () => {
 
 describe('akun pengguna dan sesi', () => {
   const HASH = 'scrypt$32768$8$1$' + 'a'.repeat(22) + '$' + 'b'.repeat(43);
-  const user = { email: 'Rina@Contoh.id', emailNormalized: 'rina@contoh.id', displayName: 'Rina Analis', passwordHash: HASH, createdAt: FETCHED_AT, updatedAt: FETCHED_AT };
+  const user = { email: 'Rina@Contoh.id', emailNormalized: 'rina@contoh.id', passwordHash: HASH, createdAt: FETCHED_AT, updatedAt: FETCHED_AT };
 
-  it('kata sandi hanya berupa hash, email ternormalisasi dan unik, nama dirapikan', async () => {
+  it('kata sandi hanya berupa hash, email ternormalisasi dan unik', async () => {
     await expectConstraintViolation(db.insert(schema.users).values({ ...user, passwordHash: 'rahasia123' }), 'users_password_is_hash');
     await expectConstraintViolation(db.insert(schema.users).values({ ...user, passwordHash: 'bcrypt$2b$10$' + 'x'.repeat(53) }), 'users_password_is_hash');
     await expectConstraintViolation(db.insert(schema.users).values({ ...user, emailNormalized: 'Rina@Contoh.id' }), 'users_email_normalized');
     await expectConstraintViolation(db.insert(schema.users).values({ ...user, email: 'bukan-email', emailNormalized: 'bukan-email' }), 'users_email_format');
-    await expectConstraintViolation(db.insert(schema.users).values({ ...user, displayName: ' Rina ' }), 'users_display_name_length');
-    await expectConstraintViolation(db.insert(schema.users).values({ ...user, displayName: 'R' }), 'users_display_name_length');
     const [row] = await db.insert(schema.users).values(user).returning();
-    expect(row).toMatchObject({ timezone: 'Asia/Jakarta', failedSignIns: 0, lockedUntil: null });
+    expect(row).toMatchObject({ failedSignIns: 0, lockedUntil: null });
     await expectConstraintViolation(db.insert(schema.users).values({ ...user, email: 'RINA@contoh.id' }), 'users_email_unique');
     await db.delete(schema.users).where(eq(schema.users.id, row.id));
+  });
+
+  it('profil: nama dirapikan, foto lengkap atau kosong, jenis dan ukurannya sesuai isi, terhapus bersama akun', async () => {
+    const [row] = await db.insert(schema.users).values({ ...user, email: 'sari@contoh.id', emailNormalized: 'sari@contoh.id' }).returning();
+    const profile = { userId: row.id, displayName: 'Sari', updatedAt: FETCHED_AT };
+    await expectConstraintViolation(db.insert(schema.userProfiles).values({ ...profile, displayName: ' Sari ' }), 'user_profiles_display_name_length');
+    await expectConstraintViolation(db.insert(schema.userProfiles).values({ ...profile, displayName: 'S' }), 'user_profiles_display_name_length');
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const avatar = { avatarData: png, avatarContentType: 'image/png', avatarSize: png.length, avatarSha256: 'd'.repeat(64), avatarUpdatedAt: FETCHED_AT };
+    await expectConstraintViolation(db.insert(schema.userProfiles).values({ ...profile, avatarData: png }), 'user_profiles_avatar_complete');
+    await expectConstraintViolation(db.insert(schema.userProfiles).values({ ...profile, ...avatar, avatarContentType: 'image/svg+xml' }), 'user_profiles_avatar_type');
+    await expectConstraintViolation(db.insert(schema.userProfiles).values({ ...profile, ...avatar, avatarSize: 999 }), 'user_profiles_avatar_size');
+    await expectConstraintViolation(db.insert(schema.userProfiles).values({ ...profile, ...avatar, avatarSha256: 'bukan-hash' }), 'user_profiles_avatar_hash');
+    await db.insert(schema.userProfiles).values({ ...profile, ...avatar });
+    const [stored] = await db.select().from(schema.userProfiles).where(eq(schema.userProfiles.userId, row.id));
+    expect(stored).toMatchObject({ timezone: 'Asia/Jakarta', avatarSize: 8 });
+    expect(Buffer.from(stored.avatarData!).equals(png)).toBe(true);
+    await db.delete(schema.users).where(eq(schema.users.id, row.id));
+    expect(await db.select().from(schema.userProfiles)).toEqual([]);
   });
 
   it('sesi hanya menyimpan hash token, kedaluwarsa setelah dibuat, dan terhapus bersama akunnya', async () => {

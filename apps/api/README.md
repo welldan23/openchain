@@ -1204,7 +1204,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 | Penilaian risiko | `risk_assessments` (+ `risk_assessment_sources`), `risk_reasons` (+ `risk_reason_evidence`), `risk_warnings` (+ `risk_warning_evidence`), `risk_trait_checks` |
 | Laporan bukti | `reports` (+ `report_snapshot_blocks`), `report_sections`, `report_blocks`, `report_claim_evidence`, `report_share_links` |
-| Akun | `users`, `user_sessions` |
+| Akun | `users`, `user_profiles`, `user_sessions` |
 
 Aturan PRD yang dijaga langsung oleh database:
 
@@ -1339,9 +1339,9 @@ Aturan PRD yang dijaga langsung oleh database:
   hash SHA-256 token (unik, dijaga formatnya) dan awalan pendeknya, waktu
   dibuat, kedaluwarsa (harus setelah dibuat), dicabut, dan hitungan dilihat.
   Menghapus laporan menghapus tautannya.
-- `users` (migrasi `0021`) menyimpan akun: email seperti diketik dan bentuk
-  ternormalisasinya (huruf kecil, unik), nama tampilan 2–60 karakter, zona
-  waktu, hash kata sandi, penghitung gagal masuk, dan waktu kunci sementara.
+- `users` (migrasi `0021`) menyimpan identitas dan kredensial akun: email
+  seperti diketik dan bentuk ternormalisasinya (huruf kecil, unik), hash kata
+  sandi, penghitung gagal masuk, dan waktu kunci sementara.
   Constraint hanya menerima hash berformat `scrypt$N$r$p$garam$hash`, jadi
   kata sandi mentah ditolak database. `user_sessions` menyimpan sesi per
   perangkat: hanya hash SHA-256 token, waktu dibuat, terakhir dipakai,
@@ -1349,3 +1349,11 @@ Aturan PRD yang dijaga langsung oleh database:
   sesinya. Hash dibuat `src/auth/password.ts` (scrypt bawaan Node, N=2^15,
   garam acak 16 byte, perbandingan waktu-konstan; parameter tersimpan yang
   tidak wajar ditolak supaya tidak bisa menghabiskan memori).
+- `user_profiles` (migrasi `0022`) menyimpan cara pengguna tampil, satu baris
+  per akun: nama tampilan 2–60 karakter, zona waktu, dan foto profil (isi
+  `bytea` maks. 2 MB, jenis PNG/JPG/WebP, ukuran yang harus sama dengan
+  isinya, SHA-256-nya, dan waktu diubah; kolom foto terisi semua atau kosong
+  semua). Foto disimpan di PostgreSQL supaya tidak perlu penyimpanan berkas
+  terpisah. Migrasi `0022` memindahkan nama dan zona waktu dari `users`
+  (disalin dulu, baru kolom lamanya dihapus). Pendaftaran membuat akun dan
+  profilnya dalam satu transaksi; menghapus akun menghapus profilnya.

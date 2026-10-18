@@ -8,7 +8,7 @@
 import { ConflictException, HttpException, HttpStatus, Inject, Injectable, UnauthorizedException, type OnModuleInit } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { normalizeEmail, type SignInInput, type SignUpInput } from './auth-input.js';
-import { AuthRepository, isUniqueViolation, type UserRow } from './auth.repository.js';
+import { AuthRepository, isUniqueViolation, type AccountRow } from './auth.repository.js';
 import type { AccountView, AuthResponse } from './auth.types.js';
 import { hashPassword, needsRehash, verifyPassword } from './password.js';
 import { hashSessionToken, newSessionToken, SESSION_TTL_MS } from './session-token.js';
@@ -30,8 +30,8 @@ export interface SessionResult extends AuthResponse {
   token: string;
 }
 
-export function toAccountView(user: UserRow): AccountView {
-  return { id: String(user.id), email: user.email, displayName: user.displayName, timezone: user.timezone, createdAt: user.createdAt.toISOString() };
+export function toAccountView({ user, profile }: AccountRow): AccountView {
+  return { id: String(user.id), email: user.email, displayName: profile.displayName, timezone: profile.timezone, createdAt: user.createdAt.toISOString() };
 }
 
 @Injectable()
@@ -52,32 +52,28 @@ export class AuthService implements OnModuleInit {
     const emailNormalized = normalizeEmail(input.email);
     if (await this.repository.findByEmail(emailNormalized)) throw new ConflictException('Email ini sudah terdaftar. Masuk dengan email tersebut.');
     const now = this.clock.now();
-    let user: UserRow;
+    let account: AccountRow;
     try {
-      user = await this.repository.insertUser({
-        email: input.email,
-        emailNormalized,
-        displayName: input.name,
-        passwordHash: await hashPassword(input.password),
-        lastSignInAt: now,
-        createdAt: now,
-        updatedAt: now,
-      });
+      account = await this.repository.insertAccount(
+        { email: input.email, emailNormalized, passwordHash: await hashPassword(input.password), lastSignInAt: now, createdAt: now, updatedAt: now },
+        { displayName: input.name, updatedAt: now },
+      );
     } catch (error) {
       // Pendaftaran bersamaan dengan email yang sama.
       if (isUniqueViolation(error, 'users_email_unique')) throw new ConflictException('Email ini sudah terdaftar. Masuk dengan email tersebut.');
       throw error;
     }
-    return this.startSession(user, now);
+    return this.startSession(account, now);
   }
 
   async signIn(input: SignInInput): Promise<SessionResult> {
-    const user = await this.repository.findByEmail(normalizeEmail(input.email));
+    const account = await this.repository.findByEmail(normalizeEmail(input.email));
     const now = this.clock.now();
-    if (!user) {
+    if (!account) {
       await verifyPassword(input.password, await this.timingHash());
       throw new UnauthorizedException(INVALID);
     }
+    const { user } = account;
     if (user.lockedUntil && user.lockedUntil > now) throw new TooManyAttemptsException(Math.ceil((user.lockedUntil.getTime() - now.getTime()) / 1000));
     if (!(await verifyPassword(input.password, user.passwordHash))) {
       const failed = user.failedSignIns + 1;
@@ -93,7 +89,7 @@ export class AuthService implements OnModuleInit {
       // Hash lama yang lebih lemah diperbarui selagi kata sandinya diketahui.
       ...(needsRehash(user.passwordHash) ? { passwordHash: await hashPassword(input.password), updatedAt: now } : {}),
     });
-    return this.startSession(user, now);
+    return this.startSession(account, now);
   }
 
   /** Pengguna dari token sesi; `null` bila tidak ada, dicabut, atau kedaluwarsa. */
@@ -103,7 +99,7 @@ export class AuthService implements OnModuleInit {
     const found = await this.repository.activeSession(hashSessionToken(token), now);
     if (!found) return null;
     if (now.getTime() - found.session.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) await this.repository.touchSession(found.session.id, now);
-    return { user: toAccountView(found.user), session: { expiresAt: found.session.expiresAt.toISOString() } };
+    return { user: toAccountView(found), session: { expiresAt: found.session.expiresAt.toISOString() } };
   }
 
   /** Cabut sesi dari token ini; tanpa token atau sesi tidak dikenal tidak melakukan apa-apa. */
@@ -116,11 +112,11 @@ export class AuthService implements OnModuleInit {
     return this.repository.revokeAllSessions(userId, this.clock.now());
   }
 
-  private async startSession(user: UserRow, now: Date): Promise<SessionResult> {
+  private async startSession(account: AccountRow, now: Date): Promise<SessionResult> {
     const token = newSessionToken();
     const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-    await this.repository.insertSession({ userId: user.id, tokenHash: hashSessionToken(token), createdAt: now, lastSeenAt: now, expiresAt });
-    return { token, user: toAccountView(user), session: { expiresAt: expiresAt.toISOString() } };
+    await this.repository.insertSession({ userId: account.user.id, tokenHash: hashSessionToken(token), createdAt: now, lastSeenAt: now, expiresAt });
+    return { token, user: toAccountView(account), session: { expiresAt: expiresAt.toISOString() } };
   }
 
   /** Hash pengganti untuk email tak dikenal, dibuat sekali. */
