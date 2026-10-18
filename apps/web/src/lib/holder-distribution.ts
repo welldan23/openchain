@@ -29,7 +29,9 @@ export function buildSupplyTiers(
   holders: TokenHolder[],
   concentration: HolderConcentration,
 ): SupplyTier[] {
-  if (holders.length === 0) return [];
+  // Tanpa holder atau konsentrasi yang terbaca, sebaran tidak dikarang.
+  if (holders.length === 0 || concentration.top10Pct === null || concentration.top50Pct === null) return [];
+  const { top10Pct, top50Pct } = concentration;
   const top1 = holders[0].sharePct;
   const top1Label = holders[0].label;
   return [
@@ -39,13 +41,13 @@ export function buildSupplyTiers(
       pct: clampPct(top1),
       holderName: top1Label ? (top1Label.name ?? ENTITY_LABEL_META[top1Label.type].label) : undefined,
     },
-    { id: "top2-10", label: "Holder #2–10", pct: clampPct(concentration.top10Pct - top1) },
+    { id: "top2-10", label: "Holder #2–10", pct: clampPct(top10Pct - top1) },
     {
       id: "top11-50",
       label: "Holder #11–50",
-      pct: clampPct(concentration.top50Pct - concentration.top10Pct),
+      pct: clampPct(top50Pct - top10Pct),
     },
-    { id: "rest", label: "Holder lainnya", pct: clampPct(100 - concentration.top50Pct) },
+    { id: "rest", label: "Holder lainnya", pct: clampPct(100 - top50Pct) },
   ];
 }
 

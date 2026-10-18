@@ -51,26 +51,29 @@ export function buildTokenHighlights(data: TokenInvestigation): TokenHighlight[]
   const { token, market, risk, contract, holders, snapshot } = data;
   const highlights: TokenHighlight[] = [];
 
-  highlights.push({
-    id: "age",
-    text: `Token berumur ${formatAge(token.deployedAt, snapshot.fetchedAt)}, dideploy ${formatDate(token.deployedAt)}.`,
-    classification: "fact",
-  });
+  if (token.deployedAt) {
+    highlights.push({
+      id: "age",
+      text: `Token berumur ${formatAge(token.deployedAt, snapshot.fetchedAt)}, dideploy ${formatDate(token.deployedAt)}.`,
+      classification: "fact",
+    });
+  }
 
-  if (market.marketCapUsd > 0 && market.liquidityUsd > 0) {
-    const ratio = (market.liquidityUsd / market.marketCapUsd) * 100;
+  const { marketCapUsd, liquidityUsd, volume24hUsd } = market;
+  if (marketCapUsd !== null && liquidityUsd !== null && marketCapUsd > 0 && liquidityUsd > 0) {
+    const ratio = (liquidityUsd / marketCapUsd) * 100;
     highlights.push({
       id: "liquidity-ratio",
-      text: `Likuiditas ${formatUsdCompact(market.liquidityUsd)}, setara ${formatPct(ratio, { maximumFractionDigits: 1 })} dari market cap.`,
+      text: `Likuiditas ${formatUsdCompact(liquidityUsd)}, setara ${formatPct(ratio, { maximumFractionDigits: 1 })} dari market cap.`,
       classification: "calculation",
     });
   }
 
-  if (market.liquidityUsd > 0 && market.volume24hUsd > 0) {
-    const turnover = market.volume24hUsd / market.liquidityUsd;
+  if (liquidityUsd !== null && volume24hUsd !== null && liquidityUsd > 0 && volume24hUsd > 0) {
+    const turnover = volume24hUsd / liquidityUsd;
     highlights.push({
       id: "turnover",
-      text: `Volume 24 jam ${formatUsdCompact(market.volume24hUsd)}, sekitar ${formatNumber(turnover, 1)}x likuiditas.`,
+      text: `Volume 24 jam ${formatUsdCompact(volume24hUsd)}, sekitar ${formatNumber(turnover, 1)}x likuiditas.`,
       classification: "calculation",
     });
   }

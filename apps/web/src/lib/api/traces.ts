@@ -1,14 +1,16 @@
 /**
  * Akses data jalur dana antar wallet untuk fitur Telusur Antar Wallet.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /traces/:chain/:from/:to` → `WalletTrace`) tanpa mengubah komponen
- * yang memakainya.
+ * Mode live menghitung jalur lewat `./live/traces` (`/api/traces`). Backend
+ * belum menyimpan daftar jalur per address, jadi di mode live
+ * `listTracesForAddress` kosong dan jalur dibuka dengan mengisi address
+ * tujuan. Mode tiruan membaca data tiruan.
  */
 import { addressKey } from "../fund-flow";
 import { MOCK_FAILING_TRACE, MOCK_TRACES } from "../mock/traces";
 import type { ChainId, WalletTrace, WalletTraceSummary } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/traces";
 
 /** Latensi tiruan supaya tampilan loading terlihat selama fase frontend. */
 const MOCK_LATENCY_MS = 600;
@@ -28,6 +30,7 @@ function sameAddress(chain: ChainId, a: string, b: string): boolean {
  * - Melempar error bila sumber data gagal (di mock: jalur simulasi gagal).
  */
 export async function getWalletTrace(chain: ChainId, from: string, to: string): Promise<WalletTrace | null> {
+  if (isLive()) return live.getWalletTrace(chain, from, to);
   await delay(MOCK_LATENCY_MS);
 
   if (
@@ -62,6 +65,7 @@ export async function listSampleTraces(): Promise<WalletTraceSummary[]> {
 
 /** Jalur yang berawal, berakhir, atau melewati `address`, untuk ditautkan dari halaman aliran dana. */
 export async function listTracesForAddress(chain: ChainId, address: string): Promise<WalletTraceSummary[]> {
+  if (isLive()) return [];
   const touches = (trace: WalletTrace) =>
     [trace.from, trace.to, ...trace.hops.flatMap((hop) => [hop.from, hop.to])].some((item) =>
       sameAddress(chain, item, address),

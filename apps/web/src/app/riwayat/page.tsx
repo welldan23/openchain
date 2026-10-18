@@ -4,6 +4,8 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { InvestigationTimeline } from "@/components/history/investigation-timeline";
 import { MockDataNotice } from "@/components/mock-data-notice";
+import { isLive } from "@/lib/api/http";
+import { requireSignIn } from "@/lib/api/require-sign-in";
 import { listInvestigationHistory, MOCK_UNDELETABLE_HISTORY_ID } from "@/lib/api/search";
 
 export const metadata: Metadata = {
@@ -14,6 +16,7 @@ export const metadata: Metadata = {
 export default async function HistoryPage() {
   // Riwayat berubah tiap kali dibuka dan label "Hari ini" bergantung jam sekarang, jadi jangan dirender saat build.
   await connection();
+  await requireSignIn("/riwayat");
   const entries = await listInvestigationHistory();
   const undeletableTitle = entries.find((entry) => entry.id === MOCK_UNDELETABLE_HISTORY_ID)?.title ?? "—";
 
@@ -33,11 +36,17 @@ export default async function HistoryPage() {
           </Link>
         }
       >
-        <p className="text-[11px] leading-relaxed text-muted">
-          Catatan dan penghapusan di data tiruan belum tersimpan permanen dan kembali seperti semula saat halaman dimuat
-          ulang. Isi catatan dengan “#gagal” untuk mencoba tampilan saat penyimpanan gagal; item “{undeletableTitle}”
-          sengaja gagal dihapus.
-        </p>
+        {isLive() ? (
+          <p className="text-[11px] leading-relaxed text-muted">
+            Riwayat dan catatannya tersimpan di akunmu. Menghapus riwayat tidak menyentuh data on-chain; halamannya tetap bisa dibuka lagi.
+          </p>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-muted">
+            Catatan dan penghapusan di data tiruan belum tersimpan permanen dan kembali seperti semula saat halaman dimuat
+            ulang. Isi catatan dengan “#gagal” untuk mencoba tampilan saat penyimpanan gagal; item “{undeletableTitle}”
+            sengaja gagal dihapus.
+          </p>
+        )}
       </InvestigationTimeline>
     </main>
   );

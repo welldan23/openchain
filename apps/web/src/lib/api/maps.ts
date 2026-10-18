@@ -1,14 +1,14 @@
 /**
  * Akses data peta hubungan wallet untuk halaman Peta Hubungan Wallet.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /maps/:chain/:token` → `WalletMap`) tanpa mengubah komponen yang
- * memakainya.
+ * Mode live memakai `./live/maps` (`/api/maps/:chain/:token`); mode tiruan
+ * membaca data tiruan.
  */
 import { addressKey } from "../fund-flow";
 import { MOCK_FAILING_MAP, MOCK_MAPS } from "../mock/maps";
 import type { ChainId, WalletMap, WalletMapSummary } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/maps";
 
 /** Latensi tiruan supaya tampilan loading terlihat selama fase frontend. */
 const MOCK_LATENCY_MS = 600;
@@ -27,6 +27,7 @@ function sameAddress(chain: ChainId, a: string, b: string): boolean {
  * - Melempar error bila sumber data gagal (di mock: token simulasi gagal).
  */
 export async function getWalletMap(chain: ChainId, token: string): Promise<WalletMap | null> {
+  if (isLive()) return live.getWalletMap(chain, token);
   await delay(MOCK_LATENCY_MS);
 
   if (chain === MOCK_FAILING_MAP.chain && sameAddress(chain, token, MOCK_FAILING_MAP.address)) {

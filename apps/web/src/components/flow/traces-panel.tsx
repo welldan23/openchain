@@ -5,10 +5,11 @@ import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
 import { tracePath } from "@/lib/api/traces";
 import { addressTitle } from "@/lib/fund-flow";
-import type { WalletTraceSummary } from "@/lib/types";
+import type { ChainId, WalletTraceSummary } from "@/lib/types";
+import { TraceStartForm } from "./trace-start-form";
 
-/** Jalur dana yang melewati address ini, untuk dibuka langkah demi langkah. */
-export function TracesPanel({ traces }: { traces: WalletTraceSummary[] }) {
+/** Jalur dana yang melewati address ini, untuk dibuka langkah demi langkah, plus form telusur ke address lain. */
+export function TracesPanel({ traces, chain, address }: { traces: WalletTraceSummary[]; chain: ChainId; address: string }) {
   return (
     <Panel
       id="telusur"
@@ -17,14 +18,15 @@ export function TracesPanel({ traces }: { traces: WalletTraceSummary[] }) {
       icon={Footprints}
       action={<ClassificationBadge classification="heuristic" />}
     >
+      <TraceStartForm chain={chain} from={address} />
       {traces.length === 0 ? (
         <EmptyState
           icon={Footprints}
-          title="Belum ada jalur"
-          description="Belum ada jalur dana yang melewati address ini di chain ini."
+          title="Belum ada jalur tersimpan"
+          description="Isi address tujuan di atas untuk mencari jalur dana dari transfer yang sudah dipindai."
         />
       ) : (
-        <ul className="space-y-2">
+        <ul className="mt-3 space-y-2">
           {traces.map((trace) => (
             <li key={`${trace.from}:${trace.to}`}>
               <Link

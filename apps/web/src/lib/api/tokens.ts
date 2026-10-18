@@ -1,14 +1,14 @@
 /**
  * Akses data token untuk halaman investigasi.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /tokens/:chain/:address` → `TokenInvestigation`) tanpa mengubah
- * komponen yang memakainya.
+ * Mode live menggabungkan `/api/tokens/:chain/:address/*` dan penilaian
+ * risiko lewat `./live/tokens`. Mode tiruan membaca data tiruan.
  */
 import { CHAINS } from "../chains";
 import { MOCK_FAILING_TOKEN, MOCK_TOKENS } from "../mock/tokens";
 import type { ChainId, TokenInvestigation, TokenSummary } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/tokens";
 
 /** Latensi tiruan supaya tampilan loading terlihat selama fase frontend. */
 const MOCK_LATENCY_MS = 600;
@@ -33,6 +33,7 @@ export async function getTokenInvestigation(
   chain: ChainId,
   address: string,
 ): Promise<TokenInvestigation | null> {
+  if (isLive()) return live.getTokenInvestigation(chain, address);
   await delay(MOCK_LATENCY_MS);
 
   if (chain === MOCK_FAILING_TOKEN.chain && sameAddress(chain, address, MOCK_FAILING_TOKEN.address)) {

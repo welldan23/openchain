@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { DataStatusNotice } from "@/components/data-status-notice";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { TraceHeader } from "@/components/trace/trace-header";
@@ -38,6 +39,7 @@ export default async function TracePage({ params }: PageProps<"/trace/[chain]/[f
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
+      <DataStatusNotice dataStatus={trace.snapshot.dataStatus} statusReason={trace.snapshot.statusReason} />
       <TraceHeader trace={trace} summary={summary} />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah isi lebar mendorong kolom melebihi layar HP. */}

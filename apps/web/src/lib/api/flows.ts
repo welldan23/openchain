@@ -1,15 +1,15 @@
 /**
  * Akses data aliran dana untuk halaman Lacak Aliran Dana.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /flows/:chain/:address` → `AddressFlow`) tanpa mengubah komponen yang
- * memakainya.
+ * Mode live membaca pemindaian tersimpan lewat `./live/flows`
+ * (`/api/flows/...`); mode tiruan membaca data tiruan.
  */
 import { CHAINS } from "../chains";
 import { addressKey } from "../fund-flow";
 import { MOCK_FAILING_FLOW, MOCK_FLOWS } from "../mock/flows";
 import type { AddressFlow, AddressFlowSummary, ChainId } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/flows";
 
 /** Latensi tiruan supaya tampilan loading terlihat selama fase frontend. */
 const MOCK_LATENCY_MS = 600;
@@ -28,6 +28,7 @@ function sameAddress(chain: ChainId, a: string, b: string): boolean {
  * - Melempar error bila sumber data gagal (di mock: address simulasi gagal).
  */
 export async function getAddressFlow(chain: ChainId, address: string): Promise<AddressFlow | null> {
+  if (isLive()) return live.getAddressFlow(chain, address);
   await delay(MOCK_LATENCY_MS);
 
   if (chain === MOCK_FAILING_FLOW.chain && sameAddress(chain, address, MOCK_FAILING_FLOW.address)) {
@@ -49,6 +50,7 @@ export async function listFlowChains(
   chain: ChainId,
   address: string,
 ): Promise<Array<{ chain: ChainId; hasData: boolean }>> {
+  if (isLive()) return live.listFlowChains(address);
   const format = CHAINS[chain].addressFormat;
   return (Object.keys(CHAINS) as ChainId[])
     .filter((id) => CHAINS[id].addressFormat === format)

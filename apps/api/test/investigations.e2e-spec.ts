@@ -70,6 +70,18 @@ describe('/api/investigations', () => {
     expect((await api().get('/api/investigations').expect(200)).body.total).toBe(1);
   });
 
+  it('mengubah dan menghapus catatan tanpa mengubah waktu dibuka', async () => {
+    const created = (await api().post('/api/investigations').send({ kind: 'flow', title: 'Pendana', chain: 'robinhood', href: '/flow/robinhood/0xcatatan' }).expect(201)).body;
+    tick(5);
+    const noted = await api().patch(`/api/investigations/${created.id}`).send({ note: '  cek exchange  ' }).expect(200);
+    expect(noted.body).toMatchObject({ id: created.id, note: 'cek exchange', openedAt: created.openedAt, openCount: 1 });
+    const cleared = await api().patch(`/api/investigations/${created.id}`).send({ note: '' }).expect(200);
+    expect(cleared.body.note).toBeNull();
+    await api().patch(`/api/investigations/${created.id}`).send({ note: 'x'.repeat(281) }).expect(400);
+    await api().patch(`/api/investigations/${created.id}`).send({}).expect(400);
+    await api().patch('/api/investigations/999999').send({ note: 'x' }).expect(404);
+  });
+
   it('menolak isian yang salah dan chain yang tidak dikenal', async () => {
     const notInvestigation = await api().post('/api/investigations').send({ ...token, href: '/admin/x' }).expect(400);
     expect(notInvestigation.body.message).toContain('Hanya halaman investigasi');

@@ -52,7 +52,7 @@ export function TokenHeader({ token, riskLevel, snapshot, actions }: TokenHeader
               ) : (
                 <Badge className="bg-slate-500/20 text-slate-300 ring-slate-400/30">
                   <CircleAlert className="size-3" aria-hidden />
-                  Source belum terverifikasi
+                  {token.verified === null ? "Verifikasi source belum bisa dicek" : "Source belum terverifikasi"}
                 </Badge>
               )}
             </div>
@@ -84,28 +84,42 @@ export function TokenHeader({ token, riskLevel, snapshot, actions }: TokenHeader
         <div className="min-w-0">
           <dt className="text-muted">Deployer</dt>
           <dd className="mt-1">
-            <HashLink
-              value={token.deployer}
-              href={explorerAddressUrl(token.chain, token.deployer)}
-              copyLabel="Salin address deployer"
-            />
+            {token.deployer ? (
+              <HashLink
+                value={token.deployer}
+                href={explorerAddressUrl(token.chain, token.deployer)}
+                copyLabel="Salin address deployer"
+              />
+            ) : (
+              <span className="text-muted">Belum tersedia dari explorer</span>
+            )}
           </dd>
         </div>
         <div className="min-w-0">
           <dt className="text-muted">Dibuat</dt>
           <dd className="mt-1 text-foreground/90">
-            {formatDate(token.deployedAt)}
-            <span className="text-muted"> · umur {formatAge(token.deployedAt, snapshot.fetchedAt)}</span>
+            {token.deployedAt ? (
+              <>
+                {formatDate(token.deployedAt)}
+                <span className="text-muted"> · umur {formatAge(token.deployedAt, snapshot.fetchedAt)}</span>
+              </>
+            ) : (
+              <span className="text-muted">Belum tersedia dari explorer</span>
+            )}
           </dd>
         </div>
         <div className="min-w-0">
           <dt className="text-muted">Transaksi deploy</dt>
           <dd className="mt-1">
-            <HashLink
-              value={token.deployTxHash}
-              href={explorerTxUrl(token.chain, token.deployTxHash)}
-              copyLabel="Salin hash transaksi deploy"
-            />
+            {token.deployTxHash ? (
+              <HashLink
+                value={token.deployTxHash}
+                href={explorerTxUrl(token.chain, token.deployTxHash)}
+                copyLabel="Salin hash transaksi deploy"
+              />
+            ) : (
+              <span className="text-muted">Belum tersedia dari explorer</span>
+            )}
           </dd>
         </div>
         <div className="min-w-0">

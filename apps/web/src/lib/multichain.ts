@@ -14,9 +14,10 @@ export interface MultichainSummary {
   /** Chain yang datanya tertinggal dari snapshot chain lain. */
   staleChains: ChainId[];
   totalTx: number;
-  inUsd: number;
-  outUsd: number;
-  balanceUsd: number;
+  /** Jumlah nilai yang diketahui; kosong bila tidak ada satu pun nilai yang diketahui. */
+  inUsd: number | null;
+  outUsd: number | null;
+  balanceUsd: number | null;
   /** Chain dengan transaksi terbanyak; `null` bila tidak aktif di mana pun. */
   busiestChain: ChainId | null;
   bridgeCount: number;
@@ -29,9 +30,15 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Jumlah nilai yang diketahui; `null` bila semuanya belum diketahui (bukan nol). */
+function sumKnown(values: Array<number | null>): number | null {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length === 0 ? null : round2(known.reduce((sum, value) => sum + value, 0));
+}
+
 /** Aktif = datanya ada dan punya transaksi. Chain yang gagal dimuat tidak dianggap aktif maupun tidak aktif. */
 export function isActive(activity: ChainActivity): boolean {
-  return activity.status !== "unavailable" && activity.txCount > 0;
+  return activity.status !== "unavailable" && (activity.txCount ?? 0) > 0;
 }
 
 function isUnavailable(activity: ChainActivity): boolean {
@@ -40,16 +47,16 @@ function isUnavailable(activity: ChainActivity): boolean {
 
 export function summarizeMultichain(profile: MultichainProfile): MultichainSummary {
   const active = profile.chains.filter(isActive);
-  const busiest = [...active].sort((a, b) => b.txCount - a.txCount || a.chain.localeCompare(b.chain))[0];
+  const busiest = [...active].sort((a, b) => (b.txCount ?? 0) - (a.txCount ?? 0) || a.chain.localeCompare(b.chain))[0];
   return {
     activeChains: active.map((item) => item.chain),
     inactiveChains: profile.chains.filter((item) => !isActive(item) && !isUnavailable(item)).map((item) => item.chain),
     unavailableChains: profile.chains.filter(isUnavailable).map((item) => item.chain),
     staleChains: profile.chains.filter((item) => item.status === "stale").map((item) => item.chain),
-    totalTx: active.reduce((sum, item) => sum + item.txCount, 0),
-    inUsd: round2(active.reduce((sum, item) => sum + item.inUsd, 0)),
-    outUsd: round2(active.reduce((sum, item) => sum + item.outUsd, 0)),
-    balanceUsd: round2(profile.chains.filter((item) => !isUnavailable(item)).reduce((sum, item) => sum + item.balanceUsd, 0)),
+    totalTx: active.reduce((sum, item) => sum + (item.txCount ?? 0), 0),
+    inUsd: sumKnown(active.map((item) => item.inUsd)),
+    outUsd: sumKnown(active.map((item) => item.outUsd)),
+    balanceUsd: sumKnown(profile.chains.filter((item) => !isUnavailable(item)).map((item) => item.balanceUsd)),
     busiestChain: busiest?.chain ?? null,
     bridgeCount: profile.bridges.length,
     bridgedUsd: round2(profile.bridges.reduce((sum, item) => sum + (item.amountUsd ?? 0), 0)),
@@ -68,7 +75,7 @@ export function sortChainActivity(chains: ChainActivity[]): ChainActivity[] {
   return [...chains].sort(
     (a, b) =>
       statusRank({ active: isActive(a), status: a.status }) - statusRank({ active: isActive(b), status: b.status }) ||
-      b.txCount - a.txCount ||
+      (b.txCount ?? 0) - (a.txCount ?? 0) ||
       a.chain.localeCompare(b.chain),
   );
 }
@@ -107,7 +114,7 @@ export function filterProfileChains(profile: MultichainProfile, selected: ChainI
   return {
     ...profile,
     chains: profile.chains.filter((item) => set.has(item.chain)),
-    bridges: profile.bridges.filter((move) => set.has(move.fromChain) || set.has(move.toChain)),
+    bridges: profile.bridges.filter((move) => set.has(move.fromChain) || (move.toChain !== null && set.has(move.toChain))),
     activities: profile.activities.filter((item) => set.has(item.chain)),
   };
 }
@@ -139,14 +146,15 @@ export interface ComparisonRow {
   chain: ChainId;
   active: boolean;
   status: ChainActivity["status"];
-  txCount: number;
+  /** Angka kosong berarti belum diketahui, bukan nol. */
+  txCount: number | null;
   /** Porsi transaksi chain ini dari total semua chain terpilih, dalam persen. */
   txSharePct: number;
-  inUsd: number;
-  outUsd: number;
-  netUsd: number;
-  counterpartyCount: number;
-  balanceUsd: number;
+  inUsd: number | null;
+  outUsd: number | null;
+  netUsd: number | null;
+  counterpartyCount: number | null;
+  balanceUsd: number | null;
   firstSeen?: string;
   lastSeen?: string;
   bridgesOut: number;
@@ -165,16 +173,16 @@ export type ComparisonKey =
   | "lastSeen";
 
 export function comparisonRows(profile: MultichainProfile): ComparisonRow[] {
-  const totalTx = profile.chains.filter(isActive).reduce((sum, item) => sum + item.txCount, 0);
+  const totalTx = profile.chains.filter(isActive).reduce((sum, item) => sum + (item.txCount ?? 0), 0);
   return profile.chains.map((item) => ({
     chain: item.chain,
     active: isActive(item),
     status: item.status,
     txCount: item.txCount,
-    txSharePct: totalTx > 0 && isActive(item) ? round2((item.txCount / totalTx) * 100) : 0,
+    txSharePct: totalTx > 0 && isActive(item) ? round2(((item.txCount ?? 0) / totalTx) * 100) : 0,
     inUsd: item.inUsd,
     outUsd: item.outUsd,
-    netUsd: round2(item.inUsd - item.outUsd),
+    netUsd: item.inUsd === null || item.outUsd === null ? null : round2(item.inUsd - item.outUsd),
     counterpartyCount: item.counterpartyCount,
     balanceUsd: item.balanceUsd,
     firstSeen: item.firstSeen,
@@ -187,7 +195,8 @@ export function comparisonRows(profile: MultichainProfile): ComparisonRow[] {
 function sortValue(row: ComparisonRow, key: ComparisonKey): number | string {
   if (key === "chain") return row.chain;
   if (key === "firstSeen" || key === "lastSeen") return row[key] ? Date.parse(row[key]) : 0;
-  return row[key];
+  // Nilai yang belum diketahui selalu di urutan paling rendah.
+  return row[key] ?? Number.NEGATIVE_INFINITY;
 }
 
 /** Urutkan tabel; chain tidak aktif dan yang gagal dimuat selalu di bawah apa pun urutannya. */
@@ -198,7 +207,7 @@ export function sortComparison(rows: ComparisonRow[], key: ComparisonKey, direct
     if (rank !== 0) return rank;
     const va = sortValue(a, key);
     const vb = sortValue(b, key);
-    const diff = typeof va === "string" ? va.localeCompare(vb as string) : va - (vb as number);
+    const diff = typeof va === "string" ? va.localeCompare(vb as string) : va === vb ? 0 : va - (vb as number);
     return diff * sign || a.chain.localeCompare(b.chain);
   });
 }
@@ -209,7 +218,7 @@ export function columnLeaders(rows: ComparisonRow[]): Partial<Record<ComparisonK
   const leaders: Partial<Record<ComparisonKey, ChainId>> = {};
   for (const key of keys) {
     const best = rows
-      .filter((row) => row.active)
+      .filter((row) => row.active && row[key] !== null)
       .reduce<ComparisonRow | null>((top, row) => (top === null || (row[key] as number) > (top[key] as number) ? row : top), null);
     if (best && (best[key] as number) > 0) leaders[key] = best.chain;
   }

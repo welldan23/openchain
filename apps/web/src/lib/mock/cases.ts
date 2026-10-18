@@ -167,8 +167,8 @@ const bridgeCase: InvestigationCase = {
   snapshot: {
     fetchedAt: funderProfile.fetchedAt,
     blocks: funderProfile.chains
-      .filter((chain) => chain.status !== "unavailable" && chain.txCount > 0)
-      .map((chain) => ({ chain: chain.chain, blockNumber: chain.snapshotBlock })),
+      .filter((chain) => chain.status !== "unavailable" && (chain.txCount ?? 0) > 0 && chain.snapshotBlock !== null)
+      .map((chain) => ({ chain: chain.chain, blockNumber: chain.snapshotBlock ?? 0 })),
     sources: funderProfile.sources,
     dataStatus: "partial",
     statusReason: unavailable?.statusReason,

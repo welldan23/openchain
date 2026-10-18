@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DATABASE, type Database } from '../database/database.module.js';
 import {
@@ -30,6 +30,32 @@ export interface SnapshotSelector {
 @Injectable()
 export class TokensRepository {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  /** Token dengan snapshot terbaru dulu, beserta tingkat risiko penilaian terakhirnya (bila ada). */
+  async recentTokens(limit: number) {
+    const result = (await this.db.execute(sql`
+      select a.chain_id, a.address, t.name, t.symbol, s.fetched_at, s.data_status,
+        (select r.level::text from risk_assessments r
+          where r.chain_id = a.chain_id and r.address_id = a.id
+          order by r.assessed_at desc, r.id desc limit 1) as risk_level
+      from tokens t
+      join addresses a on a.id = t.address_id
+      join lateral (
+        select fetched_at, data_status from token_snapshots ts where ts.token_id = t.id
+        order by ts.fetched_at desc, ts.id desc limit 1
+      ) s on true
+      order by s.fetched_at desc, t.id desc
+      limit ${limit}`)) as unknown as { rows: Array<Record<string, unknown>> };
+    return result.rows.map((row) => ({
+      chain: String(row.chain_id),
+      address: String(row.address),
+      name: row.name === null ? null : String(row.name),
+      symbol: row.symbol === null ? null : String(row.symbol),
+      snapshotAt: new Date(row.fetched_at as string | Date).toISOString(),
+      dataStatus: String(row.data_status),
+      riskLevel: row.risk_level === null ? null : String(row.risk_level),
+    }));
+  }
 
   async findChain(chainId: string) {
     const [chain] = await this.db.select().from(chains).where(eq(chains.id, chainId)).limit(1);

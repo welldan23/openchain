@@ -8,6 +8,7 @@ import { FlowHeader } from "@/components/flow/flow-header";
 import { FlowStats } from "@/components/flow/flow-stats";
 import { TracesPanel } from "@/components/flow/traces-panel";
 import { TransfersPanel } from "@/components/flow/transfers-panel";
+import { DataStatusNotice } from "@/components/data-status-notice";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { flowPath, getAddressFlow, listFlowChains } from "@/lib/api/flows";
@@ -56,6 +57,7 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
+      <DataStatusNotice dataStatus={flow.snapshot.dataStatus} statusReason={flow.snapshot.statusReason} />
       <FlowHeader
         flow={flow}
         actions={
@@ -100,7 +102,7 @@ export default async function FlowPage({ params, searchParams }: PageProps<"/flo
           />
         </div>
         <aside className="min-w-0 space-y-5" aria-label="Telusur dan keterangan">
-          <TracesPanel traces={traces} />
+          <TracesPanel traces={traces} chain={flow.chain} address={flow.address} />
           <ClassificationLegend />
         </aside>
       </div>

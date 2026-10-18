@@ -32,8 +32,8 @@ export function MarketStats({ market }: { market: TokenMarket }) {
         <Stat
           label="Harga"
           value={formatUsdPrice(market.priceUsd)}
-          sub={`${formatPctChange(change)} 24 jam`}
-          subClassName={change >= 0 ? "text-emerald-400" : "text-rose-400"}
+          sub={change === null ? "Perubahan 24 jam tidak tersedia" : `${formatPctChange(change)} 24 jam`}
+          subClassName={change === null ? undefined : change >= 0 ? "text-emerald-400" : "text-rose-400"}
         />
         <Stat
           label="Market cap"

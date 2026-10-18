@@ -34,7 +34,7 @@ function SearchHints() {
         <li>Hash transaksi EVM (0x… 66 karakter) atau signature transaksi Solana. Langsung dibuka beserta buktinya.</li>
         <li>Nama atau simbol token, atau nama label wallet seperti nama exchange.</li>
       </ul>
-      <p className="mt-4 text-xs font-medium">Coba contoh:</p>
+      {examples.length > 0 ? <p className="mt-4 text-xs font-medium">Coba contoh:</p> : null}
       <ul className="mt-2 flex flex-wrap gap-2">
         {examples.map((example) => (
           <li key={example.query}>

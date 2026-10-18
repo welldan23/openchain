@@ -30,7 +30,7 @@ function BridgeRow({ move, snapshotAt }: { move: BridgeMove; snapshotAt: string 
           <ChainBadge chain={move.fromChain} />
           <ArrowRight className="size-3.5 text-muted" aria-hidden />
           <span className="sr-only">ke</span>
-          <ChainBadge chain={move.toChain} />
+          {move.toChain ? <ChainBadge chain={move.toChain} /> : <span className="rounded-full px-2 py-0.5 text-[11px] text-muted ring-1 ring-inset ring-line">Chain tujuan belum diketahui</span>}
           <EntityLabelBadge label={move.bridge} />
         </div>
         <Badge className={status.className} title={status.description}>
@@ -61,7 +61,7 @@ function BridgeRow({ move, snapshotAt }: { move: BridgeMove; snapshotAt: string 
               : "Diterima"}
           </dt>
           <dd className="mt-0.5">
-            {move.receivedTxHash ? (
+            {move.receivedTxHash && move.toChain ? (
               <HashLink value={move.receivedTxHash} href={explorerTxUrl(move.toChain, move.receivedTxHash)} head={8} tail={4} copyLabel="Salin hash penerimaan" />
             ) : (
               <span className="text-[11px] text-muted">{status.description}</span>

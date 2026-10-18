@@ -166,4 +166,13 @@ describe('GET /api/tokens/:chain/:address/summary', () => {
   it('token di chain lain tidak ikut terbaca', async () => {
     await request(app.getHttpServer()).get(summaryUrl('ethereum', TOKEN)).expect(404);
   });
+
+  it('daftar token yang sudah punya snapshot, terbaru dulu', async () => {
+    const { body } = await request(app.getHttpServer()).get('/api/tokens?limit=5').expect(200);
+    expect(body.tokens.length).toBeGreaterThan(0);
+    expect(body.tokens[0]).toMatchObject({ chain: expect.any(String), address: expect.any(String), snapshotAt: expect.any(String), dataStatus: expect.any(String) });
+    const times = body.tokens.map((token: { snapshotAt: string }) => token.snapshotAt);
+    expect([...times].sort().reverse()).toEqual(times);
+    await request(app.getHttpServer()).get('/api/tokens?limit=51').expect(400);
+  });
 });

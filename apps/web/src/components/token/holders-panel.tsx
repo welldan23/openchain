@@ -19,7 +19,7 @@ import type { ChainId, HolderConcentration, TokenHolder } from "@/lib/types";
 interface HoldersPanelProps {
   chain: ChainId;
   symbol: string;
-  totalSupply: number;
+  totalSupply: number | null;
   concentration: HolderConcentration;
   holders: TokenHolder[];
 }
@@ -70,7 +70,7 @@ export function HoldersPanel({ chain, symbol, totalSupply, concentration, holder
                 share: tier.pct,
                 valueText: formatPct(tier.pct),
                 detailText: [
-                  formatTokenAmount((tier.pct / 100) * totalSupply, symbol),
+                  formatTokenAmount(totalSupply === null ? null : (tier.pct / 100) * totalSupply, symbol),
                   tier.holderName,
                 ]
                   .filter(Boolean)

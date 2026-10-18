@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { HashLink } from "@/components/ui/hash-link";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState } from "@/components/ui/states";
+import { isLive } from "@/lib/api/http";
 import { explorerAddressUrl, explorerTxUrl } from "@/lib/chains";
 import { formatDateTime, formatTokenAmount, formatUsdCompact, shortenHash } from "@/lib/format";
 import { ACTIVITY_META } from "@/lib/labels";
@@ -25,7 +26,11 @@ export function ActivityPanel({ chain, symbol, activity }: ActivityPanelProps) {
       {activity.length === 0 ? (
         <EmptyState
           title="Belum ada aktivitas tercatat"
-          description="Transaksi token akan muncul di sini setelah terindeks dari blockchain."
+          description={
+            isLive()
+              ? "OpenChain belum mengambil riwayat transaksi token ini. Lihat transaksinya langsung di explorer lewat tombol di atas."
+              : "Transaksi token akan muncul di sini setelah terindeks dari blockchain."
+          }
         />
       ) : (
         <ol className="divide-y divide-line">

@@ -71,11 +71,16 @@ const dayLongFormat = new Intl.DateTimeFormat(LOCALE, {
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });
 
-function isValidNumber(value: number): boolean {
-  return Number.isFinite(value);
+/** Angka yang bisa ditampilkan; `null`/`undefined` berarti datanya belum ada dan ditulis "–". */
+type MaybeNumber = number | null | undefined;
+type MaybeDate = string | null | undefined;
+
+function isValidNumber(value: MaybeNumber): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
-function parseDate(iso: string): Date | null {
+function parseDate(iso: MaybeDate): Date | null {
+  if (!iso) return null;
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -83,14 +88,14 @@ function parseDate(iso: string): Date | null {
 /* ------------------------------- Angka ---------------------------------- */
 
 /** 23.512.880 — angka penuh dengan pemisah ribuan. */
-export function formatNumber(value: number, maximumFractionDigits = 0): string {
+export function formatNumber(value: MaybeNumber, maximumFractionDigits = 0): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
   if (maximumFractionDigits === 0) return integerFormat.format(value);
   return new Intl.NumberFormat(LOCALE, { maximumFractionDigits }).format(value);
 }
 
 /** 1,25 jt — angka ringkas (rb = ribu, jt = juta, M = miliar, T = triliun). */
-export function formatNumberCompact(value: number): string {
+export function formatNumberCompact(value: MaybeNumber): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
   return compactFormat.format(value);
 }
@@ -101,7 +106,7 @@ export function formatNumberCompact(value: number): string {
  * supaya selisih kecil tetap terlihat.
  */
 export function formatTokenAmount(
-  amount: number,
+  amount: MaybeNumber,
   symbol: string,
   { compact = true, maximumFractionDigits = 2 }: { compact?: boolean; maximumFractionDigits?: number } = {},
 ): string {
@@ -113,13 +118,13 @@ export function formatTokenAmount(
 /* -------------------------------- Uang ---------------------------------- */
 
 /** US$5.266,25 — nilai USD lengkap. */
-export function formatUsd(value: number): string {
+export function formatUsd(value: MaybeNumber): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
   return usdFormat.format(value);
 }
 
 /** US$4,21 jt — nilai USD ringkas tanpa nol desimal yang tidak perlu. */
-export function formatUsdCompact(value: number): string {
+export function formatUsdCompact(value: MaybeNumber): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
   return usdCompactFormat.format(value);
 }
@@ -128,7 +133,7 @@ export function formatUsdCompact(value: number): string {
  * Harga token. Harga ≥ $1 memakai 2 desimal; harga kecil memakai 4 digit
  * signifikan supaya US$0,004213 tidak tampil sebagai US$0,00.
  */
-export function formatUsdPrice(value: number): string {
+export function formatUsdPrice(value: MaybeNumber): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
   if (Math.abs(value) >= 1 || value === 0) return usdFormat.format(value);
   return usdSmallPriceFormat.format(value);
@@ -146,7 +151,7 @@ interface PctOptions {
  * Nilai positif yang terlalu kecil untuk ditampilkan menjadi "<0,01%"
  * agar tidak terbaca sebagai nol.
  */
-export function formatPct(value: number, { maximumFractionDigits = 2 }: PctOptions = {}): string {
+export function formatPct(value: MaybeNumber, { maximumFractionDigits = 2 }: PctOptions = {}): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
   const smallest = 10 ** -maximumFractionDigits;
   if (value > 0 && value < smallest) {
@@ -159,7 +164,7 @@ export function formatPct(value: number, { maximumFractionDigits = 2 }: PctOptio
 
 /** +12,4% / -8,7% — perubahan persen dengan tanda, nol tanpa tanda. */
 export function formatPctChange(
-  value: number,
+  value: MaybeNumber,
   { maximumFractionDigits = 2 }: PctOptions = {},
 ): string {
   if (!isValidNumber(value)) return EMPTY_VALUE;
@@ -173,28 +178,28 @@ export function formatPctChange(
 /* ------------------------------- Waktu ---------------------------------- */
 
 /** 03 Okt 2026, 11.30 WIB */
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: MaybeDate): string {
   const date = parseDate(iso);
   if (!date) return EMPTY_VALUE;
   return `${dateTimeFormat.format(date)} ${TIME_ZONE_LABEL}`;
 }
 
 /** 11.30 WIB — jam saja, untuk daftar yang sudah dikelompokkan per hari. */
-export function formatTime(iso: string): string {
+export function formatTime(iso: MaybeDate): string {
   const date = parseDate(iso);
   if (!date) return EMPTY_VALUE;
   return `${timeFormat.format(date)} ${TIME_ZONE_LABEL}`;
 }
 
 /** Senin, 28 September 2026 — judul kelompok per hari. */
-export function formatDayLong(iso: string): string {
+export function formatDayLong(iso: MaybeDate): string {
   const date = parseDate(iso);
   if (!date) return EMPTY_VALUE;
   return dayLongFormat.format(date);
 }
 
 /** 03 Okt 2026 */
-export function formatDate(iso: string): string {
+export function formatDate(iso: MaybeDate): string {
   const date = parseDate(iso);
   if (!date) return EMPTY_VALUE;
   return dateFormat.format(date);
@@ -204,7 +209,7 @@ export function formatDate(iso: string): string {
  * Lama waktu dari `fromIso` sampai `toIso`, mis. "20 hari". Dipakai untuk umur
  * token relatif terhadap waktu snapshot, supaya hasilnya bisa direproduksi.
  */
-export function formatAge(fromIso: string, toIso: string): string {
+export function formatAge(fromIso: MaybeDate, toIso: MaybeDate): string {
   const from = parseDate(fromIso);
   const to = parseDate(toIso);
   if (!from || !to) return EMPTY_VALUE;
@@ -229,7 +234,7 @@ const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
 ];
 
 /** "1 jam yang lalu" — jarak waktu dari `iso` ke `now`. */
-export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+export function formatRelativeTime(iso: MaybeDate, now: Date = new Date()): string {
   const date = parseDate(iso);
   if (!date || Number.isNaN(now.getTime())) return EMPTY_VALUE;
   const diffSeconds = Math.round((date.getTime() - now.getTime()) / 1000);

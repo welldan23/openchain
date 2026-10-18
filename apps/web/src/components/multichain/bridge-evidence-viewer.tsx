@@ -29,7 +29,8 @@ function Leg({
   emptyText,
 }: {
   title: string;
-  chain: ChainId;
+  /** Kosong bila chain tujuan belum diketahui. */
+  chain: ChainId | null;
   hash?: string;
   at?: string;
   amount?: number;
@@ -40,9 +41,9 @@ function Leg({
     <section aria-label={title} className="min-w-0 rounded-lg border border-line p-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold">{title}</h3>
-        <ChainBadge chain={chain} />
+        {chain ? <ChainBadge chain={chain} /> : <span className="text-[11px] text-muted">Chain belum diketahui</span>}
       </div>
-      {hash && at ? (
+      {hash && at && chain ? (
         <div className="mt-2 space-y-2">
           <p className="text-sm font-medium tabular-nums">{amount !== undefined ? formatTokenAmount(amount, symbol, { compact: false, maximumFractionDigits: 6 }) : "–"}</p>
           <p className="text-[11px] text-muted">
@@ -144,7 +145,7 @@ export function BridgeEvidenceViewer({ move, snapshotAt }: { move: BridgeMove; s
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
               <ChainBadge chain={move.fromChain} />
               <ArrowRight className="size-3" aria-hidden />
-              <ChainBadge chain={move.toChain} />
+              {move.toChain ? <ChainBadge chain={move.toChain} /> : <span className="rounded-full px-2 py-0.5 text-[11px] text-muted ring-1 ring-inset ring-line">Chain tujuan belum diketahui</span>}
               <EntityLabelBadge label={move.bridge} interactive={false} />
             </p>
           </div>

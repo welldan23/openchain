@@ -106,9 +106,11 @@ export function RiskWarningsPanel({ risk, now }: { risk: ObjectRisk; now: Date }
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="flex flex-wrap items-center gap-1.5">
                       <SeverityBadge severity={warning.severity} />
-                      <Badge title={DANGER_TRAIT_META[warning.trait].description}>
-                        {DANGER_CATEGORY_META[DANGER_TRAIT_META[warning.trait].category].label} · {DANGER_TRAIT_META[warning.trait].label}
-                      </Badge>
+                      {warning.trait ? (
+                        <Badge title={DANGER_TRAIT_META[warning.trait].description}>
+                          {DANGER_CATEGORY_META[DANGER_TRAIT_META[warning.trait].category].label} · {DANGER_TRAIT_META[warning.trait].label}
+                        </Badge>
+                      ) : null}
                       <ClassificationBadge classification={warning.classification} />
                       {fresh ? <Badge className="bg-accent/15 text-accent ring-accent/40" title={`Terdeteksi dalam ${NEW_WARNING_HOURS} jam sebelum snapshot`}>Baru</Badge> : null}
                     </span>

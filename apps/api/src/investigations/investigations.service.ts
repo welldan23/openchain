@@ -85,6 +85,17 @@ export class InvestigationsService {
     return { entry: toEntryView(row), created: row.openCount === 1 };
   }
 
+  /** Simpan atau hapus (`null`) catatan satu riwayat milik akun ini; waktu dibuka tidak berubah. */
+  async updateNote(ownerId: number, id: number, note: string | null): Promise<InvestigationEntryView> {
+    const [row] = await this.db
+      .update(investigations)
+      .set({ note })
+      .where(and(eq(investigations.id, id), eq(investigations.ownerId, ownerId)))
+      .returning();
+    if (!row) throw new NotFoundException('Investigasi ini sudah tidak ada di riwayat.');
+    return toEntryView(row);
+  }
+
   async remove(ownerId: number, id: number): Promise<void> {
     const deleted = await this.db
       .delete(investigations)

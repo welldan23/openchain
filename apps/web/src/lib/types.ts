@@ -63,24 +63,27 @@ export interface TokenProfile {
   address: string;
   name: string;
   symbol: string;
-  decimals: number;
-  totalSupply: number;
-  deployer: string;
-  deployedAt: string;
-  deployTxHash: string;
-  /** Source code kontrak terverifikasi di explorer. */
-  verified: boolean;
+  /** Kosong bila belum terbaca dari kontrak. */
+  decimals: number | null;
+  totalSupply: number | null;
+  /** Pembuat kontrak, waktu, dan tx deploy; kosong bila explorer belum memberi datanya. */
+  deployer: string | null;
+  deployedAt: string | null;
+  deployTxHash: string | null;
+  /** Source code kontrak terverifikasi di explorer; kosong bila belum bisa dicek. */
+  verified: boolean | null;
 }
 
+/** Data pasar; nilai kosong berarti tidak tersedia dari provider, bukan nol. */
 export interface TokenMarket {
-  priceUsd: number;
-  priceChange24hPct: number;
-  marketCapUsd: number;
-  fdvUsd: number;
-  liquidityUsd: number;
-  volume24hUsd: number;
-  holderCount: number;
-  txCount24h: number;
+  priceUsd: number | null;
+  priceChange24hPct: number | null;
+  marketCapUsd: number | null;
+  fdvUsd: number | null;
+  liquidityUsd: number | null;
+  volume24hUsd: number | null;
+  holderCount: number | null;
+  txCount24h: number | null;
 }
 
 export interface RiskFinding {
@@ -94,8 +97,8 @@ export interface RiskFinding {
 }
 
 export interface RiskSummary {
-  /** Skor 0–100, makin tinggi makin berisiko. */
-  score: number;
+  /** Skor 0–100, makin tinggi makin berisiko; kosong bila belum bisa dinilai (bukan aman). */
+  score: number | null;
   level: RiskLevel;
   findings: RiskFinding[];
 }
@@ -127,14 +130,16 @@ export interface TokenHolder {
   rank: number;
   address: string;
   label?: EntityLabel;
-  balance: number;
+  /** Kosong bila decimals token belum diketahui. */
+  balance: number | null;
   /** Persentase dari total supply. */
   sharePct: number;
 }
 
 export interface HolderConcentration {
-  top10Pct: number;
-  top50Pct: number;
+  /** Kosong bila holder belum terbaca. */
+  top10Pct: number | null;
+  top50Pct: number | null;
   classification: FindingClassification;
 }
 
@@ -173,6 +178,10 @@ export interface DataSnapshot {
   fetchedAt: string;
   blockNumber: number;
   sources: string[];
+  /** Kelengkapan data; kosong di data tiruan yang selalu lengkap. */
+  dataStatus?: CaseDataStatus;
+  /** Penjelasan untuk status selain `complete`, mis. provider yang gagal. */
+  statusReason?: string;
 }
 
 export interface TokenInvestigation {
@@ -328,7 +337,8 @@ export interface MapNode {
   label?: EntityLabel;
   /** Persen supply token; 0 untuk wallet penghubung yang bukan holder. */
   sharePct: number;
-  isContract: boolean;
+  /** Kosong bila belum dicek. */
+  isContract: boolean | null;
   /** Id klaster bila wallet ini masuk kelompok hasil heuristic. */
   clusterId?: string;
 }
@@ -458,9 +468,13 @@ export interface WalletMapSummary {
  * Status data satu chain: `ok` lengkap, `stale` tertinggal dari snapshot
  * chain lain, `unavailable` gagal dimuat sehingga aktivitasnya tidak diketahui.
  */
-export type ChainDataStatus = "ok" | "stale" | "unavailable";
+export type ChainDataStatus = "ok" | "partial" | "stale" | "unavailable";
 
-/** Aktivitas satu address di satu chain selama periode data. */
+/**
+ * Aktivitas satu address di satu chain selama periode data. Angka kosong
+ * (`null`) berarti belum diketahui (chain belum dipindai, harga belum ada),
+ * bukan nol.
+ */
 export interface ChainActivity {
   chain: ChainId;
   status: ChainDataStatus;
@@ -468,17 +482,17 @@ export interface ChainActivity {
   statusReason?: string;
   /** Waktu data chain ini diambil, bila berbeda dari snapshot utama. */
   fetchedAt?: string;
-  txCount: number;
-  inUsd: number;
-  outUsd: number;
-  counterpartyCount: number;
+  txCount: number | null;
+  inUsd: number | null;
+  outUsd: number | null;
+  counterpartyCount: number | null;
   /** Kosong bila belum pernah aktif di chain ini. */
   firstSeen?: string;
   lastSeen?: string;
-  /** Saldo native coin dalam USD pada snapshot. */
-  balanceUsd: number;
-  /** Nomor blok snapshot chain ini. */
-  snapshotBlock: number;
+  /** Saldo native coin dalam USD pada snapshot; kosong bila belum diambil. */
+  balanceUsd: number | null;
+  /** Nomor blok snapshot chain ini; kosong bila belum dipindai. */
+  snapshotBlock: number | null;
 }
 
 /** Status pencocokan kiriman bridge di chain asal dengan penerimaan di chain tujuan. */
@@ -488,7 +502,8 @@ export type BridgeMatchStatus = "matched" | "pending" | "unmatched";
 export interface BridgeMove {
   id: string;
   fromChain: ChainId;
-  toChain: ChainId;
+  /** Kosong bila chain tujuan belum diketahui (penerimaannya belum ditemukan). */
+  toChain: ChainId | null;
   bridge: EntityLabel;
   asset: FlowAsset;
   amountSent: number;
@@ -579,8 +594,9 @@ export type SearchResultMeta =
       kind: "token";
       riskLevel: RiskLevel;
       findingCount: number;
-      verified: boolean;
-      deployedAt: string;
+      /** Kosong bila verifikasi source atau waktu deploy belum terbaca. */
+      verified: boolean | null;
+      deployedAt: string | null;
       priceUsd?: number;
       liquidityUsd?: number;
       holderCount?: number;
@@ -761,7 +777,8 @@ export interface DangerTraitCheck {
 /** Peringatan dini: pola baru yang perlu dipantau sebelum jadi temuan. */
 export interface RiskWarning {
   id: string;
-  trait: DangerTrait;
+  /** Ciri berbahaya yang terkait; kosong bila peringatan tidak terkait ciri yang dipantau. */
+  trait: DangerTrait | null;
   title: string;
   description: string;
   severity: RiskSeverity;

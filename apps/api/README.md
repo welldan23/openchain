@@ -680,6 +680,9 @@ akun lain dijawab `404` seperti id yang tidak ada. Kontraknya ada di
   Membuka ulang halaman yang sama di akun yang sama memperbarui baris yang
   sama (`200`, hitungan naik, catatan dan jumlah temuan lama tidak dihapus
   bila tidak dikirim); catatan baru dijawab `201`.
+- `PATCH /api/investigations/:id`, body `{ note }` — simpan catatan (maks.
+  280 karakter) atau hapus bila kosong. Waktu dibuka dan hitungan tidak
+  berubah.
 - `DELETE /api/investigations/:id` — hapus satu riwayat beserta catatannya
   (`204`, atau `404` bila sudah tidak ada). Data on-chain dan halamannya tidak
   tersentuh.
@@ -927,6 +930,13 @@ Semua endpoint di sini perlu sesi (`401` tanpa sesi). Kontraknya ada di
 - Saklar ini baru disimpan per akun; halaman analisis belum memakainya, jadi
   data dari sumber yang dimatikan masih bisa tampil di sana. Ini juga
   dicantumkan di `caveats`.
+
+### `GET /api/tokens`
+
+Token yang sudah punya snapshot, snapshot terbaru dulu: `{ tokens: [{ chain,
+address, name, symbol, snapshotAt, dataStatus, riskLevel }] }`. `riskLevel`
+dari penilaian risiko terakhir, `null` bila belum pernah dinilai. `?limit=`
+1–50 (default 12). Dipakai beranda sebagai titik awal investigasi.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

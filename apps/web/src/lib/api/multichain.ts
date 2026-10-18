@@ -1,14 +1,14 @@
 /**
  * Akses data aktivitas lintas chain untuk halaman Jelajah Multichain.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /multichain/:address` → `MultichainProfile`) tanpa mengubah komponen
- * yang memakainya.
+ * Mode live memakai `./live/multichain` (`/api/multichain/:address`); mode
+ * tiruan membaca data tiruan.
  */
 import { MOCK_FAILING_MULTICHAIN, MOCK_MULTICHAIN } from "../mock/multichain";
 import { isActive, isEvmAddress } from "../multichain";
 import type { MultichainProfile, MultichainProfileSummary } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/multichain";
 
 /** Latensi tiruan supaya tampilan loading terlihat selama fase frontend. */
 const MOCK_LATENCY_MS = 600;
@@ -23,6 +23,7 @@ function delay(ms: number): Promise<void> {
  * - Melempar error bila sumber data gagal (di mock: address simulasi gagal).
  */
 export async function getMultichainProfile(address: string): Promise<MultichainProfile | null> {
+  if (isLive()) return live.getMultichainProfile(address);
   await delay(MOCK_LATENCY_MS);
   if (!isEvmAddress(address)) return null;
   const key = address.toLowerCase();

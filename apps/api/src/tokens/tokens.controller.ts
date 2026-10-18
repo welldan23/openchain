@@ -9,7 +9,7 @@ import { HoldersService, MAX_HOLDER_LIMIT } from './holders.service.js';
 import type { HoldersResponse } from './holders.types.js';
 import { TokenSummaryService } from './token-summary.service.js';
 import type { TokenSummaryResponse } from './token-summary.types.js';
-import type { SnapshotSelector } from './tokens.repository.js';
+import { TokensRepository, type SnapshotSelector } from './tokens.repository.js';
 
 /**
  * Endpoint baca data token. Semua endpoint di sini read-only.
@@ -19,6 +19,9 @@ import type { SnapshotSelector } from './tokens.repository.js';
  * - `?block=<nomor>`: snapshot pada blok/slot tertentu.
  * - `?at=<waktu ISO>`: snapshot terakhir yang diambil sampai waktu itu.
  * - tanpa keduanya: snapshot terbaru.
+ *
+ * `GET /tokens` mendaftar token yang sudah punya snapshot, terbaru dulu
+ * (`?limit=` 1–50, default 12), untuk titik awal investigasi.
  */
 @Controller('tokens')
 export class TokensController {
@@ -27,7 +30,15 @@ export class TokensController {
     private readonly contractChecksService: ContractChecksService,
     private readonly holdersService: HoldersService,
     private readonly evidenceListService: EvidenceListService,
+    private readonly repository: TokensRepository,
   ) {}
+
+  @Get()
+  async list(@Query('limit') limit?: string) {
+    const parsed = parsePositiveInteger(limit, 'limit') ?? 12;
+    if (parsed > 50) throw new BadRequestException('Parameter limit maksimal 50.');
+    return { tokens: await this.repository.recentTokens(parsed) };
+  }
 
   /** Ringkasan token untuk blok Ringkasan Token. */
   @Get(':chain/:address/summary')

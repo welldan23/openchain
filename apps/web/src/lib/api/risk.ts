@@ -1,14 +1,14 @@
 /**
  * Penilaian risiko objek (token, wallet, kontrak).
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /risk/:chain/:address` → `ObjectRisk`, 404 bila objek belum pernah
- * dinilai) tanpa mengubah komponen yang memakainya.
+ * Mode live memakai `./live/risk` (`/api/risk/:chain/:address`); mode tiruan
+ * membaca data tiruan.
  */
 import { CHAINS } from "../chains";
 import { MOCK_FAILING_RISK, MOCK_RISKS } from "../mock/risk";
 import type { ChainId, ObjectRisk, ObjectRiskSummary } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/risk";
 
 const MOCK_LATENCY_MS = 500;
 
@@ -27,6 +27,7 @@ function sameAddress(chain: ChainId, a: string, b: string): boolean {
  * - Melempar error bila sumber data gagal (di mock: address simulasi gagal).
  */
 export async function getObjectRisk(chain: ChainId, address: string): Promise<ObjectRisk | null> {
+  if (isLive()) return live.getObjectRisk(chain, address);
   await delay(MOCK_LATENCY_MS);
   if (chain === MOCK_FAILING_RISK.chain && sameAddress(chain, address, MOCK_FAILING_RISK.address)) {
     throw new Error("Simulasi: layanan penilaian risiko tidak bisa dihubungi.");

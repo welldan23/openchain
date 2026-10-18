@@ -1,16 +1,16 @@
 /**
  * Pencarian cepat dan riwayat investigasi.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak:
- * `GET /search?q=` → `SearchResponse` dan `GET /investigations` →
- * `InvestigationEntry[]`) tanpa mengubah komponen yang memakainya.
+ * Mode live memakai `/api/search` dan `/api/investigations` (riwayat milik
+ * akun yang masuk) lewat `./live/search`. Mode tiruan membaca data tiruan.
  */
 import { MOCK_FAILING_QUERY, MOCK_HISTORY, MOCK_SEARCH_EXAMPLES, MOCK_SEARCH_INDEX } from "../mock/search";
 import { validateNote } from "../history";
 import { classifyQuery, dedupeResults, normalizeText } from "../search";
 import { EMPTY_SEARCH_FILTERS, searchFilterHref } from "../search-filter";
 import type { InvestigationEntry, SearchQueryKind, SearchResult } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/search";
 
 const MOCK_LATENCY_MS = 400;
 const SUGGEST_LATENCY_MS = 150;
@@ -62,6 +62,10 @@ function runMockSearch(rawQuery: string): SearchResponse {
  * tanpa peduli huruf besar/kecil; address dan signature Solana harus persis.
  */
 export async function searchInvestigations(rawQuery: string): Promise<SearchResponse> {
+  if (isLive()) {
+    const { query, kind, results } = await live.search(rawQuery.trim());
+    return { query, kind, results };
+  }
   await delay(MOCK_LATENCY_MS);
   return runMockSearch(rawQuery);
 }
@@ -79,6 +83,13 @@ export const SUGGESTION_LIMIT = 6;
  * pencarian penuh dan hanya mengembalikan beberapa hasil teratas.
  */
 export async function suggestSearch(rawQuery: string, limit = SUGGESTION_LIMIT): Promise<SearchSuggestions> {
+  if (isLive()) {
+    const query = rawQuery.trim();
+    if (classifyQuery(query) === "empty" || (classifyQuery(query) === "text" && normalizeText(query).length < MIN_TEXT_QUERY)) {
+      return { query, kind: classifyQuery(query), results: [], total: 0 };
+    }
+    return live.search(query, limit);
+  }
   await delay(SUGGEST_LATENCY_MS);
   const response = runMockSearch(rawQuery);
   return { ...response, results: response.results.slice(0, limit), total: response.results.length };
@@ -86,6 +97,7 @@ export async function suggestSearch(rawQuery: string, limit = SUGGESTION_LIMIT):
 
 /** Investigasi yang pernah dibuka, terbaru dulu. */
 export async function listInvestigationHistory(): Promise<InvestigationEntry[]> {
+  if (isLive()) return live.listHistory();
   return [...MOCK_HISTORY].sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt));
 }
 
@@ -98,9 +110,10 @@ export const MOCK_FAILING_NOTE = "#gagal";
  * `note` kosong menghapus catatan). Versi tiruan tidak menyimpan permanen.
  */
 export async function saveInvestigationNote(id: string, rawNote: string): Promise<InvestigationEntry> {
-  await delay(SAVE_LATENCY_MS);
   const validation = validateNote(rawNote);
   if (!validation.ok) throw new Error(validation.error);
+  if (isLive()) return live.saveNote(id, validation.note ?? null);
+  await delay(SAVE_LATENCY_MS);
   if (validation.note?.includes(MOCK_FAILING_NOTE)) {
     throw new Error("Simulasi: catatan gagal disimpan karena layanan tidak bisa dihubungi.");
   }
@@ -118,6 +131,7 @@ export const MOCK_UNDELETABLE_HISTORY_ID = "hist-5";
  * on-chain dan halaman investigasinya tetap bisa dibuka lagi.
  */
 export async function deleteInvestigation(id: string): Promise<void> {
+  if (isLive()) return live.deleteEntry(id);
   await delay(SAVE_LATENCY_MS);
   if (id === MOCK_UNDELETABLE_HISTORY_ID) {
     throw new Error("Simulasi: item ini gagal dihapus karena layanan tidak bisa dihubungi.");
@@ -136,6 +150,7 @@ export type NewInvestigationEntry = Omit<InvestigationEntry, "id" | "openedAt">;
 export async function recordInvestigation(input: NewInvestigationEntry): Promise<InvestigationEntry> {
   // Waktu dibuka = saat user memilih, bukan saat jawaban server tiba.
   const openedAt = new Date().toISOString();
+  if (isLive()) return live.recordEntry(input);
   await delay(RECORD_LATENCY_MS);
   if (!/^\/(token|flow|trace|map|multichain)\//.test(input.href)) {
     throw new Error("Hanya halaman investigasi yang dicatat di riwayat.");
@@ -146,6 +161,8 @@ export async function recordInvestigation(input: NewInvestigationEntry): Promise
 
 /** Contoh isian yang bisa dicoba saat kotak cari masih kosong. */
 export function listSearchExamples(): Array<{ label: string; query: string }> {
+  // Contoh tiruan menunjuk token fiktif; di mode live tidak ditampilkan.
+  if (isLive()) return [];
   return MOCK_SEARCH_EXAMPLES;
 }
 

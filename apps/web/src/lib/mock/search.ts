@@ -52,16 +52,16 @@ function latest(timestamps: Array<string | undefined>): string | undefined {
 
 /** Token tiruan tanpa data pasar ditandai dengan semua angka pasar nol. */
 function tokenMeta(item: TokenInvestigation): SearchResultMeta {
-  const hasMarket = item.market.holderCount > 0 || item.market.liquidityUsd > 0;
+  const hasMarket = (item.market.holderCount ?? 0) > 0 || (item.market.liquidityUsd ?? 0) > 0;
   return {
     kind: "token",
     riskLevel: item.risk.level,
     findingCount: item.risk.findings.length,
     verified: item.token.verified,
     deployedAt: item.token.deployedAt,
-    priceUsd: hasMarket ? item.market.priceUsd : undefined,
-    liquidityUsd: hasMarket ? item.market.liquidityUsd : undefined,
-    holderCount: hasMarket ? item.market.holderCount : undefined,
+    priceUsd: hasMarket ? (item.market.priceUsd ?? undefined) : undefined,
+    liquidityUsd: hasMarket ? (item.market.liquidityUsd ?? undefined) : undefined,
+    holderCount: hasMarket ? (item.market.holderCount ?? undefined) : undefined,
   };
 }
 
@@ -116,8 +116,8 @@ const multichainEntries: SearchIndexEntry[] = MOCK_MULTICHAIN.map((profile) => {
       kind: "address",
       view: "multichain",
       txCount: summary.totalTx,
-      inUsd: summary.inUsd,
-      outUsd: summary.outUsd,
+      inUsd: summary.inUsd ?? undefined,
+      outUsd: summary.outUsd ?? undefined,
       activeChains: summary.activeChains,
       lastSeen: latest(profile.chains.map((chain) => chain.lastSeen)),
     },

@@ -8,6 +8,7 @@ import { MapHeader } from "@/components/map/map-header";
 import { MapStats } from "@/components/map/map-stats";
 import { MapTable } from "@/components/map/map-table";
 import { WalletMapExplorer, type ExplorerNode } from "@/components/map/wallet-map-explorer";
+import { DataStatusNotice } from "@/components/data-status-notice";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ClassificationLegend } from "@/components/token/classification-legend";
 import { getWalletMap } from "@/lib/api/maps";
@@ -52,6 +53,7 @@ export default async function MapPage({ params, searchParams }: PageProps<"/map/
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
+      <DataStatusNotice dataStatus={map.snapshot.dataStatus} statusReason={map.snapshot.statusReason} />
       <MapHeader
         map={map}
         actions={

@@ -21,8 +21,8 @@ const COLUMNS: Array<{ key: ComparisonKey; label: string; numeric: boolean }> = 
   { key: "lastSeen", label: "Terakhir aktif", numeric: false },
 ];
 
-function signedUsd(value: number): string {
-  return `${value > 0 ? "+" : ""}${formatUsdCompact(value)}`;
+function signedUsd(value: number | null): string {
+  return `${value !== null && value > 0 ? "+" : ""}${formatUsdCompact(value)}`;
 }
 
 /**
@@ -141,7 +141,7 @@ export function ChainComparisonTable({ rows }: { rows: ComparisonRow[] }) {
                   {row.active ? cell(row, "counterpartyCount", formatNumber(row.counterpartyCount)) : EMPTY_VALUE}
                 </td>
                 <td className="px-2 py-2.5 text-right">
-                  {row.active || row.balanceUsd > 0 ? cell(row, "balanceUsd", formatUsdCompact(row.balanceUsd)) : EMPTY_VALUE}
+                  {row.active || (row.balanceUsd ?? 0) > 0 ? cell(row, "balanceUsd", formatUsdCompact(row.balanceUsd)) : EMPTY_VALUE}
                 </td>
                 <td className="py-2.5 pl-2 pr-4 whitespace-nowrap sm:pr-5">
                   {row.lastSeen ? formatDate(row.lastSeen) : EMPTY_VALUE}

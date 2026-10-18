@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { DataStatusNotice } from "@/components/data-status-notice";
 import { MockDataNotice } from "@/components/mock-data-notice";
 import { ActivityPanel } from "@/components/token/activity-panel";
 import { ClassificationLegend } from "@/components/token/classification-legend";
@@ -40,6 +41,7 @@ export default async function TokenPage({ params }: PageProps<"/token/[chain]/[a
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <MockDataNotice />
+      <DataStatusNotice dataStatus={data.snapshot.dataStatus} statusReason={data.snapshot.statusReason} />
       <TokenSummary data={data} />
 
       {/* grid-cols-1 = minmax(0,1fr): cegah tabel lebar mendorong kolom melebihi layar HP. */}
