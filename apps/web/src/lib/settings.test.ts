@@ -14,7 +14,7 @@ describe("pengaturan", () => {
   it("sumber data bermasalah tampil dulu, dengan hitungan per kondisi", () => {
     const sorted = sortDataSources(MOCK_SETTINGS.dataSources);
     expect(sorted.map((source) => source.status)).toEqual(["down", "degraded", "ok", "ok", "ok", "not_integrated"]);
-    expect(dataSourceCounts(MOCK_SETTINGS.dataSources)).toEqual({ ok: 3, degraded: 1, down: 1, disabled: 0, not_integrated: 1 });
+    expect(dataSourceCounts(MOCK_SETTINGS.dataSources)).toEqual({ ok: 3, degraded: 1, down: 1, unknown: 0, disabled: 0, not_integrated: 1 });
   });
 
   it("mock tidak membawa nilai rahasia: hanya nama environment variable dan status terisi", () => {

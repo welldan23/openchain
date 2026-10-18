@@ -6,7 +6,7 @@
  * `src/lib/mock` lewat `src/lib/api/tokens.ts`.
  */
 
-export type ChainId = "ethereum" | "bsc" | "solana" | "base" | "arbitrum";
+export type ChainId = "ethereum" | "bsc" | "solana" | "base" | "arbitrum" | "robinhood" | "optimism" | "polygon";
 
 /**
  * Klasifikasi transparansi untuk setiap temuan:
@@ -933,12 +933,16 @@ export interface DisplayPreferences {
   /** Angka besar diringkas (1,2 jt) atau ditulis penuh (1.234.567). */
   compactNumbers: boolean;
   valueUnit: ValueUnit;
-  defaultChain: ChainId;
+  /** Chain bawaan pencarian; kosong bila belum ada chain yang lolos smoke test. */
+  defaultChain: ChainId | null;
+  /** Penjelasan bila chain bawaan bukan pilihan pengguna, mis. chain pilihannya sedang tidak tervalidasi. */
+  defaultChainNote?: string | null;
   density: DensityPreference;
 }
 
 export type DataSourceKind = "rpc" | "explorer" | "market" | "security" | "label";
-export type DataSourceStatus = "ok" | "degraded" | "down" | "disabled" | "not_integrated";
+/** `unknown`: belum ada pengambilan data dalam rentang pemantauan, jadi kondisinya belum diketahui (bukan berarti normal). */
+export type DataSourceStatus = "ok" | "degraded" | "down" | "unknown" | "disabled" | "not_integrated";
 
 /**
  * Sumber data (provider) beserta kondisinya. API key hanya lewat environment

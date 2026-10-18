@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "@/lib/api/auth";
 import { validateSignIn, type SignInField } from "@/lib/auth";
+import { isLive } from "@/lib/api/http";
 import { MOCK_DEMO_ACCOUNT } from "@/lib/mock/auth";
 import { AuthField } from "./auth-field";
 import { FormAlert, SUBMIT_CLASS } from "./form-parts";
@@ -42,9 +43,11 @@ export function SignInForm({ next = "/pengaturan/profil" }: { next?: string }) {
         {form.pending ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
         {form.pending ? "Memeriksa…" : "Masuk"}
       </button>
-      <p className="rounded-lg bg-surface-raised px-3 py-2 text-[11px] text-muted">
-        Akun demo: <span className="font-mono text-foreground">{MOCK_DEMO_ACCOUNT.email}</span> / <span className="font-mono text-foreground">{MOCK_DEMO_ACCOUNT.password}</span>
-      </p>
+      {isLive() ? null : (
+        <p className="rounded-lg bg-surface-raised px-3 py-2 text-[11px] text-muted">
+          Akun demo: <span className="font-mono text-foreground">{MOCK_DEMO_ACCOUNT.email}</span> / <span className="font-mono text-foreground">{MOCK_DEMO_ACCOUNT.password}</span>
+        </p>
+      )}
     </form>
   );
 }

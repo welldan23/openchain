@@ -11,7 +11,7 @@ import { DATA_SOURCE_KIND_META, DATA_SOURCE_STATUS_META } from "@/lib/labels";
 import { dataSourceCounts, inactiveKinds, withSourceEnabled } from "@/lib/settings";
 import type { DataSourceSetting, DataSourceStatus } from "@/lib/types";
 
-const SUMMARY: DataSourceStatus[] = ["ok", "degraded", "down", "disabled", "not_integrated"];
+const SUMMARY: DataSourceStatus[] = ["ok", "degraded", "down", "unknown", "disabled", "not_integrated"];
 
 /**
  * Daftar sumber data dengan saklar nyala/mati per akun. Perubahan langsung

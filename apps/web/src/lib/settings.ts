@@ -18,14 +18,14 @@ export function settingsTabFromPath(pathname: string): SettingsTabId | null {
 }
 
 /** Urutan tampil: yang bermasalah dulu supaya langsung terlihat. */
-const STATUS_ORDER: DataSourceStatus[] = ["down", "degraded", "ok", "disabled", "not_integrated"];
+const STATUS_ORDER: DataSourceStatus[] = ["down", "degraded", "unknown", "ok", "disabled", "not_integrated"];
 
 export function sortDataSources(sources: DataSourceSetting[]): DataSourceSetting[] {
   return [...sources].sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.name.localeCompare(b.name));
 }
 
 export function dataSourceCounts(sources: DataSourceSetting[]): Record<DataSourceStatus, number> {
-  const counts = { ok: 0, degraded: 0, down: 0, disabled: 0, not_integrated: 0 };
+  const counts = { ok: 0, degraded: 0, down: 0, unknown: 0, disabled: 0, not_integrated: 0 };
   for (const source of sources) counts[source.status] += 1;
   return counts;
 }

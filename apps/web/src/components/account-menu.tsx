@@ -46,10 +46,11 @@ export function AccountMenu() {
     };
   }, [open]);
 
-  function signOut() {
-    endSession();
+  async function signOut() {
     setOpen(false);
+    await endSession();
     router.push("/masuk?keluar=1");
+    router.refresh();
   }
 
   const checking = session === undefined;

@@ -465,7 +465,12 @@ export const DATA_SOURCE_STATUS_META: Record<DataSourceStatus, Meta & { descript
     description: "Provider tidak bisa dihubungi; datanya ditandai tidak tersedia, tidak dikarang.",
     className: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
   },
-  disabled: { label: "Dimatikan", description: "Provider dimatikan lewat environment variable.", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
+  unknown: {
+    label: "Belum diketahui",
+    description: "Belum ada pengambilan data baru-baru ini, jadi kondisinya belum diketahui. Bukan berarti normal.",
+    className: "bg-slate-500/20 text-slate-300 ring-slate-400/30",
+  },
+  disabled: { label: "Dimatikan", description: "Dimatikan untuk akun ini atau lewat environment variable di server.", className: "bg-slate-500/20 text-slate-300 ring-slate-400/30" },
   not_integrated: {
     label: "Belum terhubung",
     description: "Belum dipakai OpenChain; datanya tidak muncul di analisis.",

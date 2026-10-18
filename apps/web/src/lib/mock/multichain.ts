@@ -23,7 +23,10 @@ const WINDOW = { from: "2026-09-03T00:00:00.000Z", to: SNAPSHOT_AT };
 const SOURCES = ["Node RPC tiap chain (tiruan)", "Label publik explorer (tiruan)"];
 
 /** Blok snapshot tiap chain EVM. */
-const SNAPSHOT_BLOCKS: Record<Exclude<ChainId, "solana">, number> = {
+/** Chain EVM yang dipakai data tiruan. */
+type MockEvmChain = "ethereum" | "bsc" | "base" | "arbitrum";
+
+const SNAPSHOT_BLOCKS: Record<MockEvmChain, number> = {
   ethereum: 23_512_880,
   bsc: 62_480_115,
   base: 36_118_402,
@@ -31,12 +34,12 @@ const SNAPSHOT_BLOCKS: Record<Exclude<ChainId, "solana">, number> = {
 };
 
 const EVM_CHAINS = (Object.keys(CHAINS) as ChainId[]).filter(
-  (chain): chain is Exclude<ChainId, "solana"> => CHAINS[chain].addressFormat === "evm",
+  (chain): chain is MockEvmChain => Object.hasOwn(SNAPSHOT_BLOCKS, chain),
 );
 
 const ETH: BridgeMove["asset"] = { symbol: "ETH", address: null };
 
-function inactive(chain: Exclude<ChainId, "solana">): ChainActivity {
+function inactive(chain: MockEvmChain): ChainActivity {
   return { chain, status: "ok", txCount: 0, inUsd: 0, outUsd: 0, counterpartyCount: 0, balanceUsd: 0, snapshotBlock: SNAPSHOT_BLOCKS[chain] };
 }
 
@@ -148,7 +151,7 @@ const USDC = { symbol: "USDC", address: mockEvmAddress("multi:usdc") };
 
 function busyActivity(
   id: string,
-  chain: Exclude<ChainId, "solana">,
+  chain: MockEvmChain,
   kind: CrossChainActivity["kind"],
   timestamp: string,
   counterpartySeed: string,

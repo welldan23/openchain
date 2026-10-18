@@ -1,17 +1,15 @@
 /**
  * Pengaturan akun.
  *
- * Selama fase frontend, fungsi di sini membaca data tiruan. Saat backend
- * siap, ganti isinya dengan pemanggilan API (asumsi kontrak: `GET /settings`
- * → `AccountSettings`; `PATCH /settings/profile` multipart berisi
- * `displayName` dan `avatar` → `UserProfile`; `PATCH /settings/preferences`
- * → `DisplayPreferences`; `PATCH /settings/data-sources/:id` berisi
- * `{ enabled }` → `DataSourceSetting`, `409` untuk sumber terkunci) tanpa
- * mengubah komponen yang memakainya.
+ * Mode live memakai `/api/account` (profil, foto, preferensi, sumber data)
+ * lewat `./live/settings`. Mode tiruan membaca data tiruan; perubahannya tidak
+ * tersimpan setelah halaman dimuat ulang.
  */
 import { MOCK_SETTINGS } from "../mock/settings";
 import { validateAvatarFile, validateDisplayName, type AvatarChange } from "../profile";
 import type { AccountSettings, DataSourceSetting, DisplayPreferences, UserProfile } from "../types";
+import { isLive } from "./http";
+import * as live from "./live/settings";
 
 const MOCK_LATENCY_MS = 400;
 
@@ -20,13 +18,14 @@ function delay(ms: number): Promise<void> {
 }
 
 export async function getAccountSettings(): Promise<AccountSettings> {
+  if (isLive()) return live.getAccountSettings();
   await delay(MOCK_LATENCY_MS);
   return structuredClone(MOCK_SETTINGS);
 }
 
 /**
- * Simulasi ubah profil: foto hanya dibaca di browser (URL objek lokal), tidak
- * diunggah. Perubahan tidak tersimpan setelah halaman dimuat ulang.
+ * Ubah nama dan foto profil. Mode tiruan: foto hanya dibaca di browser (URL
+ * objek lokal), tidak diunggah, dan perubahan hilang saat dimuat ulang.
  */
 export async function updateProfile(profile: UserProfile, input: { displayName: string; avatar: AvatarChange }): Promise<UserProfile> {
   const nameError = validateDisplayName(input.displayName);
@@ -35,13 +34,15 @@ export async function updateProfile(profile: UserProfile, input: { displayName: 
     const fileError = validateAvatarFile(input.avatar.file);
     if (fileError) throw new Error(fileError);
   }
+  if (isLive()) return live.updateProfile(input);
   await delay(MOCK_LATENCY_MS);
   const avatarUrl = input.avatar.kind === "keep" ? profile.avatarUrl : input.avatar.kind === "remove" ? null : URL.createObjectURL(input.avatar.file);
   return { ...profile, displayName: input.displayName.trim(), avatarUrl };
 }
 
-/** Simulasi simpan preferensi tampilan; perubahan tidak tersimpan setelah halaman dimuat ulang. */
+/** Simpan preferensi tampilan (mode tiruan: tidak tersimpan setelah halaman dimuat ulang). */
 export async function updateDisplayPreferences(current: DisplayPreferences, changes: Partial<DisplayPreferences>): Promise<DisplayPreferences> {
+  if (isLive()) return live.updateDisplayPreferences(changes);
   await delay(MOCK_LATENCY_MS);
   return { ...current, ...changes };
 }
@@ -56,6 +57,7 @@ export const MOCK_FAILING_SOURCE_ID = "simulasi-gagal";
  */
 export async function setDataSourceEnabled(source: DataSourceSetting, enabled: boolean, previousStatus: DataSourceSetting["status"]): Promise<DataSourceSetting> {
   if (source.lockedReason) throw new Error(`${source.name} tidak bisa diubah. ${source.lockedReason}`);
+  if (isLive()) return live.setDataSourceEnabled(source.id, enabled);
   await delay(MOCK_LATENCY_MS);
   if (source.id === MOCK_FAILING_SOURCE_ID && !enabled) throw new Error(`Simulasi: pengaturan ${source.name} gagal disimpan. Coba lagi.`);
   return { ...source, enabled, status: enabled ? previousStatus : "disabled" };

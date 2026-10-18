@@ -55,6 +55,30 @@ export const CHAINS: Record<ChainId, ChainInfo> = {
     explorer: { name: "Arbiscan", baseUrl: "https://arbiscan.io" },
     badgeClass: "bg-sky-500/15 text-sky-300 ring-sky-400/30",
   },
+  robinhood: {
+    id: "robinhood",
+    name: "Robinhood Chain",
+    nativeSymbol: "ETH",
+    addressFormat: "evm",
+    explorer: { name: "Blockscout", baseUrl: "https://robinhoodchain.blockscout.com" },
+    badgeClass: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30",
+  },
+  optimism: {
+    id: "optimism",
+    name: "OP Mainnet",
+    nativeSymbol: "ETH",
+    addressFormat: "evm",
+    explorer: { name: "Optimistic Etherscan", baseUrl: "https://optimistic.etherscan.io" },
+    badgeClass: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
+  },
+  polygon: {
+    id: "polygon",
+    name: "Polygon PoS",
+    nativeSymbol: "POL",
+    addressFormat: "evm",
+    explorer: { name: "PolygonScan", baseUrl: "https://polygonscan.com" },
+    badgeClass: "bg-violet-500/15 text-violet-300 ring-violet-400/30",
+  },
 };
 
 export function isChainId(value: string): value is ChainId {

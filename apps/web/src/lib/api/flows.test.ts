@@ -70,6 +70,9 @@ describe("API aliran dana (mock)", () => {
       { chain: "bsc", hasData: false },
       { chain: "base", hasData: true },
       { chain: "arbitrum", hasData: false },
+      { chain: "robinhood", hasData: false },
+      { chain: "optimism", hasData: false },
+      { chain: "polygon", hasData: false },
     ]);
     expect(await listFlowChains("solana", kodoCreator.address)).toEqual([{ chain: "solana", hasData: true }]);
   });

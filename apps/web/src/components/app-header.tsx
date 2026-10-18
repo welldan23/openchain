@@ -1,5 +1,6 @@
 import { FileText, FolderOpen, History, Radar, Search } from "lucide-react";
 import Link from "next/link";
+import { isLive } from "@/lib/api/http";
 import { AccountMenu } from "./account-menu";
 import { HeaderSearch } from "./search/header-search";
 
@@ -52,14 +53,16 @@ export function AppHeader() {
             <Search className="size-4" aria-hidden />
           </Link>
           <AccountMenu />
-          <span
-            title="Data tiruan"
-            className="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-400/30 sm:px-2.5"
-          >
-            {/* Disingkat di layar kecil supaya deretan ikon tidak meluber. */}
-            <span className="sm:hidden">Tiruan</span>
-            <span className="hidden sm:inline">Data tiruan</span>
-          </span>
+          {isLive() ? null : (
+            <span
+              title="Data tiruan"
+              className="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-300 ring-1 ring-inset ring-amber-400/30 sm:px-2.5"
+            >
+              {/* Disingkat di layar kecil supaya deretan ikon tidak meluber. */}
+              <span className="sm:hidden">Tiruan</span>
+              <span className="hidden sm:inline">Data tiruan</span>
+            </span>
+          )}
         </div>
       </div>
     </header>

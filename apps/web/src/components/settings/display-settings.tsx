@@ -20,8 +20,9 @@ export function DisplaySettings({ preferences }: { preferences: DisplayPreferenc
         ))}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 last:pb-0">
           <dt className="text-sm text-muted">Chain bawaan pencarian</dt>
-          <dd>
-            <ChainBadge chain={preferences.defaultChain} />
+          <dd className="text-right">
+            {preferences.defaultChain ? <ChainBadge chain={preferences.defaultChain} /> : <span className="text-sm text-muted">Belum ada chain yang lolos smoke test</span>}
+            {preferences.defaultChainNote ? <span className="mt-1 block text-xs text-muted">{preferences.defaultChainNote}</span> : null}
           </dd>
         </div>
       </dl>
