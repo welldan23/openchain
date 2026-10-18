@@ -148,6 +148,13 @@
       "when": 1791923581740,
       "tag": "0020_report_share_links",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792314825540,
+      "tag": "0021_user_accounts",
+      "breakpoints": true
     }
   ]
 }

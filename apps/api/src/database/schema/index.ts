@@ -7,7 +7,8 @@
  * Transfer internal native coin disimpan di `native_transfers` (kind `internal`).
  * Penilaian risiko objek ada di `risk_assessments`; `risk_findings` lama tetap
  * menyimpan temuan per snapshot token. Laporan bukti ada di `reports`, dengan
- * bagian (`report_sections`) dan blok isi (`report_blocks`).
+ * bagian (`report_sections`) dan blok isi (`report_blocks`). Akun pengguna ada di
+ * `users` dan sesi masuknya di `user_sessions`.
  */
 export * from './enums.js';
 export * from './reference.js';
@@ -21,3 +22,4 @@ export * from './search.js';
 export * from './investigations.js';
 export * from './risk.js';
 export * from './reports.js';
+export * from './accounts.js';
