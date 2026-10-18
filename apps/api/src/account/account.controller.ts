@@ -4,7 +4,8 @@ import type { Response } from 'express';
 import { CurrentAccount, SessionGuard, type SignedInRequest } from '../auth/session.guard.js';
 import { AVATAR_MAX_BYTES } from '../database/schema/accounts.js';
 import { AccountService } from './account.service.js';
-import type { ProfileView } from './account.types.js';
+import type { PreferencesView, ProfileView } from './account.types.js';
+import { parsePreferencesUpdate } from './preferences-input.js';
 import { parseProfileUpdate, ProfileInputError, validateAvatar } from './profile-input.js';
 
 type Account = NonNullable<SignedInRequest['account']>;
@@ -21,7 +22,8 @@ function parsed<T>(parse: () => T): T {
 /**
  * Profil pengguna yang sedang masuk. `GET`/`PATCH /account/profile`,
  * `PUT /account/avatar` (multipart, kolom `avatar`, maks. 2 MB),
- * `DELETE /account/avatar`, dan `GET /account/avatar` untuk gambarnya.
+ * `DELETE /account/avatar`, `GET /account/avatar` untuk gambarnya, serta
+ * `GET`/`PATCH /account/preferences` untuk preferensi tampilan.
  */
 @Controller('account')
 @UseGuards(SessionGuard)
@@ -64,5 +66,16 @@ export class AccountController {
       return undefined;
     }
     return new StreamableFile(avatar.data, { type: avatar.contentType, disposition: 'inline', length: avatar.data.length });
+  }
+
+  @Get('preferences')
+  preferences(@CurrentAccount() account: Account, @Res({ passthrough: true }) res: Response): Promise<PreferencesView> {
+    res.setHeader('Cache-Control', 'no-store');
+    return this.service.preferences(account.userId);
+  }
+
+  @Patch('preferences')
+  updatePreferences(@CurrentAccount() account: Account, @Body() body: unknown): Promise<PreferencesView> {
+    return this.service.updatePreferences(account.userId, parsed(() => parsePreferencesUpdate(body)));
   }
 }

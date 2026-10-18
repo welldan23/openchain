@@ -46,6 +46,8 @@ describe('/api/account', () => {
     await request(server).patch('/api/account/profile').send({ displayName: 'X Y' }).expect(401);
     await request(server).put('/api/account/avatar').attach('avatar', PNG, 'a.png').expect(401);
     await request(server).get('/api/account/avatar').expect(401);
+    await request(server).get('/api/account/preferences').expect(401);
+    await request(server).patch('/api/account/preferences').send({ theme: 'light' }).expect(401);
   });
 
   it('baca dan ubah profil: nama dan zona waktu; respons sesi ikut berubah', async () => {
@@ -95,5 +97,54 @@ describe('/api/account', () => {
     await request(server).put('/api/account/avatar').set('Cookie', cookie).attach('avatar', big, 'besar.png').expect(413);
     const { body } = await request(server).get('/api/account/profile').set('Cookie', cookie).expect(200);
     expect(body.avatar).toBeNull();
+  });
+
+  it('preferensi tampilan: bawaan, simpan sebagian, chain bawaan hanya yang tervalidasi', async () => {
+    const server = app.getHttpServer();
+    // Ethereum dan Base dianggap sudah lolos smoke test; Robinhood masih eksperimental.
+    for (const [chain, status] of [
+      ['ethereum', 'validated'],
+      ['base', 'validated'],
+      ['robinhood', 'experimental'],
+    ]) {
+      const check = await client.query<{ id: number }>(`INSERT INTO chain_smoke_checks (chain_id, status, checks, tested_at) VALUES ($1, $2, '[]', now()) RETURNING id`, [chain, status]);
+      await client.query(`UPDATE chains SET support_status = $2, support_check_id = $3 WHERE id = $1`, [chain, status, check.rows[0].id]);
+    }
+
+    const initial = await request(server).get('/api/account/preferences').set('Cookie', cookie).expect(200);
+    expect(initial.headers['cache-control']).toBe('no-store');
+    expect(initial.body).toEqual({
+      theme: 'dark',
+      language: 'id',
+      numberLocale: 'id',
+      timeDisplay: 'local',
+      compactNumbers: true,
+      valueUnit: 'usd',
+      defaultChain: 'ethereum',
+      defaultChainSource: 'fallback',
+      defaultChainNote: 'Belum memilih chain bawaan; memakai Ethereum.',
+      density: 'comfortable',
+      updatedAt: expect.any(String),
+    });
+
+    now = new Date('2026-10-03T08:00:00Z');
+    const saved = await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ theme: 'light', compactNumbers: false, defaultChain: 'base' }).expect(200);
+    expect(saved.body).toMatchObject({ theme: 'light', compactNumbers: false, language: 'id', defaultChain: 'base', defaultChainSource: 'chosen', defaultChainNote: null, updatedAt: now.toISOString() });
+    const reread = await request(server).get('/api/account/preferences').set('Cookie', cookie).expect(200);
+    expect(reread.body).toEqual(saved.body);
+
+    await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ language: 'en' }).expect(400);
+    await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ theme: 'sepia' }).expect(400);
+    const experimental = await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ defaultChain: 'robinhood' }).expect(400);
+    expect(experimental.body.message).toContain('belum didukung penuh');
+    await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ defaultChain: 'cardano' }).expect(400);
+
+    // Bila chain pilihan turun status, chain tervalidasi pertama dipakai dan alasannya dijelaskan.
+    await client.query(`UPDATE chains SET support_status = 'experimental' WHERE id = 'base'`);
+    const degraded = await request(server).get('/api/account/preferences').set('Cookie', cookie).expect(200);
+    expect(degraded.body).toMatchObject({ defaultChain: 'ethereum', defaultChainSource: 'fallback', defaultChainNote: 'Base sedang tidak tervalidasi (status experimental); sementara memakai Ethereum.' });
+
+    const cleared = await request(server).patch('/api/account/preferences').set('Cookie', cookie).send({ defaultChain: null }).expect(200);
+    expect(cleared.body).toMatchObject({ theme: 'light', defaultChain: 'ethereum', defaultChainSource: 'fallback' });
   });
 });

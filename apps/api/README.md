@@ -857,7 +857,7 @@ Kontraknya ada di `src/auth/auth.types.ts`.
   `401`. Waktu terakhir dipakai sesi diperbarui paling sering sekali per 5
   menit.
 
-### `/api/account` (profil)
+### `/api/account` (profil dan preferensi)
 
 Semua endpoint di sini perlu sesi (`401` tanpa sesi). Kontraknya ada di
 `src/account/account.types.ts`.
@@ -879,6 +879,20 @@ Semua endpoint di sini perlu sesi (`401` tanpa sesi). Kontraknya ada di
   `Cache-Control: private, max-age=0, must-revalidate`, dan
   `X-Content-Type-Options: nosniff`; `304` bila `If-None-Match` cocok, `404`
   bila belum ada foto.
+- `GET /api/account/preferences` — preferensi tampilan, sama dengan
+  `DisplayPreferences` di frontend: `theme`, `language`, `numberLocale`,
+  `timeDisplay`, `compactNumbers`, `valueUnit`, `defaultChain`, `density`,
+  ditambah `defaultChainSource` (`chosen`, `fallback`, atau `none`),
+  `defaultChainNote`, dan `updatedAt`. `defaultChain` selalu chain yang sudah
+  lolos smoke test (`validated`): bila belum dipilih atau chain pilihan turun
+  status, dipakai chain tervalidasi pertama menurut urutan prioritas adapter
+  dan alasannya ditulis di `defaultChainNote`; `null` bila belum ada chain
+  tervalidasi. `Cache-Control: no-store`.
+- `PATCH /api/account/preferences` — simpan sebagian field di atas. Nilai di
+  luar pilihan ditolak `400`. `language: "en"` ditolak `400` karena antarmuka
+  Bahasa Inggris belum tersedia. `defaultChain` harus chain `validated`
+  (chain eksperimental, terencana, atau tak dikenal `400`); `null`
+  mengosongkan pilihan. Menjawab preferensi terbaru.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

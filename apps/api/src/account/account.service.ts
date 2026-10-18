@@ -1,9 +1,14 @@
-/** Profil pengguna yang sedang masuk: baca, ubah nama dan zona waktu, ganti atau hapus foto. */
+/**
+ * Profil pengguna yang sedang masuk (baca, ubah nama dan zona waktu, ganti
+ * atau hapus foto) dan preferensi tampilannya.
+ */
 import { createHash } from 'node:crypto';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
+import { compareChains } from '../chains/chains-catalog.mapper.js';
 import { AccountRepository } from './account.repository.js';
-import type { ProfileView } from './account.types.js';
+import type { PreferencesView, ProfileView } from './account.types.js';
+import { defaultChainError, resolveDefaultChain, type PreferencesUpdate } from './preferences-input.js';
 import type { AvatarType, ProfileUpdate } from './profile-input.js';
 
 @Injectable()
@@ -65,5 +70,40 @@ export class AccountService {
     const found = await this.repository.avatar(userId);
     if (!found) throw new NotFoundException('Belum ada foto profil.');
     return found;
+  }
+
+  async preferences(userId: number): Promise<PreferencesView> {
+    let row = await this.repository.preferences(userId);
+    if (!row) {
+      // Akun tanpa baris preferensi (seharusnya tidak terjadi) mendapat nilai bawaan.
+      await this.repository.savePreferences(userId, { updatedAt: this.clock.now() });
+      row = await this.repository.preferences(userId);
+      if (!row) throw new NotFoundException('Preferensi tidak ditemukan.');
+    }
+    const chains = (await this.repository.chains()).sort(compareChains);
+    const resolved = resolveDefaultChain(row.defaultChainId, chains);
+    return {
+      theme: row.theme,
+      language: row.language,
+      numberLocale: row.numberLocale,
+      timeDisplay: row.timeDisplay,
+      compactNumbers: row.compactNumbers,
+      valueUnit: row.valueUnit,
+      defaultChain: resolved.defaultChain,
+      defaultChainSource: resolved.source,
+      defaultChainNote: resolved.note,
+      density: row.density,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  async updatePreferences(userId: number, update: PreferencesUpdate): Promise<PreferencesView> {
+    const { defaultChain, ...rest } = update;
+    if (typeof defaultChain === 'string') {
+      const error = defaultChainError(defaultChain, await this.repository.chains());
+      if (error) throw new BadRequestException(error);
+    }
+    await this.repository.savePreferences(userId, { ...rest, ...(defaultChain !== undefined ? { defaultChainId: defaultChain } : {}), updatedAt: this.clock.now() });
+    return this.preferences(userId);
   }
 }

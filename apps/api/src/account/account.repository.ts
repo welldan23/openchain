@@ -1,8 +1,8 @@
-/** Query profil pengguna. Isi foto hanya dibaca saat gambarnya diminta. */
+/** Query profil dan preferensi pengguna. Isi foto hanya dibaca saat gambarnya diminta. */
 import { Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
-import { userProfiles, users } from '../database/schema/index.js';
+import { chains, userPreferences, userProfiles, users } from '../database/schema/index.js';
 
 @Injectable()
 export class AccountRepository {
@@ -39,5 +39,22 @@ export class AccountRepository {
 
   async updateProfile(userId: number, values: Partial<typeof userProfiles.$inferInsert>): Promise<void> {
     await this.db.update(userProfiles).set(values).where(eq(userProfiles.userId, userId));
+  }
+
+  async preferences(userId: number) {
+    const [row] = await this.db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1);
+    return row ?? null;
+  }
+
+  /** Simpan perubahan; baris dibuat dengan nilai bawaan bila belum ada. */
+  async savePreferences(userId: number, values: Partial<Omit<typeof userPreferences.$inferInsert, 'userId'>> & { updatedAt: Date }): Promise<void> {
+    await this.db
+      .insert(userPreferences)
+      .values({ ...values, userId })
+      .onConflictDoUpdate({ target: userPreferences.userId, set: values });
+  }
+
+  async chains() {
+    return this.db.select().from(chains);
   }
 }
