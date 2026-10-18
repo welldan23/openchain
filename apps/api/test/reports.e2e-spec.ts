@@ -1,7 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { PGlite } from '@electric-sql/pglite';
-import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
@@ -10,6 +9,7 @@ import { DATABASE, type Database } from '../src/database/database.module.js';
 import { FundFlowIngestionService } from '../src/flows/fund-flow-ingestion.service.js';
 import type { AddressFlowCollection, KindCoverage } from '../src/flows/fund-flow.types.js';
 import { createTestDatabase, type TestDatabase } from './support/database.js';
+import { signedIn } from './support/auth.js';
 
 const WALLET = '0x' + 'c1'.repeat(20);
 const FUNDER = '0x' + 'f1'.repeat(20);
@@ -49,6 +49,7 @@ describe('/api/reports', () => {
   let client: PGlite;
   let db: TestDatabase;
   let app: INestApplication<App>;
+  let api: Awaited<ReturnType<typeof signedIn>>;
   let now = new Date('2026-10-03T05:00:00Z');
   const tick = (minutes: number) => (now = new Date(now.getTime() + minutes * 60_000));
   let caseId: string;
@@ -65,7 +66,8 @@ describe('/api/reports', () => {
       .compile();
     app = configureApp(moduleRef.createNestApplication());
     await app.init();
-    const created = await request(app.getHttpServer())
+    api = await signedIn(app);
+    const created = await api()
       .post('/api/cases')
       .send({
         title: 'Pendana wallet',
@@ -96,9 +98,8 @@ describe('/api/reports', () => {
   ];
 
   it('buat dari kasus: judul dan snapshot kasus disalin, chain bukti klaim dari snapshot, bukti tersimpan dibaca, kesiapan dihitung', async () => {
-    const server = app.getHttpServer();
     tick(1);
-    const { body } = await request(server).post('/api/reports').send({ title: 'Laporan pendana', caseId, sections: draftSections() }).expect(201);
+    const { body } = await api().post('/api/reports').send({ title: 'Laporan pendana', caseId, sections: draftSections() }).expect(201);
     reportId = body.id;
     expect(body).toMatchObject({
       title: 'Laporan pendana',
@@ -128,19 +129,18 @@ describe('/api/reports', () => {
       ['empty_section', 'warning'],
     ]);
 
-    const list = await request(server).get('/api/reports').expect(200);
+    const list = await api().get('/api/reports').expect(200);
     expect(list.body).toEqual([
       { id: reportId, title: 'Laporan pendana', summary: '', status: 'draft', updatedAt: now.toISOString(), sourceTitle: 'Pendana wallet', sectionCount: 2, claimCount: 1, evidenceCount: 2, blockerCount: 2 },
     ]);
   });
 
   it('simpan isi utuh: id blok yang dikirim lagi tetap, catatan yang diubah ditandai, yang tidak dikirim dihapus', async () => {
-    const server = app.getHttpServer();
-    const before = (await request(server).get(`/api/reports/${reportId}`).expect(200)).body;
+    const before = (await api().get(`/api/reports/${reportId}`).expect(200)).body;
     const [temuan, kosong] = before.sections;
     const [entity, claim, note] = temuan.blocks;
     tick(5);
-    const { body } = await request(server)
+    const { body } = await api()
       .patch(`/api/reports/${reportId}`)
       .send({
         summary: 'Ringkasan baru',
@@ -165,11 +165,10 @@ describe('/api/reports', () => {
   });
 
   it('final: ditolak selama ada blocker (perubahan di permintaan yang sama dibatalkan), lalu dikunci sampai dibuka lagi', async () => {
-    const server = app.getHttpServer();
-    const before = (await request(server).get(`/api/reports/${reportId}`).expect(200)).body;
-    const refused = await request(server).patch(`/api/reports/${reportId}`).send({ title: 'Judul baru', status: 'final' }).expect(409);
+    const before = (await api().get(`/api/reports/${reportId}`).expect(200)).body;
+    const refused = await api().patch(`/api/reports/${reportId}`).send({ title: 'Judul baru', status: 'final' }).expect(409);
     expect(refused.body.message).toContain('belum menyebut provider');
-    const unchanged = (await request(server).get(`/api/reports/${reportId}`).expect(200)).body;
+    const unchanged = (await api().get(`/api/reports/${reportId}`).expect(200)).body;
     expect(unchanged).toMatchObject({ title: before.title, status: 'draft', updatedAt: before.updatedAt });
 
     const sections = before.sections.map((section: { id: string; title: string; blocks: Array<Record<string, unknown>> }) => ({
@@ -179,42 +178,40 @@ describe('/api/reports', () => {
       ),
     }));
     tick(1);
-    const final = await request(server).patch(`/api/reports/${reportId}`).send({ sections, status: 'final' }).expect(200);
+    const final = await api().patch(`/api/reports/${reportId}`).send({ sections, status: 'final' }).expect(200);
     expect(final.body).toMatchObject({ status: 'final', finalizedAt: now.toISOString(), readiness: { ready: true } });
 
-    await request(server).patch(`/api/reports/${reportId}`).send({ title: 'Ubah diam-diam' }).expect(409);
-    await request(server).patch(`/api/reports/${reportId}`).send({ status: 'final' }).expect(409);
-    const reopened = await request(server).patch(`/api/reports/${reportId}`).send({ status: 'review' }).expect(200);
+    await api().patch(`/api/reports/${reportId}`).send({ title: 'Ubah diam-diam' }).expect(409);
+    await api().patch(`/api/reports/${reportId}`).send({ status: 'final' }).expect(409);
+    const reopened = await api().patch(`/api/reports/${reportId}`).send({ status: 'review' }).expect(200);
     expect(reopened.body).toMatchObject({ status: 'review', finalizedAt: null });
   });
 
   it('laporan tanpa kasus: snapshot ditandai tidak tersedia, hash klaim wajib menyebut chain; kasus dihapus tidak menghapus laporan', async () => {
-    const server = app.getHttpServer();
-    const blank = await request(server).post('/api/reports').send({ title: 'Catatan bebas' }).expect(201);
+    const blank = await api().post('/api/reports').send({ title: 'Catatan bebas' }).expect(201);
     expect(blank.body).toMatchObject({ source: null, sections: [], snapshot: { dataStatus: 'unavailable', blocks: [], sources: [] } });
     expect(blank.body.readiness.issues).toEqual([expect.objectContaining({ kind: 'snapshot_incomplete', message: expect.stringContaining('belum memakai snapshot') })]);
     const claimOnly = [{ title: 'A', blocks: [{ kind: 'claim', claim: { title: 'Tanpa chain', classification: 'fact', evidenceTxHashes: [TX] } }] }];
-    const noChain = await request(server).patch(`/api/reports/${blank.body.id}`).send({ sections: claimOnly }).expect(400);
+    const noChain = await api().patch(`/api/reports/${blank.body.id}`).send({ sections: claimOnly }).expect(400);
     expect(noChain.body.message).toContain('wajib menyebut chain');
-    await request(server)
+    await api()
       .patch(`/api/reports/${blank.body.id}`)
       .send({ sections: [{ title: 'A', blocks: [{ kind: 'evidence', chain: 'mars', txHash: TX, caption: '' }] }] })
       .expect(400);
 
-    await request(server).delete(`/api/cases/${caseId}`).expect(204);
-    const kept = await request(server).get(`/api/reports/${reportId}`).expect(200);
+    await api().delete(`/api/cases/${caseId}`).expect(204);
+    const kept = await api().get(`/api/reports/${reportId}`).expect(200);
     expect(kept.body.source).toEqual({ caseId: null, title: 'Pendana wallet', href: null });
   });
 
   it('galat: id rusak 400, tidak ada 404, kasus tak dikenal 404, isi salah 400, hapus 204', async () => {
-    const server = app.getHttpServer();
-    await request(server).get('/api/reports/abc').expect(400);
-    await request(server).get('/api/reports/999').expect(404);
-    await request(server).post('/api/reports').send({ title: 'X', caseId: 999 }).expect(404);
-    await request(server).post('/api/reports').send({ title: '' }).expect(400);
-    await request(server).patch(`/api/reports/${reportId}`).send({}).expect(400);
-    await request(server).patch('/api/reports/999').send({ title: 'X' }).expect(404);
-    await request(server).delete(`/api/reports/${reportId}`).expect(204);
-    await request(server).delete(`/api/reports/${reportId}`).expect(404);
+    await api().get('/api/reports/abc').expect(400);
+    await api().get('/api/reports/999').expect(404);
+    await api().post('/api/reports').send({ title: 'X', caseId: 999 }).expect(404);
+    await api().post('/api/reports').send({ title: '' }).expect(400);
+    await api().patch(`/api/reports/${reportId}`).send({}).expect(400);
+    await api().patch('/api/reports/999').send({ title: 'X' }).expect(404);
+    await api().delete(`/api/reports/${reportId}`).expect(204);
+    await api().delete(`/api/reports/${reportId}`).expect(404);
   });
 });

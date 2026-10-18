@@ -118,8 +118,17 @@ function blockColumns(block: ResolvedBlock) {
 export class ReportsRepository {
   constructor(@Inject(DATABASE) readonly db: Database) {}
 
-  async list(): Promise<ReportRow[]> {
-    return this.db.select().from(reports).orderBy(desc(reports.updatedAt), desc(reports.id));
+  async list(ownerId: number): Promise<ReportRow[]> {
+    return this.db.select().from(reports).where(eq(reports.ownerId, ownerId)).orderBy(desc(reports.updatedAt), desc(reports.id));
+  }
+
+  async isOwnedBy(id: number, ownerId: number): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: reports.id })
+      .from(reports)
+      .where(and(eq(reports.id, id), eq(reports.ownerId, ownerId)))
+      .limit(1);
+    return Boolean(row);
   }
 
   async find(id: number, executor: Executor = this.db): Promise<ReportRow | null> {
@@ -158,8 +167,13 @@ export class ReportsRepository {
       .orderBy(asc(reportSnapshotBlocks.chainId));
   }
 
-  async findCase(id: number) {
-    const [row] = await this.db.select().from(cases).where(eq(cases.id, id)).limit(1);
+  /** Kasus milik akun ini beserta blok snapshotnya; `null` bila tidak ada atau milik akun lain. */
+  async findCase(id: number, ownerId: number) {
+    const [row] = await this.db
+      .select()
+      .from(cases)
+      .where(and(eq(cases.id, id), eq(cases.ownerId, ownerId)))
+      .limit(1);
     if (!row) return null;
     const blocks = await this.db
       .select({ chainId: caseSnapshotBlocks.chainId, blockNumber: caseSnapshotBlocks.blockNumber })

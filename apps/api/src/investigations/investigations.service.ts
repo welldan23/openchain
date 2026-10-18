@@ -1,11 +1,12 @@
 /**
- * Riwayat investigasi: halaman yang pernah dibuka. Membuka ulang halaman yang
- * sama memperbarui baris yang sama (waktu, judul, jumlah temuan, hitungan).
+ * Riwayat investigasi per akun: halaman yang pernah dibuka. Membuka ulang
+ * halaman yang sama memperbarui baris yang sama (waktu, judul, jumlah temuan,
+ * hitungan). Setiap query dibatasi ke akun pemiliknya.
  * Menghapus riwayat tidak menyentuh data on-chain; halamannya tetap bisa
  * dibuka lagi.
  */
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { DATABASE, type Database } from '../database/database.module.js';
 import type { InvestigationKind } from '../database/schema/enums.js';
@@ -39,8 +40,8 @@ export class InvestigationsService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async list(kind?: InvestigationKind, limit = DEFAULT_HISTORY_LIMIT): Promise<InvestigationListResponse> {
-    const where = kind ? eq(investigations.kind, kind) : undefined;
+  async list(ownerId: number, kind?: InvestigationKind, limit = DEFAULT_HISTORY_LIMIT): Promise<InvestigationListResponse> {
+    const where = and(eq(investigations.ownerId, ownerId), kind ? eq(investigations.kind, kind) : undefined);
     const [rows, [{ total }]] = await Promise.all([
       this.db.select().from(investigations).where(where).orderBy(desc(investigations.openedAt), desc(investigations.id)).limit(limit),
       this.db.select({ total: count() }).from(investigations).where(where),
@@ -49,7 +50,7 @@ export class InvestigationsService {
   }
 
   /** Catat halaman yang dibuka; waktu dan id dari server. */
-  async record(input: NewInvestigationInput): Promise<{ entry: InvestigationEntryView; created: boolean }> {
+  async record(ownerId: number, input: NewInvestigationInput): Promise<{ entry: InvestigationEntryView; created: boolean }> {
     if (input.chain !== null) {
       const [chain] = await this.db.select({ id: chains.id }).from(chains).where(eq(chains.id, input.chain)).limit(1);
       if (!chain) throw new BadRequestException(`Chain "${input.chain}" tidak dikenal.`);
@@ -58,6 +59,7 @@ export class InvestigationsService {
     const [row] = await this.db
       .insert(investigations)
       .values({
+        ownerId,
         kind: input.kind,
         title: input.title,
         chainId: input.chain,
@@ -68,7 +70,7 @@ export class InvestigationsService {
         openedAt: now,
       })
       .onConflictDoUpdate({
-        target: investigations.href,
+        target: [investigations.ownerId, investigations.href],
         set: {
           title: input.title,
           chainId: input.chain,
@@ -83,8 +85,11 @@ export class InvestigationsService {
     return { entry: toEntryView(row), created: row.openCount === 1 };
   }
 
-  async remove(id: number): Promise<void> {
-    const deleted = await this.db.delete(investigations).where(eq(investigations.id, id)).returning({ id: investigations.id });
+  async remove(ownerId: number, id: number): Promise<void> {
+    const deleted = await this.db
+      .delete(investigations)
+      .where(and(eq(investigations.id, id), eq(investigations.ownerId, ownerId)))
+      .returning({ id: investigations.id });
     if (deleted.length === 0) throw new NotFoundException('Investigasi ini sudah tidak ada di riwayat.');
   }
 }

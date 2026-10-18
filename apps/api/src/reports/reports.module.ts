@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module.js';
 import { CLOCK, systemClock } from '../common/clock.js';
 import { CasesModule } from '../cases/cases.module.js';
 import { FlowsModule } from '../flows/flows.module.js';
@@ -14,7 +15,7 @@ import { ReportsRepository } from './reports.repository.js';
 import { ReportsService } from './reports.service.js';
 
 @Module({
-  imports: [FlowsModule, CasesModule, RiskModule],
+  imports: [AuthModule, FlowsModule, CasesModule, RiskModule],
   controllers: [ReportsController, PublicReportsController],
   providers: [ReportsService, ReportsRepository, ReportComposeService, ReportEvidenceService, ReportNotesService, ReportExportService, ReportShareService, { provide: CLOCK, useValue: systemClock }],
   exports: [ReportsService, ReportsRepository],

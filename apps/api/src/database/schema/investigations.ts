@@ -1,12 +1,14 @@
 /**
- * Riwayat investigasi dan kasus. Aplikasi belum punya akun pengguna, jadi
- * semuanya milik satu workspace. Batas panjang teks sama dengan validasi di
- * frontend (catatan 280, judul kasus 120 karakter).
+ * Riwayat investigasi dan kasus, masing-masing milik satu akun (`owner_id`).
+ * Baris yang dibuat sebelum ada akun tidak punya pemilik dan tidak tampil
+ * lewat API. Menghapus akun menghapus riwayat dan kasusnya. Batas panjang teks
+ * sama dengan validasi di frontend (catatan 280, judul kasus 120 karakter).
  */
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
 import { blockNumber, idColumn, refId, timestampTz } from './columns.js';
 import { caseStatus, caseSubjectKind, dataStatus, infoClassification, investigationKind } from './enums.js';
+import { users } from './accounts.js';
 import { addresses, chains } from './reference.js';
 
 const HREF_PATTERN = `'^/(token|flow|trace|map|multichain)/'`;
@@ -16,10 +18,12 @@ export const investigations = pgTable(
   'investigations',
   {
     id: idColumn(),
+    /** Akun pemilik riwayat. */
+    ownerId: refId('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     kind: investigationKind('kind').notNull(),
     title: text('title').notNull(),
     chainId: text('chain_id').references(() => chains.id),
-    /** Tautan halaman di aplikasi, mis. `/token/base/0x…`; unik. */
+    /** Tautan halaman di aplikasi, mis. `/token/base/0x…`; unik per akun. */
     href: text('href').notNull(),
     /** Catatan singkat user; kosong bila belum ada. */
     note: text('note'),
@@ -30,8 +34,8 @@ export const investigations = pgTable(
     openCount: integer('open_count').notNull().default(1),
   },
   (t) => [
-    unique('investigations_href_unique').on(t.href),
-    index('investigations_opened_idx').on(t.openedAt),
+    unique('investigations_owner_href_unique').on(t.ownerId, t.href),
+    index('investigations_owner_opened_idx').on(t.ownerId, t.openedAt),
     check('investigations_href_is_investigation', sql`${t.href} ~ ${sql.raw(HREF_PATTERN)} and starts_with(${t.href}, '/' || ${t.kind}::text || '/')`),
     check('investigations_title_not_blank', sql`length(btrim(${t.title})) > 0`),
     check('investigations_note_length', sql`${t.note} is null or (length(btrim(${t.note})) > 0 and length(${t.note}) <= 280)`),
@@ -49,6 +53,8 @@ export const cases = pgTable(
   'cases',
   {
     id: idColumn(),
+    /** Akun pemilik kasus. */
+    ownerId: refId('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     summary: text('summary').notNull().default(''),
     status: caseStatus('status').notNull().default('open'),
@@ -69,7 +75,7 @@ export const cases = pgTable(
     updatedAt: timestampTz('updated_at').notNull(),
   },
   (t) => [
-    index('cases_updated_idx').on(t.updatedAt),
+    index('cases_owner_updated_idx').on(t.ownerId, t.updatedAt),
     check('cases_title_length', sql`length(btrim(${t.title})) > 0 and length(${t.title}) <= 120`),
     check('cases_not_complete_is_explained', sql`${t.dataStatus} = 'complete' or ${t.statusReason} is not null`),
     check('cases_updated_order', sql`${t.createdAt} <= ${t.updatedAt}`),

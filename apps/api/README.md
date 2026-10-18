@@ -666,8 +666,10 @@ chain, masing-masing dengan jumlah address dari data tersimpan.
 
 ### `/api/investigations` (riwayat investigasi)
 
-Riwayat halaman investigasi yang pernah dibuka, untuk satu workspace (belum ada
-akun pengguna). Kontraknya ada di `src/investigations/investigations.types.ts`.
+Riwayat halaman investigasi yang pernah dibuka, per akun. Semua endpoint di
+sini perlu sesi (`401` tanpa sesi) dan hanya melihat riwayat akun itu; id milik
+akun lain dijawab `404` seperti id yang tidak ada. Kontraknya ada di
+`src/investigations/investigations.types.ts`.
 
 - `GET /api/investigations` — terbaru dulu; `kind` (`token`, `flow`, `trace`,
   `map`, `multichain`) dan `limit` (1–200, default 50); `total` adalah jumlah
@@ -675,9 +677,9 @@ akun pengguna). Kontraknya ada di `src/investigations/investigations.types.ts`.
 - `POST /api/investigations` — catat halaman yang dibuka, body `{ kind, title,
   chain?, href, note?, findingCount? }`. Waktu dan id dari server. Hanya
   tautan `/token|flow|trace|map|multichain/…` yang jenisnya cocok yang diterima.
-  Membuka ulang halaman yang sama memperbarui baris yang sama (`200`, hitungan
-  naik, catatan dan jumlah temuan lama tidak dihapus bila tidak dikirim);
-  catatan baru dijawab `201`.
+  Membuka ulang halaman yang sama di akun yang sama memperbarui baris yang
+  sama (`200`, hitungan naik, catatan dan jumlah temuan lama tidak dihapus
+  bila tidak dikirim); catatan baru dijawab `201`.
 - `DELETE /api/investigations/:id` — hapus satu riwayat beserta catatannya
   (`204`, atau `404` bila sudah tidak ada). Data on-chain dan halamannya tidak
   tersentuh.
@@ -688,10 +690,12 @@ akun pengguna). Kontraknya ada di `src/investigations/investigations.types.ts`.
 
 Kasus menyimpan subjek (token atau address), temuan beserta hash bukti
 transaksinya, langkah investigasi, catatan, dan snapshot data supaya hasilnya
-bisa direproduksi. Satu workspace, belum ada akun pengguna. Kontraknya ada di
-`src/cases/cases.types.ts`.
+bisa direproduksi. Kasus milik satu akun: semua endpoint di sini perlu sesi
+(`401` tanpa sesi), daftar hanya berisi kasus akun itu, dan kasus milik akun
+lain dijawab `404` seperti kasus yang tidak ada (baca, ubah, tambah item,
+maupun hapus). Kontraknya ada di `src/cases/cases.types.ts`.
 
-- `GET /api/cases` — ringkasan semua kasus, terbaru diperbarui dulu: status,
+- `GET /api/cases` — ringkasan kasus akun ini, terbaru diperbarui dulu: status,
   tag, chain yang terlibat, jumlah subjek, temuan, bukti, catatan, dan status
   data snapshot.
 - `GET /api/cases/:id` — kasus lengkap. `evidence` berisi setiap hash bukti
@@ -724,9 +728,14 @@ bisa direproduksi. Satu workspace, belum ada akun pengguna. Kontraknya ada di
 
 Laporan investigasi berbasis bukti, biasanya disusun dari satu kasus.
 Kontraknya ada di `src/reports/reports.types.ts`; bentuknya mengikuti
-`InvestigationReport` dan `ReportSummary` di frontend.
+`InvestigationReport` dan `ReportSummary` di frontend. Laporan milik satu
+akun: semua endpoint `/api/reports` perlu sesi (`401` tanpa sesi), laporan
+milik akun lain dijawab `404` (termasuk ekspor, catatan, dan tautan
+berbagi), dan laporan hanya bisa dibuat dari kasus milik akun yang sama.
+Tautan berbagi publik tetap dibuka lewat `/api/public/reports/:token` tanpa
+masuk.
 
-- `GET /api/reports` — ringkasan semua laporan, terbaru diperbarui dulu:
+- `GET /api/reports` — ringkasan laporan akun ini, terbaru diperbarui dulu:
   status, judul kasus sumber, jumlah bagian, klaim, hash bukti unik, dan
   jumlah masalah `blocker`.
 - `GET /api/reports/:id` — laporan lengkap: bagian berisi blok (`paragraph`,
@@ -1356,11 +1365,14 @@ Aturan PRD yang dijaga langsung oleh database:
   ulang; ikut terhapus bila address atau tokennya dihapus. Hash transaksi dan
   address persis dicari langsung di tabel sumber.
 
-- Riwayat dan kasus belum punya akun pengguna, jadi milik satu workspace.
-  `investigations` menyimpan satu baris per halaman investigasi (`href` unik,
-  hanya `/token|flow|trace|map|multichain/…` dengan jenis yang cocok); membuka
-  ulang memperbarui waktu dan hitungannya. Catatan dan catatan kasus maksimal
-  280 karakter dan tidak boleh kosong; judul kasus maksimal 120.
+- Riwayat, kasus, dan laporan milik satu akun lewat `owner_id` (migrasi
+  `0025`); menghapus akun menghapus ketiganya. Baris yang dibuat sebelum ada
+  akun tidak punya pemilik dan tidak tampil lewat API.
+  `investigations` menyimpan satu baris per halaman investigasi per akun
+  (`href` unik per akun, hanya `/token|flow|trace|map|multichain/…` dengan
+  jenis yang cocok); membuka ulang memperbarui waktu dan hitungannya. Catatan
+  dan catatan kasus maksimal 280 karakter dan tidak boleh kosong; judul kasus
+  maksimal 120.
 - `cases` wajib menjelaskan data yang tidak lengkap (`status_reason`) dan
   menyimpan sumber serta blok per chain (`case_snapshot_blocks`) supaya bisa
   direproduksi. Temuan kasus (`case_findings`) memakai klasifikasi jenis

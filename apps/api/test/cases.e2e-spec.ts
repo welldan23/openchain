@@ -2,7 +2,6 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { PGlite } from '@electric-sql/pglite';
 import { and, eq } from 'drizzle-orm';
-import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
@@ -12,6 +11,7 @@ import * as schema from '../src/database/schema/index.js';
 import { FundFlowIngestionService } from '../src/flows/fund-flow-ingestion.service.js';
 import type { AddressFlowCollection, KindCoverage } from '../src/flows/fund-flow.types.js';
 import { createTestDatabase, seedToken, type TestDatabase } from './support/database.js';
+import { signedIn } from './support/auth.js';
 
 const TOKEN = '0x' + 'ab'.repeat(20);
 const WALLET = '0x' + 'c1'.repeat(20);
@@ -52,6 +52,7 @@ describe('/api/cases', () => {
   let client: PGlite;
   let db: TestDatabase;
   let app: INestApplication<App>;
+  let api: Awaited<ReturnType<typeof signedIn>>;
   let now = new Date('2026-10-03T05:00:00Z');
   const tick = (minutes: number) => (now = new Date(now.getTime() + minutes * 60_000));
 
@@ -72,6 +73,7 @@ describe('/api/cases', () => {
       .compile();
     app = configureApp(moduleRef.createNestApplication());
     await app.init();
+    api = await signedIn(app);
   }, 60_000);
 
   afterAll(async () => {
@@ -84,26 +86,24 @@ describe('/api/cases', () => {
   let caseId: string;
 
   it('kasus kosong: snapshot tidak tersedia beserta alasannya', async () => {
-    const server = app.getHttpServer();
-    const created = await request(server).post('/api/cases').send({ title: '  Kasus kosong ', tags: ['Rug', 'rug'] }).expect(201);
+    const created = await api().post('/api/cases').send({ title: '  Kasus kosong ', tags: ['Rug', 'rug'] }).expect(201);
     expect(created.body).toMatchObject({ caseTitle: 'Kasus kosong', created: true, subjectAdded: false, addedFindings: 0, noteAdded: false, stepAdded: false });
-    const { body } = await request(server).get(`/api/cases/${created.body.caseId}`).expect(200);
+    const { body } = await api().get(`/api/cases/${created.body.caseId}`).expect(200);
     expect(body).toMatchObject({ title: 'Kasus kosong', status: 'open', tags: ['rug'], subjects: [], findings: [], evidence: [], notes: [], steps: [] });
     expect(body.snapshot).toMatchObject({ dataStatus: 'unavailable', blocks: [], sources: [], fetchedAt: now.toISOString() });
     expect(body.snapshot.statusReason).toContain('belum punya subjek');
   });
 
   it('kasus baru dengan token, temuan, catatan, dan langkah; snapshot memakai data token tersimpan', async () => {
-    const server = app.getHttpServer();
     tick(1);
-    const created = await request(server)
+    const created = await api()
       .post('/api/cases')
       .send({ title: 'Investigasi NBLA', summary: 'Cek pendana', subject: tokenSubject, findings: [finding], note: 'cek ulang besok', step: { kind: 'map', title: 'Peta NBLA', chain: 'robinhood', href: `/map/robinhood/${TOKEN}` } })
       .expect(201);
     expect(created.body).toMatchObject({ caseTitle: 'Investigasi NBLA', created: true, subjectAdded: true, addedFindings: 1, skippedFindings: 0, noteAdded: true, stepAdded: true });
     caseId = created.body.caseId;
 
-    const { body } = await request(server).get(`/api/cases/${caseId}`).expect(200);
+    const { body } = await api().get(`/api/cases/${caseId}`).expect(200);
     expect(body.subjects).toEqual([expect.objectContaining({ kind: 'token', chain: 'robinhood', address: TOKEN, label: null })]);
     expect(body.findings).toEqual([{ id: 'cluster-1', title: finding.title, detail: '3 dompet', classification: 'heuristic', evidence: [{ chain: 'robinhood', txHash: MISSING_TX }] }]);
     // Hash yang belum tercatat tetap ditampilkan, tapi ditandai tidak tersimpan.
@@ -121,10 +121,9 @@ describe('/api/cases', () => {
   });
 
   it('menambah item ke kasus: yang sudah ada tidak digandakan; bukti tersimpan dibaca dari data', async () => {
-    const server = app.getHttpServer();
     tick(1);
     const walletSubject = { kind: 'address', chain: 'ethereum', address: WALLET.toUpperCase().replace('0X', '0x'), title: 'Dompet C1', href: `/flow/ethereum/${WALLET}` };
-    const added = await request(server)
+    const added = await api()
       .post(`/api/cases/${caseId}/items`)
       .send({
         subject: walletSubject,
@@ -134,10 +133,10 @@ describe('/api/cases', () => {
       .expect(200);
     expect(added.body).toMatchObject({ caseId, created: false, subjectAdded: true, addedFindings: 1, skippedFindings: 1, noteAdded: false, stepAdded: false });
 
-    const again = await request(server).post(`/api/cases/${caseId}/items`).send({ subject: walletSubject }).expect(200);
+    const again = await api().post(`/api/cases/${caseId}/items`).send({ subject: walletSubject }).expect(200);
     expect(again.body).toMatchObject({ subjectAdded: false, addedFindings: 0 });
 
-    const { body } = await request(server).get(`/api/cases/${caseId}`).expect(200);
+    const { body } = await api().get(`/api/cases/${caseId}`).expect(200);
     expect(body.subjects.map((subject: { kind: string }) => subject.kind)).toEqual(['token', 'address']);
     expect(body.findings.map((item: { id: string; classification: string }) => [item.id, item.classification])).toEqual([
       ['cluster-1', 'heuristic'],
@@ -157,54 +156,51 @@ describe('/api/cases', () => {
   });
 
   it('subjek multichain memakai label dari chain mana pun; daftar kasus menghitung isinya', async () => {
-    const server = app.getHttpServer();
     tick(1);
-    const created = await request(server)
+    const created = await api()
       .post('/api/cases')
       .send({ title: 'Pendana', subject: { kind: 'address', address: FUNDER, title: 'Pendana', href: `/multichain/${FUNDER}` } })
       .expect(201);
-    const { body } = await request(server).get(`/api/cases/${created.body.caseId}`).expect(200);
+    const { body } = await api().get(`/api/cases/${created.body.caseId}`).expect(200);
     expect(body.subjects[0]).toMatchObject({ chain: null, label: { type: 'exchange', name: 'Bybit: Hot Wallet 6', source: 'external' } });
     // Pendana belum pernah dipindai sendiri: tidak ada data, bukan "lengkap".
     expect(body.snapshot).toMatchObject({ dataStatus: 'unavailable' });
 
-    const list = await request(server).get('/api/cases').expect(200);
+    const list = await api().get('/api/cases').expect(200);
     expect(list.body.map((item: { title: string }) => item.title)).toEqual(['Pendana', 'Investigasi NBLA', 'Kasus kosong']);
     expect(list.body[1]).toMatchObject({ chains: ['robinhood', 'ethereum'], subjectCount: 2, findingCount: 2, evidenceCount: 2, noteCount: 1, dataStatus: 'partial' });
   });
 
   it('mengubah judul, status, dan tag; menghapus temuan, catatan, subjek, lalu kasusnya', async () => {
-    const server = app.getHttpServer();
     tick(1);
-    const updated = await request(server).patch(`/api/cases/${caseId}`).send({ status: 'monitoring', tags: ['bridge'] }).expect(200);
+    const updated = await api().patch(`/api/cases/${caseId}`).send({ status: 'monitoring', tags: ['bridge'] }).expect(200);
     expect(updated.body).toMatchObject({ status: 'monitoring', tags: ['bridge'], updatedAt: now.toISOString() });
-    await request(server).patch(`/api/cases/${caseId}`).send({}).expect(400);
-    await request(server).patch(`/api/cases/${caseId}`).send({ status: 'archived' }).expect(400);
+    await api().patch(`/api/cases/${caseId}`).send({}).expect(400);
+    await api().patch(`/api/cases/${caseId}`).send({ status: 'archived' }).expect(400);
 
-    await request(server).delete(`/api/cases/${caseId}/findings/cluster-1`).expect(204);
-    await request(server).delete(`/api/cases/${caseId}/findings/cluster-1`).expect(404);
+    await api().delete(`/api/cases/${caseId}/findings/cluster-1`).expect(204);
+    await api().delete(`/api/cases/${caseId}/findings/cluster-1`).expect(404);
     const note = updated.body.notes[0].id;
-    await request(server).delete(`/api/cases/${caseId}/notes/${note}`).expect(204);
+    await api().delete(`/api/cases/${caseId}/notes/${note}`).expect(204);
     const token = updated.body.subjects.find((subject: { kind: string }) => subject.kind === 'token').id;
-    await request(server).delete(`/api/cases/${caseId}/subjects/${token}`).expect(204);
-    await request(server).delete(`/api/cases/${caseId}/subjects/${token}`).expect(404);
+    await api().delete(`/api/cases/${caseId}/subjects/${token}`).expect(204);
+    await api().delete(`/api/cases/${caseId}/subjects/${token}`).expect(404);
 
-    const { body } = await request(server).get(`/api/cases/${caseId}`).expect(200);
+    const { body } = await api().get(`/api/cases/${caseId}`).expect(200);
     expect(body.findings.map((item: { id: string }) => item.id)).toEqual(['funding']);
     expect(body.notes).toEqual([]);
     // Snapshot dibekukan ulang dari subjek yang tersisa (dompet di Ethereum, lengkap).
     expect(body.snapshot).toMatchObject({ dataStatus: 'complete', statusReason: null, blocks: [{ chain: 'ethereum', blockNumber: 1000 }] });
 
-    await request(server).delete(`/api/cases/${caseId}`).expect(204);
-    await request(server).delete(`/api/cases/${caseId}`).expect(404);
-    await request(server).get(`/api/cases/${caseId}`).expect(404);
+    await api().delete(`/api/cases/${caseId}`).expect(204);
+    await api().delete(`/api/cases/${caseId}`).expect(404);
+    await api().get(`/api/cases/${caseId}`).expect(404);
     expect(await db.select().from(schema.caseFindings).where(eq(schema.caseFindings.caseId, Number(caseId)))).toEqual([]);
   });
 
   it('menolak isi yang salah dengan 400 yang jelas, dan kasus yang tidak ada dengan 404', async () => {
-    const server = app.getHttpServer();
     const reject = async (path: string, body: object, message: string) => {
-      const response = await request(server).post(path).send(body).expect(400);
+      const response = await api().post(path).send(body).expect(400);
       expect(response.body.message).toContain(message);
     };
     await reject('/api/cases', { title: ' ' }, 'Judul kasus wajib diisi');
@@ -214,8 +210,8 @@ describe('/api/cases', () => {
     await reject('/api/cases', { title: 'x', subject: { ...tokenSubject, address: 'bukan-address' } }, 'Address subjek tidak valid');
     await reject('/api/cases', { title: 'x', findings: [{ ...finding, evidenceTxHashes: ['A'.repeat(44)] }] }, 'tidak valid untuk');
     await reject('/api/cases', { title: 'x', note: 'x'.repeat(281) }, 'maksimal 280');
-    await request(server).post('/api/cases/999/items').send({ note: 'halo' }).expect(404);
-    await request(server).get('/api/cases/abc').expect(400);
-    await request(server).delete('/api/cases/999/notes/1').expect(404);
+    await api().post('/api/cases/999/items').send({ note: 'halo' }).expect(404);
+    await api().get('/api/cases/abc').expect(400);
+    await api().delete('/api/cases/999/notes/1').expect(404);
   });
 });

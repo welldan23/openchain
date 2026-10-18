@@ -56,8 +56,8 @@ export class CasesRepository {
     return rows.map((row) => ({ chainId: String(row.chain_id), id: Number(row.id) }));
   }
 
-  /** Hitungan isi tiap kasus untuk daftar kasus. */
-  async counts() {
+  /** Hitungan isi tiap kasus milik akun ini untuk daftar kasus. */
+  async counts(ownerId: number) {
     const rows = await this.rows(sql`
       select c.id,
         (select count(*)::int from case_subjects s where s.case_id = c.id) as subject_count,
@@ -70,7 +70,8 @@ export class CasesRepository {
             union select e.chain_id from case_finding_evidence e join case_findings f on f.id = e.finding_id where f.case_id = c.id
           ) x
         ) as chains
-      from cases c`);
+      from cases c
+      where c.owner_id = ${ownerId}`);
     return new Map(
       rows.map((row) => [
         Number(row.id),

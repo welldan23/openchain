@@ -3,7 +3,9 @@
  * dan catatan, lalu membekukan snapshot data (blok, provider, kelengkapan)
  * yang dipakai saat item ditambahkan. Bukti transaksi dibaca dari data
  * tersimpan; hash yang belum tercatat ditandai `stored: false`, tidak dikarang.
- * Yang sudah ada di kasus tidak digandakan.
+ * Yang sudah ada di kasus tidak digandakan. Kasus milik satu akun: daftar dan
+ * pembuatan memakai pemiliknya, dan controller memanggil `assertOwned` sebelum
+ * membaca atau mengubah kasus lewat id.
  */
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, max } from 'drizzle-orm';
@@ -53,9 +55,12 @@ export class CasesService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  /** Semua kasus, terbaru diperbarui di atas. */
-  async list(): Promise<CaseSummaryView[]> {
-    const [rows, counts] = await Promise.all([this.db.select().from(cases).orderBy(desc(cases.updatedAt), desc(cases.id)), this.repository.counts()]);
+  /** Kasus milik akun ini, terbaru diperbarui di atas. */
+  async list(ownerId: number): Promise<CaseSummaryView[]> {
+    const [rows, counts] = await Promise.all([
+      this.db.select().from(cases).where(eq(cases.ownerId, ownerId)).orderBy(desc(cases.updatedAt), desc(cases.id)),
+      this.repository.counts(ownerId),
+    ]);
     return rows.map((row) => {
       const count = counts.get(row.id);
       return {
@@ -150,14 +155,14 @@ export class CasesService {
     };
   }
 
-  /** Kasus baru, sekaligus dengan item pertamanya bila dikirim. */
-  async create(input: NewCaseInput): Promise<SaveToCaseResult> {
+  /** Kasus baru milik akun ini, sekaligus dengan item pertamanya bila dikirim. */
+  async create(ownerId: number, input: NewCaseInput): Promise<SaveToCaseResult> {
     const prepared = await this.prepare(input, []);
     const now = this.clock.now();
     return this.db.transaction(async (tx) => {
       const [row] = await tx
         .insert(cases)
-        .values({ title: input.title, summary: input.summary, tags: input.tags, ...snapshotColumns(prepared.snapshot), createdAt: now, updatedAt: now })
+        .values({ ownerId, title: input.title, summary: input.summary, tags: input.tags, ...snapshotColumns(prepared.snapshot), createdAt: now, updatedAt: now })
         .returning();
       const result = await this.write(tx, row, prepared, now);
       return { ...result, created: true };
@@ -231,6 +236,16 @@ export class CasesService {
       .returning({ id: caseNotes.id });
     if (deleted.length === 0) throw new NotFoundException('Catatan ini sudah tidak ada di kasus.');
     await this.touch(id);
+  }
+
+  /** Kasus milik akun lain dijawab sama seperti kasus yang tidak ada, supaya keberadaannya tidak bocor. */
+  async assertOwned(ownerId: number, id: number): Promise<void> {
+    const [row] = await this.db
+      .select({ id: cases.id })
+      .from(cases)
+      .where(and(eq(cases.id, id), eq(cases.ownerId, ownerId)))
+      .limit(1);
+    if (!row) throw new NotFoundException('Kasus tidak ditemukan. Mungkin sudah dihapus.');
   }
 
   private async find(id: number): Promise<CaseRow> {

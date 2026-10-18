@@ -2,7 +2,9 @@
  * Laporan bukti investigasi: daftar, detail (beserta bukti transaksi dari data
  * tersimpan dan kesiapannya), buat, ubah, hapus. Laporan dari kasus menyalin
  * judul dan snapshot data kasusnya. Laporan final dikunci; finalisasi
- * ditolak selama masih ada masalah `blocker`.
+ * ditolak selama masih ada masalah `blocker`. Laporan milik satu akun: daftar
+ * dan pembuatan memakai pemiliknya, laporan hanya bisa dibuat dari kasus milik
+ * akun yang sama, dan controller memanggil `assertOwned` sebelum memakai id.
  */
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { storedTxEvidence } from '../cases/case-evidence.js';
@@ -24,9 +26,9 @@ export class ReportsService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  /** Semua laporan, terbaru diperbarui di atas. */
-  async list(): Promise<ReportSummaryView[]> {
-    const rows = await this.repository.list();
+  /** Laporan milik akun ini, terbaru diperbarui di atas. */
+  async list(ownerId: number): Promise<ReportSummaryView[]> {
+    const rows = await this.repository.list(ownerId);
     const sections = await this.repository.sectionsOf(rows.map((row) => row.id));
     return rows.map((row) => {
       const content = sections.get(row.id) ?? [];
@@ -89,9 +91,9 @@ export class ReportsService {
   }
 
   /** Laporan baru; dari kasus bila `caseId` diisi (judul dan snapshot kasus disalin). */
-  async create(input: NewReportInput): Promise<ReportView> {
+  async create(ownerId: number, input: NewReportInput): Promise<ReportView> {
     const now = this.clock.now();
-    const source = input.caseId === null ? null : await this.repository.findCase(input.caseId);
+    const source = input.caseId === null ? null : await this.repository.findCase(input.caseId, ownerId);
     if (input.caseId !== null && !source) throw new NotFoundException(`Kasus ${input.caseId} tidak ditemukan.`);
     const snapshotBlocks = source?.blocks ?? [];
     const sections = await this.resolve(input.sections, snapshotBlocks);
@@ -99,6 +101,7 @@ export class ReportsService {
       const row = await this.repository.insertReport(
         tx,
         {
+          ownerId,
           title: input.title,
           summary: input.summary,
           caseId: source?.row.id ?? null,
@@ -144,6 +147,11 @@ export class ReportsService {
 
   async remove(id: number): Promise<void> {
     if (!(await this.repository.remove(id))) throw new NotFoundException(`Laporan ${id} tidak ditemukan.`);
+  }
+
+  /** Laporan milik akun lain dijawab sama seperti laporan yang tidak ada. */
+  async assertOwned(ownerId: number, id: number): Promise<void> {
+    if (!(await this.repository.isOwnedBy(id, ownerId))) throw new NotFoundException(`Laporan ${id} tidak ditemukan.`);
   }
 
   private async find(id: number, executor?: Executor): Promise<ReportRow> {

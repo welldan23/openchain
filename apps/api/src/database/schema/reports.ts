@@ -5,12 +5,15 @@
  * datanya beserta hash buktinya; nilai yang kosong ditandai di panel
  * kesiapan, tidak diisi tebakan. Entitas dan judul kasus disalin supaya
  * laporan tetap utuh bila kasusnya berubah atau dihapus. Batas panjang teks
- * sama dengan validasi di frontend (catatan 280 karakter).
+ * sama dengan validasi di frontend (catatan 280 karakter). Tiap laporan milik
+ * satu akun (`owner_id`); laporan tanpa pemilik (dibuat sebelum ada akun)
+ * tidak tampil lewat API, dan menghapus akun menghapus laporannya.
  */
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, integer, pgTable, text, unique, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { blockNumber, idColumn, refId, timestampTz } from './columns.js';
 import { caseSubjectKind, dataStatus, infoClassification, reportBlockKind, reportStatus } from './enums.js';
+import { users } from './accounts.js';
 import { cases } from './investigations.js';
 import { chains } from './reference.js';
 
@@ -18,6 +21,8 @@ export const reports = pgTable(
   'reports',
   {
     id: idColumn(),
+    /** Akun pemilik laporan. */
+    ownerId: refId('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     summary: text('summary').notNull().default(''),
     status: reportStatus('status').notNull().default('draft'),
@@ -40,7 +45,7 @@ export const reports = pgTable(
     finalizedAt: timestampTz('finalized_at'),
   },
   (t) => [
-    index('reports_updated_idx').on(t.updatedAt),
+    index('reports_owner_updated_idx').on(t.ownerId, t.updatedAt),
     index('reports_case_idx').on(t.caseId),
     check('reports_title_length', sql`length(btrim(${t.title})) > 0 and length(${t.title}) <= 160`),
     check('reports_summary_length', sql`length(${t.summary}) <= 2000`),

@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, StreamableFile } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, StreamableFile, UseGuards } from '@nestjs/common';
+import { CurrentAccount, SessionGuard, type SignedInRequest } from '../auth/session.guard.js';
 import { parsePositiveInteger } from '../common/query-params.js';
 import { ReportComposeService } from './report-compose.service.js';
 import { EVIDENCE_FILTERS } from './report-evidence.js';
@@ -22,6 +23,8 @@ import type {
   ReportSummaryView,
   ReportView,
 } from './reports.types.js';
+
+type Account = NonNullable<SignedInRequest['account']>;
 
 function parsed<T>(parse: () => T): T {
   try {
@@ -50,8 +53,11 @@ function idOf(value: string, what = 'id'): number {
  * mengelola catatan investigasi (daftar, tambah, ubah, hapus).
  * `GET /:id/export?format=csv|pdf` mengunduh laporan sebagai berkas.
  * `/:id/share` membuat, mendaftar, dan mencabut tautan berbagi publik.
+ * Semua butuh masuk; laporan milik akun lain dijawab `404`. Tautan berbagi
+ * dibuka lewat `/public/reports/:token` tanpa masuk.
  */
 @Controller('reports')
+@UseGuards(SessionGuard)
 export class ReportsController {
   constructor(
     private readonly service: ReportsService,
@@ -62,99 +68,106 @@ export class ReportsController {
     private readonly shares: ReportShareService,
   ) {}
 
+  /** Id laporan milik akun ini; selain itu `404`. */
+  private async owned(account: Account, value: string): Promise<number> {
+    const id = idOf(value);
+    await this.service.assertOwned(account.userId, id);
+    return id;
+  }
+
   @Get(':id/share')
-  shareList(@Param('id') id: string): Promise<ReportSharesResponse> {
-    return this.shares.list(idOf(id));
+  async shareList(@CurrentAccount() account: Account, @Param('id') id: string): Promise<ReportSharesResponse> {
+    return this.shares.list(await this.owned(account, id));
   }
 
   @Post(':id/share')
-  share(@Param('id') id: string, @Body() body: unknown): Promise<ReportShareCreated> {
-    return this.shares.create(idOf(id), parsed(() => parseShare(body)));
+  async share(@CurrentAccount() account: Account, @Param('id') id: string, @Body() body: unknown): Promise<ReportShareCreated> {
+    return this.shares.create(await this.owned(account, id), parsed(() => parseShare(body)));
   }
 
   @Delete(':id/share/:linkId')
   @HttpCode(204)
-  revokeShare(@Param('id') id: string, @Param('linkId') linkId: string): Promise<void> {
-    return this.shares.revoke(idOf(id), idOf(linkId, 'linkId'));
+  async revokeShare(@CurrentAccount() account: Account, @Param('id') id: string, @Param('linkId') linkId: string): Promise<void> {
+    return this.shares.revoke(await this.owned(account, id), idOf(linkId, 'linkId'));
   }
 
   @Get(':id/export')
-  async export(@Param('id') id: string, @Query('format') format?: string): Promise<StreamableFile> {
+  async export(@CurrentAccount() account: Account, @Param('id') id: string, @Query('format') format?: string): Promise<StreamableFile> {
     if (format === undefined || !Object.hasOwn(REPORT_EXPORT_FORMATS, format)) {
       throw new BadRequestException(`Parameter format harus salah satu dari: ${Object.keys(REPORT_EXPORT_FORMATS).join(', ')}.`);
     }
-    const file = await this.exporter.export(idOf(id), format as ReportExportFormat);
+    const file = await this.exporter.export(await this.owned(account, id), format as ReportExportFormat);
     return new StreamableFile(file.content, { type: file.mime, disposition: `attachment; filename="${file.fileName}"`, length: file.content.length });
   }
 
   @Get(':id/notes')
-  noteList(@Param('id') id: string): Promise<ReportNotesResponse> {
-    return this.notes.list(idOf(id));
+  async noteList(@CurrentAccount() account: Account, @Param('id') id: string): Promise<ReportNotesResponse> {
+    return this.notes.list(await this.owned(account, id));
   }
 
   @Post(':id/notes')
-  createNote(@Param('id') id: string, @Body() body: unknown): Promise<ReportNoteResult> {
-    return this.notes.create(idOf(id), parsed(() => parseNoteCreate(body)));
+  async createNote(@CurrentAccount() account: Account, @Param('id') id: string, @Body() body: unknown): Promise<ReportNoteResult> {
+    return this.notes.create(await this.owned(account, id), parsed(() => parseNoteCreate(body)));
   }
 
   @Patch(':id/notes/:noteId')
-  updateNote(@Param('id') id: string, @Param('noteId') noteId: string, @Body() body: unknown): Promise<ReportNoteResult> {
-    return this.notes.update(idOf(id), idOf(noteId, 'noteId'), parsed(() => parseNoteUpdate(body)));
+  async updateNote(@CurrentAccount() account: Account, @Param('id') id: string, @Param('noteId') noteId: string, @Body() body: unknown): Promise<ReportNoteResult> {
+    return this.notes.update(await this.owned(account, id), idOf(noteId, 'noteId'), parsed(() => parseNoteUpdate(body)));
   }
 
   @Delete(':id/notes/:noteId')
   @HttpCode(204)
-  removeNote(@Param('id') id: string, @Param('noteId') noteId: string): Promise<void> {
-    return this.notes.remove(idOf(id), idOf(noteId, 'noteId'));
+  async removeNote(@CurrentAccount() account: Account, @Param('id') id: string, @Param('noteId') noteId: string): Promise<void> {
+    return this.notes.remove(await this.owned(account, id), idOf(noteId, 'noteId'));
   }
 
   @Get(':id/evidence')
-  evidenceList(@Param('id') id: string, @Query('filter') filter?: string): Promise<ReportEvidenceResponse> {
+  async evidenceList(@CurrentAccount() account: Account, @Param('id') id: string, @Query('filter') filter?: string): Promise<ReportEvidenceResponse> {
     const value = filter === undefined || filter === '' ? 'all' : filter;
     if (!(EVIDENCE_FILTERS as readonly string[]).includes(value)) throw new BadRequestException(`Parameter filter harus salah satu dari: ${EVIDENCE_FILTERS.join(', ')}.`);
-    return this.evidence.list(idOf(id), value as ReportEvidenceFilter);
+    return this.evidence.list(await this.owned(account, id), value as ReportEvidenceFilter);
   }
 
   @Post(':id/evidence')
   @HttpCode(200)
-  embed(@Param('id') id: string, @Body() body: unknown): Promise<ReportEmbedResult> {
-    return this.evidence.embed(idOf(id), parsed(() => parseEmbed(body)));
+  async embed(@CurrentAccount() account: Account, @Param('id') id: string, @Body() body: unknown): Promise<ReportEmbedResult> {
+    return this.evidence.embed(await this.owned(account, id), parsed(() => parseEmbed(body)));
   }
 
   @Get()
-  list(): Promise<ReportSummaryView[]> {
-    return this.service.list();
+  list(@CurrentAccount() account: Account): Promise<ReportSummaryView[]> {
+    return this.service.list(account.userId);
   }
 
   @Get(':id')
-  get(@Param('id') id: string): Promise<ReportView> {
-    return this.service.get(idOf(id));
+  async get(@CurrentAccount() account: Account, @Param('id') id: string): Promise<ReportView> {
+    return this.service.get(await this.owned(account, id));
   }
 
   @Get(':id/picker')
-  picker(@Param('id') id: string): Promise<ReportPickerResponse> {
-    return this.composer.picker(idOf(id));
+  async picker(@CurrentAccount() account: Account, @Param('id') id: string): Promise<ReportPickerResponse> {
+    return this.composer.picker(await this.owned(account, id));
   }
 
   @Post(':id/compose')
   @HttpCode(200)
-  compose(@Param('id') id: string, @Body() body: unknown): Promise<ReportComposeResult> {
-    return this.composer.compose(idOf(id), parsed(() => parseCompose(body)));
+  async compose(@CurrentAccount() account: Account, @Param('id') id: string, @Body() body: unknown): Promise<ReportComposeResult> {
+    return this.composer.compose(await this.owned(account, id), parsed(() => parseCompose(body)));
   }
 
   @Post()
-  create(@Body() body: unknown): Promise<ReportView> {
-    return this.service.create(parsed(() => parseNewReport(body)));
+  create(@CurrentAccount() account: Account, @Body() body: unknown): Promise<ReportView> {
+    return this.service.create(account.userId, parsed(() => parseNewReport(body)));
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: unknown): Promise<ReportView> {
-    return this.service.update(idOf(id), parsed(() => parseReportUpdate(body)));
+  async update(@CurrentAccount() account: Account, @Param('id') id: string, @Body() body: unknown): Promise<ReportView> {
+    return this.service.update(await this.owned(account, id), parsed(() => parseReportUpdate(body)));
   }
 
   @Delete(':id')
   @HttpCode(204)
-  remove(@Param('id') id: string): Promise<void> {
-    return this.service.remove(idOf(id));
+  async remove(@CurrentAccount() account: Account, @Param('id') id: string): Promise<void> {
+    return this.service.remove(await this.owned(account, id));
   }
 }

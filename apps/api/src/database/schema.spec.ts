@@ -1336,10 +1336,22 @@ describe('indeks pencarian', () => {
 });
 
 describe('riwayat investigasi dan kasus', () => {
-  it('riwayat: satu baris per halaman, hanya halaman investigasi, catatan pendek', async () => {
-    const base = { kind: 'token' as const, title: 'Nebula Finance (NBLA)', chainId: 'robinhood', href: '/token/robinhood/0xabc', firstOpenedAt: FETCHED_AT, openedAt: FETCHED_AT };
+  it('riwayat: satu baris per halaman per akun, hanya halaman investigasi, catatan pendek, terhapus bersama akun', async () => {
+    const owner = async (email: string) =>
+      (
+        await db
+          .insert(schema.users)
+          .values({ email, emailNormalized: email, passwordHash: 'scrypt$32768$8$1$' + 'a'.repeat(22) + '$' + 'b'.repeat(43), createdAt: FETCHED_AT, updatedAt: FETCHED_AT })
+          .returning()
+      )[0];
+    const [rina, sari] = [await owner('riwayat-rina@contoh.id'), await owner('riwayat-sari@contoh.id')];
+    const base = { ownerId: rina.id, kind: 'token' as const, title: 'Nebula Finance (NBLA)', chainId: 'robinhood', href: '/token/robinhood/0xabc', firstOpenedAt: FETCHED_AT, openedAt: FETCHED_AT };
     await db.insert(schema.investigations).values(base);
-    await expectConstraintViolation(db.insert(schema.investigations).values(base), 'investigations_href_unique');
+    await expectConstraintViolation(db.insert(schema.investigations).values(base), 'investigations_owner_href_unique');
+    // Akun lain boleh punya riwayat halaman yang sama.
+    await db.insert(schema.investigations).values({ ...base, ownerId: sari.id });
+    await db.delete(schema.users).where(eq(schema.users.id, sari.id));
+    expect(await db.select().from(schema.investigations).where(eq(schema.investigations.ownerId, sari.id))).toEqual([]);
     await expectConstraintViolation(
       db.insert(schema.investigations).values({ ...base, href: '/admin/rahasia' }),
       'investigations_href_is_investigation',
