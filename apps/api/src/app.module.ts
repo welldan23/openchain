@@ -9,6 +9,7 @@ import { FlowsModule } from './flows/flows.module.js';
 import { InvestigationsModule } from './investigations/investigations.module.js';
 import { MapsModule } from './maps/maps.module.js';
 import { MultichainModule } from './multichain/multichain.module.js';
+import { AccountModule } from './account/account.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { RiskModule } from './risk/risk.module.js';
@@ -17,7 +18,7 @@ import { SnapshotsModule } from './snapshots/snapshots.module.js';
 import { TokensModule } from './tokens/tokens.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule, TokensModule, SnapshotsModule, FlowsModule, MapsModule, ChainsModule, MultichainModule, SearchModule, InvestigationsModule, CasesModule, RiskModule, ReportsModule, AuthModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule, TokensModule, SnapshotsModule, FlowsModule, MapsModule, ChainsModule, MultichainModule, SearchModule, InvestigationsModule, CasesModule, RiskModule, ReportsModule, AuthModule, AccountModule],
   controllers: [AppController],
   providers: [AppService],
 })

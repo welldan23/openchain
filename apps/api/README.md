@@ -857,6 +857,29 @@ Kontraknya ada di `src/auth/auth.types.ts`.
   `401`. Waktu terakhir dipakai sesi diperbarui paling sering sekali per 5
   menit.
 
+### `/api/account` (profil)
+
+Semua endpoint di sini perlu sesi (`401` tanpa sesi). Kontraknya ada di
+`src/account/account.types.ts`.
+
+- `GET /api/account/profile` — `{ id, email, displayName, timezone, joinedAt,
+  avatarUrl, avatar }`. `avatarUrl` berisi `/api/account/avatar?v=<hash>` atau
+  `null` bila belum ada foto. `Cache-Control: no-store`.
+- `PATCH /api/account/profile`, body `{ displayName?, timezone? }` — nama 2–60
+  karakter (spasi tepi dibuang), zona waktu harus nama IANA yang dikenal
+  (mis. `Asia/Jakarta`) atau `UTC`. Body tanpa salah satu field itu ditolak `400`. Nama baru
+  langsung terlihat di `GET /api/auth/session`.
+- `PUT /api/account/avatar` — multipart dengan satu field file `avatar`,
+  maks. 2 MB (lebih besar `413`). Jenis gambar dibaca dari isi file, bukan
+  dari nama atau `Content-Type` kiriman: hanya PNG, JPEG, dan WebP; SVG dan
+  lainnya ditolak `400`. Foto disimpan di database dan menggantikan foto
+  lama. Menjawab profil terbaru.
+- `DELETE /api/account/avatar` — menghapus foto, menjawab profil terbaru.
+- `GET /api/account/avatar` — isi foto dengan `ETag` (hash SHA-256),
+  `Cache-Control: private, max-age=0, must-revalidate`, dan
+  `X-Content-Type-Options: nosniff`; `304` bila `If-None-Match` cocok, `404`
+  bila belum ada foto.
+
 ### `GET /api/tokens/:chain/:address/summary`
 
 Ringkasan token untuk blok Ringkasan Token: profil token, statistik pasar,
