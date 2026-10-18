@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthInputError, parseSignIn, parseSignUp } from './auth-input.js';
 import { AuthService, TooManyAttemptsException, type SessionResult } from './auth.service.js';
 import type { AuthResponse } from './auth.types.js';
+import { CurrentAccount, SessionGuard, type SignedInRequest } from './session.guard.js';
 import { readSessionToken, SESSION_COOKIE, sessionCookieOptions } from './session-token.js';
 
 function parsed<T>(parse: () => T): T {
@@ -17,7 +18,8 @@ function parsed<T>(parse: () => T): T {
 /**
  * Akun: `POST /auth/sign-up` (201) dan `POST /auth/sign-in` membuat sesi
  * dan memasang cookie HttpOnly; `GET /auth/session` memberi pengguna yang
- * sedang masuk. Token sesi tidak pernah dikirim di body.
+ * sedang masuk; `POST /auth/sign-out` dan `/auth/sign-out-all` keluar dari
+ * perangkat ini atau semua perangkat. Token sesi tidak pernah dikirim di body.
  */
 @Controller('auth')
 export class AuthController {
@@ -40,11 +42,33 @@ export class AuthController {
   }
 
   @Get('session')
-  async session(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<AuthResponse> {
+  @UseGuards(SessionGuard)
+  session(@CurrentAccount() account: NonNullable<SignedInRequest['account']>, @Res({ passthrough: true }) res: Response): AuthResponse {
     res.setHeader('Cache-Control', 'no-store');
-    const current = await this.service.current(readSessionToken(req.headers.cookie));
-    if (!current) throw new UnauthorizedException('Belum masuk.');
-    return current;
+    return { user: account.user, session: account.session };
+  }
+
+  /** Keluar dari perangkat ini: sesi dicabut dan cookie dihapus. Aman dipanggil berulang. */
+  @Post('sign-out')
+  @HttpCode(204)
+  async signOut(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
+    await this.service.signOut(readSessionToken(req.headers.cookie));
+    this.clearCookie(req, res);
+  }
+
+  /** Keluar dari semua perangkat, termasuk yang ini. */
+  @Post('sign-out-all')
+  @HttpCode(204)
+  @UseGuards(SessionGuard)
+  async signOutAll(@CurrentAccount() account: NonNullable<SignedInRequest['account']>, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
+    await this.service.signOutEverywhere(account.userId);
+    this.clearCookie(req, res);
+  }
+
+  private clearCookie(req: Request, res: Response): void {
+    const { expires: _expires, ...options } = sessionCookieOptions(new Date(0), req.secure || process.env.NODE_ENV === 'production');
+    res.clearCookie(SESSION_COOKIE, options);
+    res.setHeader('Cache-Control', 'no-store');
   }
 
   private withCookie(result: SessionResult, req: Request, res: Response): AuthResponse {

@@ -106,6 +106,16 @@ export class AuthService implements OnModuleInit {
     return { user: toAccountView(found.user), session: { expiresAt: found.session.expiresAt.toISOString() } };
   }
 
+  /** Cabut sesi dari token ini; tanpa token atau sesi tidak dikenal tidak melakukan apa-apa. */
+  async signOut(token: string | null): Promise<void> {
+    if (token) await this.repository.revokeSession(hashSessionToken(token), this.clock.now());
+  }
+
+  /** Keluar dari semua perangkat. */
+  async signOutEverywhere(userId: number): Promise<number> {
+    return this.repository.revokeAllSessions(userId, this.clock.now());
+  }
+
   private async startSession(user: UserRow, now: Date): Promise<SessionResult> {
     const token = newSessionToken();
     const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);

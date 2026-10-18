@@ -849,6 +849,13 @@ Kontraknya ada di `src/auth/auth.types.ts`.
   `401` bila tidak ada, rusak, dicabut, atau kedaluwarsa. Respons akun selalu
   `Cache-Control: no-store`.
 - Kata sandi lebih dari 72 karakter ditolak `400` sebelum di-hash.
+- `POST /api/auth/sign-out` (`204`) — mencabut sesi perangkat ini dan menghapus
+  cookie; aman dipanggil berulang atau tanpa sesi. `POST /api/auth/sign-out-all`
+  (`204`, perlu sesi) — mencabut semua sesi pengguna itu di semua perangkat.
+- Endpoint yang butuh masuk memakai `SessionGuard` (`src/auth/session.guard.ts`)
+  dan membaca akunnya lewat `@CurrentAccount()`; tanpa sesi yang sah dijawab
+  `401`. Waktu terakhir dipakai sesi diperbarui paling sering sekali per 5
+  menit.
 
 ### `GET /api/tokens/:chain/:address/summary`
 

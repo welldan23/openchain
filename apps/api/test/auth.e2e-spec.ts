@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { PGlite } from '@electric-sql/pglite';
+import { eq, isNull } from 'drizzle-orm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
@@ -114,5 +115,35 @@ describe('/api/auth', () => {
     await request(server).get('/api/auth/session').set('Cookie', `${SESSION_COOKIE}=${'A'.repeat(43)}`).expect(401);
     tick(30 * 24 * 60 + 1);
     await request(server).get('/api/auth/session').set('Cookie', `${SESSION_COOKIE}=${token}`).expect(401);
+  });
+
+  it('keluar: hanya sesi perangkat ini yang dicabut, cookie dihapus, aman dipanggil berulang', async () => {
+    const server = app.getHttpServer();
+    const signIn = async () => sessionCookie(await request(server).post('/api/auth/sign-in').send({ email: 'rina@contoh.id', password: PASSWORD }).expect(200)).token;
+    const laptop = await signIn();
+    const phone = await signIn();
+    const out = await request(server).post('/api/auth/sign-out').set('Cookie', `${SESSION_COOKIE}=${laptop}`).expect(204);
+    const cleared = ([] as string[]).concat(out.headers['set-cookie'] ?? []).find((item) => item.startsWith(`${SESSION_COOKIE}=`));
+    expect(cleared).toMatch(/^openchain_session=;/);
+    expect(cleared).toContain('Expires=Thu, 01 Jan 1970');
+    expect(cleared).toContain('HttpOnly');
+    const denied = await request(server).get('/api/auth/session').set('Cookie', `${SESSION_COOKIE}=${laptop}`).expect(401);
+    expect(denied.body.message).toContain('Masuk dulu');
+    await request(server).get('/api/auth/session').set('Cookie', `${SESSION_COOKIE}=${phone}`).expect(200);
+    await request(server).post('/api/auth/sign-out').set('Cookie', `${SESSION_COOKIE}=${laptop}`).expect(204);
+    await request(server).post('/api/auth/sign-out').expect(204);
+    const [revoked] = await db.select().from(schema.userSessions).where(eq(schema.userSessions.tokenHash, hashSessionToken(laptop)));
+    expect(revoked.revokedAt).toEqual(now);
+  });
+
+  it('keluar dari semua perangkat: semua sesi pengguna itu dicabut, perlu sesi yang sah', async () => {
+    const server = app.getHttpServer();
+    const signIn = async () => sessionCookie(await request(server).post('/api/auth/sign-in').send({ email: 'rina@contoh.id', password: PASSWORD }).expect(200)).token;
+    const [a, b] = [await signIn(), await signIn()];
+    await request(server).post('/api/auth/sign-out-all').expect(401);
+    await request(server).post('/api/auth/sign-out-all').set('Cookie', `${SESSION_COOKIE}=${a}`).expect(204);
+    for (const token of [a, b]) await request(server).get('/api/auth/session').set('Cookie', `${SESSION_COOKIE}=${token}`).expect(401);
+    const active = await db.select().from(schema.userSessions).where(isNull(schema.userSessions.revokedAt));
+    expect(active).toEqual([]);
   });
 });

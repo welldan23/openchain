@@ -48,6 +48,26 @@ export class AuthRepository {
     return row ?? null;
   }
 
+  /** Cabut satu sesi berdasarkan hash tokennya; yang sudah dicabut tidak berubah. */
+  async revokeSession(tokenHash: string, at: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(userSessions)
+      .set({ revokedAt: at })
+      .where(and(eq(userSessions.tokenHash, tokenHash), isNull(userSessions.revokedAt)))
+      .returning({ id: userSessions.id });
+    return rows.length > 0;
+  }
+
+  /** Cabut semua sesi aktif seorang pengguna; menjawab jumlah yang dicabut. */
+  async revokeAllSessions(userId: number, at: Date): Promise<number> {
+    const rows = await this.db
+      .update(userSessions)
+      .set({ revokedAt: at })
+      .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+      .returning({ id: userSessions.id });
+    return rows.length;
+  }
+
   async touchSession(id: number, at: Date): Promise<void> {
     await this.db.update(userSessions).set({ lastSeenAt: at }).where(eq(userSessions.id, id));
   }
