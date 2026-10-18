@@ -239,6 +239,17 @@ export const dangerTrait = pgEnum('danger_trait', [
 /** `clear` sudah dicek dan tidak ditemukan; `unknown` belum bisa dicek, bukan berarti aman. */
 export const dangerTraitStatus = pgEnum('danger_trait_status', ['detected', 'clear', 'unknown']);
 
+/** Preferensi tampilan pengguna; nilainya sama dengan tipe di frontend (`DisplayPreferences`). */
+export const themePreference = pgEnum('theme_preference', ['system', 'dark', 'light']);
+export const languagePreference = pgEnum('language_preference', ['id', 'en']);
+/** `id` = 1.234,5; `en` = 1,234.5. */
+export const numberLocale = pgEnum('number_locale', ['id', 'en']);
+/** `local` = zona waktu profil. */
+export const timeDisplay = pgEnum('time_display', ['local', 'utc']);
+/** Satuan nilai transfer: dolar AS atau koin native chain-nya. */
+export const valueUnit = pgEnum('value_unit', ['usd', 'native']);
+export const densityPreference = pgEnum('density_preference', ['comfortable', 'compact']);
+
 export type ChainFamily = (typeof chainFamily.enumValues)[number];
 export type DataStatus = (typeof dataStatus.enumValues)[number];
 export type InfoClassification = (typeof infoClassification.enumValues)[number];
@@ -270,3 +281,9 @@ export type RiskSeverity = (typeof riskSeverity.enumValues)[number];
 export type RiskObjectKind = (typeof riskObjectKind.enumValues)[number];
 export type DangerTrait = (typeof dangerTrait.enumValues)[number];
 export type DangerTraitStatus = (typeof dangerTraitStatus.enumValues)[number];
+export type ThemePreference = (typeof themePreference.enumValues)[number];
+export type LanguagePreference = (typeof languagePreference.enumValues)[number];
+export type NumberLocale = (typeof numberLocale.enumValues)[number];
+export type TimeDisplay = (typeof timeDisplay.enumValues)[number];
+export type ValueUnit = (typeof valueUnit.enumValues)[number];
+export type DensityPreference = (typeof densityPreference.enumValues)[number];

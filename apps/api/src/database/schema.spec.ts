@@ -86,6 +86,7 @@ const EXPECTED_TABLES = [
   'tokens',
   'trading_events',
   'transactions',
+  'user_preferences',
   'user_profiles',
   'user_sessions',
   'users',
@@ -1542,6 +1543,30 @@ describe('akun pengguna dan sesi', () => {
     expect(Buffer.from(stored.avatarData!).equals(png)).toBe(true);
     await db.delete(schema.users).where(eq(schema.users.id, row.id));
     expect(await db.select().from(schema.userProfiles)).toEqual([]);
+  });
+
+  it('preferensi tampilan: bawaan sama dengan frontend, nilai di luar pilihan ditolak, chain harus terdaftar', async () => {
+    const [row] = await db.insert(schema.users).values({ ...user, email: 'tia@contoh.id', emailNormalized: 'tia@contoh.id' }).returning();
+    const [stored] = await db.insert(schema.userPreferences).values({ userId: row.id, updatedAt: FETCHED_AT }).returning();
+    expect(stored).toMatchObject({
+      theme: 'dark',
+      language: 'id',
+      numberLocale: 'id',
+      timeDisplay: 'local',
+      compactNumbers: true,
+      valueUnit: 'usd',
+      defaultChainId: null,
+      density: 'comfortable',
+    });
+    await expect(client.query(`UPDATE user_preferences SET theme = 'sepia' WHERE user_id = ${row.id}`)).rejects.toThrow(/theme_preference/);
+    await expectConstraintViolation(
+      db.update(schema.userPreferences).set({ defaultChainId: 'belum-ada' }).where(eq(schema.userPreferences.userId, row.id)),
+      'user_preferences_default_chain_id_chains_id_fk',
+    );
+    await db.update(schema.userPreferences).set({ defaultChainId: 'base', theme: 'light' }).where(eq(schema.userPreferences.userId, row.id));
+    await expectConstraintViolation(db.insert(schema.userPreferences).values({ userId: row.id, updatedAt: FETCHED_AT }), 'user_preferences_pkey');
+    await db.delete(schema.users).where(eq(schema.users.id, row.id));
+    expect(await db.select().from(schema.userPreferences)).toEqual([]);
   });
 
   it('sesi hanya menyimpan hash token, kedaluwarsa setelah dibuat, dan terhapus bersama akunnya', async () => {

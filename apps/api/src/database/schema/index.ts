@@ -8,7 +8,8 @@
  * Penilaian risiko objek ada di `risk_assessments`; `risk_findings` lama tetap
  * menyimpan temuan per snapshot token. Laporan bukti ada di `reports`, dengan
  * bagian (`report_sections`) dan blok isi (`report_blocks`). Akun pengguna ada di
- * `users` dan sesi masuknya di `user_sessions`.
+ * `users`, profil dan preferensinya di `user_profiles` dan `user_preferences`,
+ * dan sesi masuknya di `user_sessions`.
  */
 export * from './enums.js';
 export * from './reference.js';

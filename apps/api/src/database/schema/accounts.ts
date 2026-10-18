@@ -1,14 +1,17 @@
 /**
  * Akun pengguna, profilnya, dan sesi masuk. `users` hanya identitas dan
  * kredensial; cara pengguna tampil (nama, zona waktu, foto) ada di
- * `user_profiles`. Kata sandi hanya disimpan sebagai hash scrypt
- * (dijaga constraint, jadi kata sandi mentah ditolak database). Token sesi
- * hanya disimpan hash SHA-256-nya; token mentah hanya dipegang browser.
+ * `user_profiles`, dan cara aplikasi tampil baginya di `user_preferences`.
+ * Kata sandi hanya disimpan sebagai hash scrypt (dijaga constraint, jadi kata
+ * sandi mentah ditolak database). Token sesi hanya disimpan hash SHA-256-nya;
+ * token mentah hanya dipegang browser.
  * Tidak ada private key, seed phrase, atau koneksi wallet.
  */
 import { sql } from 'drizzle-orm';
-import { check, customType, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { boolean, check, customType, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
 import { idColumn, refId, timestampTz } from './columns.js';
+import { densityPreference, languagePreference, numberLocale, themePreference, timeDisplay, valueUnit } from './enums.js';
+import { chains } from './reference.js';
 
 /** Format hash kata sandi: `scrypt$N$r$p$garam$hash` (base64url). */
 export const PASSWORD_HASH_PATTERN = '^scrypt\\$[0-9]+\\$[0-9]+\\$[0-9]+\\$[A-Za-z0-9_-]{16,}\\$[A-Za-z0-9_-]{32,}$';
@@ -80,6 +83,28 @@ export const userProfiles = pgTable(
     check('user_profiles_avatar_hash', sql`${t.avatarSha256} is null or ${t.avatarSha256} ~ '^[0-9a-f]{64}$'`),
   ],
 );
+
+/**
+ * Preferensi tampilan: satu baris per akun, dibuat saat daftar. Nilai
+ * bawaannya sama dengan bawaan frontend. `default_chain_id` kosong berarti
+ * belum dipilih; aplikasi lalu memakai chain aktif pertama, bukan menganggap
+ * chain tertentu didukung.
+ */
+export const userPreferences = pgTable('user_preferences', {
+  userId: refId('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  theme: themePreference('theme').notNull().default('dark'),
+  language: languagePreference('language').notNull().default('id'),
+  numberLocale: numberLocale('number_locale').notNull().default('id'),
+  timeDisplay: timeDisplay('time_display').notNull().default('local'),
+  /** Angka besar diringkas (1,2 jt) atau ditulis penuh. */
+  compactNumbers: boolean('compact_numbers').notNull().default(true),
+  valueUnit: valueUnit('value_unit').notNull().default('usd'),
+  defaultChainId: text('default_chain_id').references(() => chains.id, { onDelete: 'set null' }),
+  density: densityPreference('density').notNull().default('comfortable'),
+  updatedAt: timestampTz('updated_at').notNull(),
+});
 
 /** Sesi masuk: satu baris per perangkat/browser. */
 export const userSessions = pgTable(

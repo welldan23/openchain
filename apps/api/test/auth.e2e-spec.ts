@@ -60,6 +60,8 @@ describe('/api/auth', () => {
     const [user] = await db.select().from(schema.users);
     expect(user.passwordHash).toMatch(/^scrypt\$/);
     expect(user.passwordHash).not.toContain(PASSWORD);
+    const [preferences] = await db.select().from(schema.userPreferences);
+    expect(preferences).toMatchObject({ userId: user.id, theme: 'dark', language: 'id', defaultChainId: null });
     const [session] = await db.select().from(schema.userSessions);
     expect(session.tokenHash).toBe(hashSessionToken(token));
 

@@ -2,7 +2,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { DATABASE, type Database } from '../database/database.module.js';
-import { userProfiles, users, userSessions } from '../database/schema/index.js';
+import { userPreferences, userProfiles, users, userSessions } from '../database/schema/index.js';
 
 export type UserRow = typeof users.$inferSelect;
 export type ProfileRow = typeof userProfiles.$inferSelect;
@@ -43,7 +43,7 @@ export class AuthRepository {
     return row ?? null;
   }
 
-  /** Akun dan profilnya dibuat bersama dalam satu transaksi. */
+  /** Akun, profil, dan preferensi tampilan bawaannya dibuat bersama dalam satu transaksi. */
   async insertAccount(user: typeof users.$inferInsert, profile: Omit<typeof userProfiles.$inferInsert, 'userId'>): Promise<AccountRow> {
     return this.db.transaction(async (tx) => {
       const [userRow] = await tx.insert(users).values(user).returning();
@@ -51,6 +51,7 @@ export class AuthRepository {
         .insert(userProfiles)
         .values({ ...profile, userId: userRow.id })
         .returning(PROFILE_COLUMNS);
+      await tx.insert(userPreferences).values({ userId: userRow.id, updatedAt: user.updatedAt });
       return { user: userRow, profile: profileRow };
     });
   }

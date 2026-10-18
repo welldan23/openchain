@@ -1227,7 +1227,7 @@ Skema ada di `src/database/schema`, migrasinya di `drizzle/`.
 | Bukti dan analisis | `evidence`, `risk_findings`, `contract_checks`, serta tabel penghubung ke bukti |
 | Penilaian risiko | `risk_assessments` (+ `risk_assessment_sources`), `risk_reasons` (+ `risk_reason_evidence`), `risk_warnings` (+ `risk_warning_evidence`), `risk_trait_checks` |
 | Laporan bukti | `reports` (+ `report_snapshot_blocks`), `report_sections`, `report_blocks`, `report_claim_evidence`, `report_share_links` |
-| Akun | `users`, `user_profiles`, `user_sessions` |
+| Akun | `users`, `user_profiles`, `user_preferences`, `user_sessions` |
 
 Aturan PRD yang dijaga langsung oleh database:
 
@@ -1380,3 +1380,14 @@ Aturan PRD yang dijaga langsung oleh database:
   terpisah. Migrasi `0022` memindahkan nama dan zona waktu dari `users`
   (disalin dulu, baru kolom lamanya dihapus). Pendaftaran membuat akun dan
   profilnya dalam satu transaksi; menghapus akun menghapus profilnya.
+- `user_preferences` (migrasi `0023`) menyimpan preferensi tampilan, satu
+  baris per akun, dengan nilai yang sama dengan tipe `DisplayPreferences` di
+  frontend: tema (`system`/`dark`/`light`), bahasa (`id`/`en`), format angka
+  (`id`/`en`), waktu (`local` = zona waktu profil, atau `utc`), angka ringkas,
+  satuan nilai (`usd`/`native`), chain bawaan, dan kerapatan
+  (`comfortable`/`compact`). Pilihan dijaga enum PostgreSQL, dan bawaannya
+  sama dengan bawaan frontend (gelap, Bahasa Indonesia, angka `id`, waktu
+  lokal, ringkas, USD, nyaman). Chain bawaan harus ada di `chains`; kosong
+  berarti belum dipilih, bukan klaim chain tertentu didukung. Pendaftaran
+  membuat barisnya bersama akun; migrasi `0023` membuatkan baris bawaan untuk
+  akun yang sudah ada. Menghapus akun menghapus preferensinya.
